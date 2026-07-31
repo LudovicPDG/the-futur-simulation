@@ -1,0 +1,45 @@
+// page: hypothesis.vibe
+/**
+    Its a class that represent a event prediction.
+    Each event prediction is represented by an normal distribution truncated in left for not calculated the past and normalize for calculated the probability that the event was impossible.
+    like all other class every field is editable by a system of proof.
+*/
+class event_prediction {
+    name: SimplyFact | name of the prediction ex: date of the AGI,
+    description: simplyFact | description of the evenement ex: date where the humanity create an AI that surpass the capacity of all domain for a mean man,
+    objectif_test: simplyFact | describe the objectif test for prooving this prediction is validating ex: we go to the street asking someone to compete with an ai in a random task, if the AI beat the human in majority of task, wa can say AGI is reached,
+    impossibility: SimplyValue | describe the impossibility the probability that this prediction was never reached for any time. Because if we don't make that any evenement have a probability of 1 to be realized for a long period of time. ex: the impossibility of the AGI for any reason, like metaphysique, reoource constraint, complexity reason,
+    date: SimplyValue,
+    uncertainty: SimplyValue,
+    importance: SimplyValue
+    relationship: Map<hypothesis, SimplyValue>
+}
+
+class SimplyFact {
+    name: string,
+    description: string,
+    value: string
+    array<Proof>
+} 
+
+class SimplyValue {
+    name: string,
+    description: string,
+    value: number,
+    array<Proof>
+} 
+
+/**
+    class that describe a proof
+    this class is very important because in this app all value is editable by the genie with a system of proof.
+*/
+proof {
+    name: string,
+    description: string,
+    fiability:number,
+    importance: number,
+    relationship: Array<proof>
+
+}
+
+

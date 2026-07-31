@@ -1,0 +1,8 @@
+// page: ressource.vibe
+
+class ressource {
+    name: string,
+    description: simpleFact,
+    quantity: SimpleValues,
+    proof: 
+}
