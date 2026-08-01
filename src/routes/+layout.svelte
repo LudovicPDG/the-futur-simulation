@@ -38,6 +38,6 @@
 
 	:global(:root) {
 		--futuristic-blue: #2563eb;
-		--futuristic-violet: #7c3aed;
+		--futuristic-purple: #7c3aed;
 	}
 </style>

@@ -3,6 +3,7 @@
 	import videoDesktop from '$lib/assets/video.webm';
 	import videoPhone from '$lib/assets/video-phone.webm';
 	import { navbarVisible } from '$lib/stores/navbar';
+	import { reveal } from '$lib/actions/reveal';
 
 	let video = $state(videoDesktop);
 
@@ -285,14 +286,11 @@
 <div id="navbar-trigger"></div>
 
 <article>
-	<header>
-		<h1>The Future Simulation</h1>
-		<p>
-			<strong>Modéliser les futurs possibles pour mieux décider aujourd'hui</strong>
-		</p>
+	<header class="reveal {false ? 'visible' : ''}" use:reveal>
+		<h1>The Future Simulation: Une simulation du futur</h1>
 	</header>
 
-	<section>
+	<section class="reveal {false ? 'visible' : ''}" use:reveal>
 		<h2>Comment savoir à quoi ressemblera le futur&nbsp;?</h2>
 
 		<p>
@@ -323,7 +321,7 @@
 		</p>
 	</section>
 
-	<section>
+	<section class="reveal" use:reveal>
 		<h2>Une nouvelle approche de la prédiction du futur</h2>
 
 		<p>
@@ -355,7 +353,7 @@
 		</p>
 	</section>
 
-	<section>
+	<section class="reveal" use:reveal>
 		<h2>Une intelligence collective pour améliorer les prédictions</h2>
 
 		<p>
@@ -381,7 +379,7 @@
 		</p>
 	</section>
 
-	<section>
+	<section class="reveal" use:reveal>
 		<h2>Comment connaître l'impact d'une action&nbsp;?</h2>
 
 		<p>
@@ -422,7 +420,7 @@
 		</p>
 	</section>
 
-	<section>
+	<section class="reveal" use:reveal>
 		<h2>Un outil d'aide à la décision pour construire le futur</h2>
 
 		<p>
@@ -466,7 +464,7 @@
 	}
 
 	article {
-		padding: 15vh 5vw 0;
+		padding: 5vw;
 		width: 100%;
 	}
 
@@ -524,9 +522,43 @@
 		width: 100%;
 	}
 
-	h1 {
-		width: 100%;
+	header h1 {
+		display: inline;
+		width: auto;
+	}
+
+	header {
+		display: block;
 		text-align: center;
+	}
+
+	h1,
+	h2 {
+		display: inline;
+		background-image: linear-gradient(var(--futuristic-blue), var(--futuristic-blue));
+		background-repeat: no-repeat;
+		background-position: 0 100%;
+		background-size: 0% 6px;
+		transition: background-size 700ms ease;
+	}
+
+	.reveal.visible h1,
+	.reveal.visible h2 {
+		background-size: 100% 6px;
+	}
+
+	.reveal {
+		opacity: 0;
+		transform: translateY(24px);
+		transition:
+			opacity 600ms ease,
+			transform 600ms ease;
+		will-change: opacity, transform;
+	}
+
+	.reveal.visible {
+		opacity: 1;
+		transform: translateY(0);
 	}
 
 	@keyframes blink {
