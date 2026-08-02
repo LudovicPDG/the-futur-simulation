@@ -31,12 +31,12 @@
 
 		await waitUntil(start, 5000, session);
 		if (session !== currentSession) return;
-		await writeText('Un futur utopique ?', 2, 3000, session);
+		await writeText('Un futur techno-utopique ?', 2, 3000, session);
 		if (session !== currentSession) return;
 
 		await waitUntil(start, 8250, session);
 		if (session !== currentSession) return;
-		await deleteText('utopique ?', 2, 1000, session);
+		await deleteText('techno-utopique ?', 2, 1000, session);
 		if (session !== currentSession) return;
 
 		changeText2Color('red');
@@ -255,6 +255,36 @@
 		};
 	});
 
+	function smoothScrollTo(targetY: number, duration: number) {
+		const startY = window.scrollY;
+		const distance = targetY - startY;
+		const startTime = performance.now();
+
+		function animate(currentTime: number) {
+			const elapsed = currentTime - startTime;
+			const progress = Math.min(elapsed / duration, 1);
+
+			// Courbe d'accélération/décélération
+			const ease =
+				progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+			window.scrollTo(0, startY + distance * ease);
+
+			if (progress < 1) {
+				requestAnimationFrame(animate);
+			}
+		}
+
+		requestAnimationFrame(animate);
+	}
+
+	let articleElement: HTMLElement;
+
+	function handleVideoEnded() {
+		setTimeout(() => {
+			smoothScrollTo(articleElement.offsetTop - 10, 2000); // le -10 est pour éviter que le header ne cache le début de l'article
+		}, 6000);
+	}
 	$effect(() => {
 		if (videoElement) {
 			videoElement.load();
@@ -264,7 +294,8 @@
 </script>
 
 <div id="carroussel">
-	<video bind:this={videoElement} src={video} autoplay muted playsinline></video>
+	<video bind:this={videoElement} src={video} autoplay muted playsinline onended={handleVideoEnded}
+	></video>
 
 	<div class="overlay">
 		<div class="typing">
@@ -285,7 +316,7 @@
 </div>
 <div id="navbar-trigger"></div>
 
-<article>
+<article bind:this={articleElement}>
 	<header class="reveal {false ? 'visible' : ''}" use:reveal>
 		<h1>The Future Simulation: Une simulation du futur</h1>
 	</header>
@@ -336,12 +367,12 @@
 		</p>
 
 		<ul>
-			<li>l'évolution des ressources naturelles&nbsp;;</li>
-			<li>l'évolution des marchés boursiers&nbsp;;</li>
-			<li>prédire la date de sortie d'une technologie&nbsp;;</li>
-			<li>prédire les résultats d'une élection&nbsp;;</li>
-			<li>prédire les résultats d'une compétition sportive&nbsp;;</li>
-			<li>et tout autre type de prédiction.</li>
+			<li>l'évolution des ressources naturelles</li>
+			<li>l'évolution des marchés boursiers</li>
+			<li>prédire la date de sortie d'une technologie</li>
+			<li>prédire les résultats d'une élection</li>
+			<li>prédire les résultats d'une compétition sportive</li>
+			<li>et tout autre type de prédiction</li>
 		</ul>
 
 		<p>
@@ -398,14 +429,14 @@
 			conséquences potentielles d'une action.
 		</p>
 
-		<p>Ce système peut analyser&nbsp;:</p>
+		<p>Ce système peut analyser</p>
 
 		<ul>
-			<li>la crédibilité d'une action&nbsp;;</li>
-			<li>ses effets possibles sur différentes prédictions&nbsp;;</li>
-			<li>les acteurs susceptibles d'être impactés&nbsp;;</li>
-			<li>les réactions qu'elle pourrait provoquer&nbsp;;</li>
-			<li>ses interactions avec d'autres actions existantes.</li>
+			<li>la crédibilité d'une action</li>
+			<li>ses effets possibles sur différentes prédictions</li>
+			<li>les acteurs susceptibles d'être impactés</li>
+			<li>les réactions qu'elle pourrait provoquer</li>
+			<li>ses interactions avec d'autres actions existantes</li>
 		</ul>
 
 		<p>
@@ -429,13 +460,13 @@
 		</p>
 
 		<ul>
-			<li>les institutions publiques&nbsp;;</li>
-			<li>les collectivités&nbsp;;</li>
-			<li>les entreprises&nbsp;;</li>
-			<li>les associations&nbsp;;</li>
-			<li>les chercheurs&nbsp;;</li>
-			<li>les citoyens&nbsp;;</li>
-			<li>et tout autre acteur de la vie publique.</li>
+			<li>les institutions publiques</li>
+			<li>les collectivités</li>
+			<li>les entreprises</li>
+			<li>les associations</li>
+			<li>les chercheurs</li>
+			<li>les citoyens;</li>
+			<li>et tout autre acteur de la vie publique</li>
 		</ul>
 
 		<p>
@@ -455,6 +486,15 @@
 	</section>
 </article>
 
+<a class="reveal" id="simulation" href="/simulation" use:reveal>
+	<video autoplay muted loop playsinline>
+		<source src={video} type="video/webm" />
+	</video>
+
+	<span>Visualiser le futur</span>
+</a>
+<a class="reveal" id="detail" href="/detail" use:reveal>En savoir plus</a>
+
 <style>
 	#carroussel {
 		position: relative;
@@ -464,8 +504,12 @@
 	}
 
 	article {
-		padding: 5vw;
+		padding: 5vh 5vw 0;
 		width: 100%;
+	}
+
+	section {
+		margin: 5vh 0;
 	}
 
 	video {
@@ -559,6 +603,109 @@
 	.reveal.visible {
 		opacity: 1;
 		transform: translateY(0);
+	}
+
+	ul {
+		list-style: none;
+		font-weight: bolder;
+	}
+
+	li::before {
+		content: '>';
+		position: absolute;
+		left: 15px;
+		color: var(--futuristic-blue);
+		font-weight: bold;
+	}
+
+	a {
+		display: flex;
+		position: relative;
+		width: calc(100% - 10vw);
+		height: 15vh;
+		margin: 2vh 5vw;
+		border-radius: 2rem;
+
+		font-size: 1.5rem;
+		font-weight: bold;
+		justify-content: center;
+		align-items: center;
+
+		text-decoration: none;
+		color: white;
+
+		overflow: hidden;
+		transition:
+			transform 300ms ease,
+			box-shadow 300ms ease;
+	}
+
+	/* effet lumineux qui traverse le bouton */
+	a::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+
+		background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+
+		transition: left 500ms ease;
+		z-index: 3;
+		pointer-events: none;
+	}
+
+	a:hover::before {
+		left: 100%;
+	}
+
+	a:hover {
+		transform: translateY(-5px);
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+	}
+
+	a:active {
+		transform: translateY(0);
+	}
+
+	#simulation {
+		position: relative;
+		background: none;
+		overflow: hidden;
+
+		box-shadow: 0 0 20px rgba(37, 99, 235, 0.5);
+	}
+
+	#simulation video {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		z-index: 0;
+	}
+
+	/* Keep text above video */
+	#simulation span {
+		position: relative;
+		z-index: 4;
+	}
+
+	/* Blue/purple futuristic overlay */
+	#simulation::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(135deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5));
+		z-index: 1;
+	}
+
+	/* Bouton détail */
+	#detail {
+		background: linear-gradient(135deg, #8b4513, #d2691e);
+
+		box-shadow: 0 0 20px rgba(139, 69, 19, 0.5);
 	}
 
 	@keyframes blink {

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
 	import '@fontsource-variable/roboto/wght.css';
-	import Navbar from './navbar.svelte';
+	import Navbar from './Navbar.svelte';
+	import Footer from './Footer.svelte';
 
 	let { children } = $props();
 </script>
@@ -16,12 +17,14 @@
 	{@render children()}
 </main>
 
+<Footer></Footer>
+
 <style>
 	:global(html),
 	:global(body) {
 		margin: 0;
 		width: 100%;
-		height: 100%;
+		min-height: 100%;
 		font-family: 'Roboto Variable', sans-serif;
 	}
 
@@ -31,13 +34,19 @@
 		box-sizing: border-box;
 	}
 
-	main {
-		width: 100%;
-		height: 100%;
+	:global(body) {
+		display: flex;
+		flex-direction: column;
 	}
 
 	:global(:root) {
 		--futuristic-blue: #2563eb;
 		--futuristic-purple: #7c3aed;
+	}
+
+	main {
+		flex: 1;
+		width: 100%;
+		min-height: 100%;
 	}
 </style>
