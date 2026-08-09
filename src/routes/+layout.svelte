@@ -4,7 +4,7 @@
 	import Navbar from './Navbar.svelte';
 	import Footer from './Footer.svelte';
 
-	let { children } = $props();
+	let { data, children } = $props();
 </script>
 
 <svelte:head>
@@ -47,6 +47,6 @@
 	main {
 		flex: 1;
 		width: 100%;
-		min-height: 100%;
+		min-height: 100vh;
 	}
 </style>

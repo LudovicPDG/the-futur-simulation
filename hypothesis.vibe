@@ -1,4 +1,4 @@
-// page: hypothesis.vibe
+// page:  Hypothesis.vibe
 /**
     Its a class that represent a event prediction.
     Each event prediction is represented by an normal distribution truncated in left for not calculated the past and normalize for calculated the probability that the event was impossible.
@@ -12,7 +12,7 @@ class event_prediction {
     date: SimplyValue,
     uncertainty: SimplyValue,
     importance: SimplyValue
-    relationship: Map<hypothesis, SimplyValue>
+    relationship: Map< Hypothesis, SimplyValue>
 }
 
 class SimplyFact {

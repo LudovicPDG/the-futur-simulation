@@ -94,11 +94,11 @@ Toutes les entités et relations forment un graphe interactif :
 
 ---
 
-## 6. Fondement Factuel et Réfutabilité (Preuves)
+## 6. Fondement Hypothesisuel et Réfutabilité (Preuves)
 
 Toute la simulation repose sur des faits réels qui peuvent être contestés par les utilisateurs à l'aide de preuves de n'importe quelle nature (chiffres, textes, liens web) :
 
-- **Débat factuel** : Un utilisateur peut contester une prédiction ou un fait (ex. : la probabilité que le prix du pétrole atteigne 3 € en Europe d'ici 2030) en apportant des preuves. Les preuves peuvent elles-mêmes être contredites par d'autres preuves.
+- **Débat Hypothesisuel** : Un utilisateur peut contester une prédiction ou un fait (ex. : la probabilité que le prix du pétrole atteigne 3 € en Europe d'ici 2030) en apportant des preuves. Les preuves peuvent elles-mêmes être contredites par d'autres preuves.
 - **Pondération des faits dénombrables** : Une preuve modifie la valeur du fait en fonction de deux paramètres estimés par l'Oracle : sa **crédibilité** et son **impact**.
 - **Anti-spam** : Si le produit `crédibilité × impact` d'une preuve est inférieur à un certain seuil, elle est ignorée pour éviter les micro-contributions spammantes ou obsolètes.
 - **Faits non dénombrables** : L'Oracle évalue de manière qualitative les meilleures preuves disponibles pour ajuster le fait dans la simulation.
