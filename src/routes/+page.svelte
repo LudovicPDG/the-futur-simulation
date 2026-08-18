@@ -200,7 +200,6 @@
 		mediaQuery.addEventListener('change', updateScreen);
 
 		const trigger = document.querySelector('#navbar-trigger');
-
 		let observer: IntersectionObserver | undefined;
 
 		if (trigger) {
@@ -208,11 +207,8 @@
 				(entries) => {
 					navbarVisible.set(!entries[0].isIntersecting);
 				},
-				{
-					threshold: 0
-				}
+				{ threshold: 0 }
 			);
-
 			observer.observe(trigger);
 		}
 
