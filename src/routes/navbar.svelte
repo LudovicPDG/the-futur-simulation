@@ -36,7 +36,8 @@
 	const languages = [
 		{ code: 'en', name: 'English' },
 		{ code: 'es', name: 'Español' },
-		{ code: 'fr', name: 'Français' }
+		{ code: 'fr', name: 'Français' },
+		{ code: 'de', name: 'Deutsch' }
 	] as const;
 
 	$effect(() => {
@@ -52,7 +53,9 @@
 
 <header class:visible={$navbarVisible}>
 	<nav>
-		<a href="/">The Future Simulation</a>
+		<a href={resolve(localizeHref('/', { locale: getLocale() }) as Pathname)}
+			>The Future Simulation</a
+		>
 	</nav>
 	<div class="left-elements {onTheHeader ? 'onTheHeader' : 'notOnTheHeader'}">
 		{#if !(burgerMenuOpen && onTheHeader)}

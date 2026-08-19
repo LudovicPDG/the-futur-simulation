@@ -9,6 +9,7 @@
 
 	let displayedText1 = $state('');
 
+	import * as m from '$lib/paraglide/messages';
 	let displayedText2 = $state('');
 
 	let currentSession = 0;
@@ -26,53 +27,53 @@
 		const start = Date.now();
 		const session = currentSession;
 
-		await writeText('Comment sera le futur ?', 1, 3000, session);
+		await writeText(m.home_hero_question(), 1, 3000, session);
 		if (session !== currentSession) return;
 
 		await waitUntil(start, 5000, session);
 		if (session !== currentSession) return;
-		await writeText('Un futur techno-utopique ?', 2, 3000, session);
+		await writeText(m.home_hero_techno(), 2, 3000, session);
 		if (session !== currentSession) return;
 
 		await waitUntil(start, 8250, session);
 		if (session !== currentSession) return;
-		await deleteText('techno-utopique ?', 2, 1000, session);
+		await deleteText(m.home_hero_techno(), 2, 1000, session);
 		if (session !== currentSession) return;
 
 		changeText2Color('red');
-		await writeText('dystopique ?', 2, 3000, session);
+		await writeText(m.home_hero_dystopian(), 2, 3000, session);
 		if (session !== currentSession) return;
 
 		await waitUntil(start, 12500, session);
 		if (session !== currentSession) return;
-		await deleteText('dystopique ?', 2, 1000, session);
+		await deleteText(m.home_hero_dystopian(), 2, 1000, session);
 		if (session !== currentSession) return;
 
 		changeText2Color('brown');
 
-		await writeText('sans energie ?', 2, 3000, session);
+		await writeText(m.home_hero_energy(), 2, 3000, session);
 		if (session !== currentSession) return;
 
 		await waitUntil(start, 16500, session);
 		if (session !== currentSession) return;
-		await deleteText('sans energie ?', 2, 1000, session);
+		await deleteText(m.home_hero_energy(), 2, 1000, session);
 		if (session !== currentSession) return;
 
 		changeText2Color('#88E788');
 
-		await writeText('naturelle ?', 2, 3000, session);
+		await writeText(m.home_hero_natural(), 2, 3000, session);
 		if (session !== currentSession) return;
 
 		await waitUntil(start, 20000, session);
 		if (session !== currentSession) return;
-		await deleteText('Un futur naturelle ?', 2, 1000, session);
+		await deleteText(m.home_hero_natural(), 2, 1000, session);
 		if (session !== currentSession) return;
-		await deleteText('Comment sera le futur ?', 1, 1000, session);
+		await deleteText(m.home_hero_question(), 1, 1000, session);
 		if (session !== currentSession) return;
 
 		await waitUntil(start, 22500, session);
 		if (session !== currentSession) return;
-		await writeText('Et comment le modifier ?', 1, 3000, session);
+		await writeText(m.home_hero_change(), 1, 3000, session);
 	}
 
 	function resetText() {
@@ -314,170 +315,131 @@
 
 <article bind:this={articleElement}>
 	<header class="reveal {false ? 'visible' : ''}" use:reveal>
-		<h1>The Future Simulation: Une simulation du futur</h1>
+		<h1>{m.home_title()}</h1>
 	</header>
 
 	<section class="reveal {false ? 'visible' : ''}" use:reveal>
-		<h2>Comment savoir à quoi ressemblera le futur&nbsp;?</h2>
+		<h2>{m.home_intro_title()}</h2>
 
 		<p>
-			Depuis toujours, l'être humain cherche à comprendre et à anticiper l'avenir. Les premières
-			civilisations tentaient déjà de prévoir les récoltes, les migrations animales pour la chasse,
-			les conditions météorologiques ou les périodes favorables aux voyages. Ces prédictions
-			reposaient principalement sur l'observation, l'expérience et des méthodes empiriques.
+			{m.home_intro_1()}
 		</p>
 
 		<p>
-			Aujourd'hui, grâce aux progrès scientifiques et technologiques, nous sommes capables de
-			prédire certains événements plusieurs semaines, voire plusieurs années à l'avance, dans des
-			domaines tels que la météorologie, la climatologie, l'épidémiologie ou encore l'économie.
+			{m.home_intro_2()}
 		</p>
 
 		<p>
-			Malgré ces progrès, la plupart des modèles actuels reposent sur des simulations statiques,
-			souvent limitées à un domaine précis. Il est donc difficile d'obtenir une vision globale du
-			futur, et les hypothèses sur lesquelles reposent ces simulations restent souvent difficiles à
-			remettre en question, aussi bien par la communauté scientifique que par le grand public. De
-			plus, la plupart de ces simulations proposent peu, voire aucun, moyen d'agir sur la
-			trajectoire du futur qu'elles décrivent.
+			{m.home_intro_3()}
 		</p>
 
 		<p>
-			<strong>The Future Simulation</strong> vise à dépasser ces limites en développant une simulation
-			globale et dynamique du futur, ouverte à tous, dans laquelle chacun peut proposer des modifications.
+			{m.home_intro_4()}
 		</p>
 	</section>
 
 	<section class="reveal" use:reveal>
-		<h2>Une nouvelle approche de la prédiction du futur</h2>
+		<h2>{m.home_prediction_title()}</h2>
 
 		<p>
-			Les progrès récents de l'intelligence artificielle lui permettent aujourd'hui d'analyser des
-			informations complexes, de comprendre les relations entre différents éléments et de produire
-			des estimations à partir de nombreux paramètres.
+			{m.home_prediction_1()}
 		</p>
 
 		<p>
-			Ces capacités peuvent être mobilisées pour établir des prédictions dans des domaines variés,
-			par exemple&nbsp;:
+			{m.home_prediction_2()}
 		</p>
 
 		<ul>
-			<li>l'évolution des ressources naturelles</li>
-			<li>l'évolution des marchés boursiers</li>
-			<li>prédire la date de sortie d'une technologie</li>
-			<li>prédire les résultats d'une élection</li>
-			<li>prédire les résultats d'une compétition sportive</li>
-			<li>et tout autre type de prédiction</li>
+			<li>{m.home_prediction_list_1()}</li>
+			<li>{m.home_prediction_list_2()}</li>
+			<li>{m.home_prediction_list_3()}</li>
+			<li>{m.home_prediction_list_4()}</li>
+			<li>{m.home_prediction_list_5()}</li>
+			<li>{m.home_prediction_list_6()}</li>
 		</ul>
 
 		<p>
-			Contrairement à la plupart des simulations classiques,
-			<strong>The Future Simulation</strong> ne considère pas les événements comme indépendants les uns
-			des autres. Les différentes prédictions sont reliées entre elles&nbsp;: lorsqu'un événement évolue,
-			les conséquences potentielles sur les autres événements sont automatiquement recalculées, afin de
-			maintenir une représentation cohérente des futurs possibles.
+			{m.home_prediction_3()}
 		</p>
 	</section>
 
 	<section class="reveal" use:reveal>
-		<h2>Une intelligence collective pour améliorer les prédictions</h2>
+		<h2>{m.home_collective_title()}</h2>
 
 		<p>
-			La fiabilité d'une prédiction dépend fortement de la qualité des informations et des
-			raisonnements qui l'accompagnent.
+			{m.home_collective_1()}
 		</p>
 
 		<p>
-			C'est pourquoi <strong>The Future Simulation</strong> permet aux utilisateurs de contribuer directement
-			à l'amélioration du modèle. Chaque personne peut proposer des arguments, des sources, des preuves
-			ou remettre en question une hypothèse formulée par l'intelligence artificielle.
+			{m.home_collective_2()}
 		</p>
 
 		<p>
-			L'IA analyse ensuite ces nouveaux éléments afin d'ajuster ses prédictions, de modifier les
-			relations entre les événements ou de revoir la probabilité de certains scénarios.
+			{m.home_collective_3()}
 		</p>
 
 		<p>
-			Cette approche vise à créer une forme d'intelligence collective, où les connaissances humaines
-			et les capacités d'analyse de l'intelligence artificielle se complètent afin de construire des
-			projections plus pertinentes.
+			{m.home_collective_4()}
 		</p>
 	</section>
 
 	<section class="reveal" use:reveal>
-		<h2>Comment connaître l'impact d'une action&nbsp;?</h2>
+		<h2>{m.home_action_title()}</h2>
 
 		<p>
-			Le futur n'est pas seulement quelque chose que nous observons&nbsp;: il est aussi façonné par
-			nos décisions.
+			{m.home_action_1()}
 		</p>
 
 		<p>
-			Il est pourtant souvent difficile d'évaluer, avant sa mise en œuvre, les conséquences réelles
-			d'une action ainsi que sa crédibilité. Une décision politique, une innovation technologique ou
-			un changement économique peut avoir des effets directs et indirects sur de nombreux acteurs.
+			{m.home_action_2()}
 		</p>
 
 		<p>
-			<strong>The Future Simulation</strong> propose donc également un système permettant de simuler les
-			conséquences potentielles d'une action.
+			{m.home_action_3()}
 		</p>
 
-		<p>Ce système peut analyser</p>
+		<p>{m.home_action_intro()}</p>
 
 		<ul>
-			<li>la crédibilité d'une action</li>
-			<li>ses effets possibles sur différentes prédictions</li>
-			<li>les acteurs susceptibles d'être impactés</li>
-			<li>les réactions qu'elle pourrait provoquer</li>
-			<li>ses interactions avec d'autres actions existantes</li>
+			<li>{m.home_action_list_1()}</li>
+			<li>{m.home_action_list_2()}</li>
+			<li>{m.home_action_list_3()}</li>
+			<li>{m.home_action_list_4()}</li>
+			<li>{m.home_action_list_5()}</li>
 		</ul>
 
 		<p>
-			Une décision concernant l'énergie, par exemple, pourrait avoir des répercussions sur les prix,
-			les entreprises, l'emploi, l'environnement ou encore le comportement des citoyens.
+			{m.home_action_4()}
 		</p>
 
 		<p>
-			Comme pour les prédictions, les utilisateurs peuvent proposer des actions, fournir des
-			informations complémentaires et remettre en question les résultats produits par l'intelligence
-			artificielle.
+			{m.home_action_5()}
 		</p>
 	</section>
 
 	<section class="reveal" use:reveal>
-		<h2>Un outil d'aide à la décision pour construire le futur</h2>
+		<h2>{m.home_decision_title()}</h2>
 
 		<p>
-			Si <strong>The Future Simulation</strong> parvient à produire des projections fiables, elle pourrait
-			devenir un outil d'aide à la décision pour de nombreux acteurs&nbsp;:
+			{m.home_decision_1()}
 		</p>
 
 		<ul>
-			<li>les institutions publiques</li>
-			<li>les collectivités</li>
-			<li>les entreprises</li>
-			<li>les associations</li>
-			<li>les chercheurs</li>
-			<li>les citoyens;</li>
-			<li>et tout autre acteur de la vie publique</li>
+			<li>{m.home_decision_list_1()}</li>
+			<li>{m.home_decision_list_2()}</li>
+			<li>{m.home_decision_list_3()}</li>
+			<li>{m.home_decision_list_4()}</li>
+			<li>{m.home_decision_list_5()}</li>
+			<li>{m.home_decision_list_6()}</li>
+			<li>{m.home_decision_list_7()}</li>
 		</ul>
 
 		<p>
-			Il convient toutefois de considérer les prédictions et les résultats du modèle avec prudence.
-			Toute simulation du futur repose sur des probabilités&nbsp;: rien n'est donc certain. De plus,
-			l'intelligence artificielle peut parfois commettre des erreurs manifestement absurdes du point
-			de vue humain. Si cela se produit, n'hésitez pas à reformuler votre requête ou à apporter des
-			sources complémentaires à l'appui de vos propos. Si le problème persiste, contactez les
-			membres du site.
+			{m.home_decision_2()}
 		</p>
 
 		<p>
-			<strong>The Future Simulation</strong> n'est pas un projet lucratif et a pour seul objectif de permettre
-			à chaque acteur de la vie publique de prendre de meilleures décisions afin de contribuer à rendre
-			le monde meilleur.
+			{m.home_decision_3()}
 		</p>
 	</section>
 </article>
@@ -487,9 +449,9 @@
 		<source src={video} type="video/webm" />
 	</video>
 
-	<span>Visualiser le futur</span>
+	<span>{m.home_simulation_link()}</span>
 </a>
-<a class="reveal" id="detail" href="/detail" use:reveal>En savoir plus</a>
+<a class="reveal" id="detail" href="/detail" use:reveal>{m.home_more_link()}</a>
 
 <style>
 	#carroussel {
