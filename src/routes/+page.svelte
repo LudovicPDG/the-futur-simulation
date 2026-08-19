@@ -186,8 +186,33 @@
 
 	let videoElement: HTMLVideoElement;
 
+	async function restartVideoAndText() {
+		if (!videoElement) return;
+
+		resetText();
+		videoElement.currentTime = 0;
+
+		try {
+			await videoElement.play();
+			textAnimation();
+		} catch {
+			// Playback may be temporarily unavailable while returning to the tab.
+		}
+	}
+
 	onMount(() => {
 		const mediaQuery = window.matchMedia('(orientation: portrait)');
+
+		function handleVisibilityChange() {
+			if (document.hidden) {
+				videoElement.pause();
+				videoElement.currentTime = 0;
+				resetText();
+				return;
+			}
+
+			restartVideoAndText();
+		}
 
 		function updateScreen() {
 			video = mediaQuery.matches ? videoPhone : videoDesktop;
@@ -199,6 +224,7 @@
 		updateScreen();
 
 		mediaQuery.addEventListener('change', updateScreen);
+		document.addEventListener('visibilitychange', handleVisibilityChange);
 
 		const trigger = document.querySelector('#navbar-trigger');
 		let observer: IntersectionObserver | undefined;
@@ -215,6 +241,7 @@
 
 		return () => {
 			mediaQuery.removeEventListener('change', updateScreen);
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
 			observer?.disconnect();
 			clearAllTimers();
 		};

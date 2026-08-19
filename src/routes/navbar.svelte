@@ -68,7 +68,7 @@
 					<img id="lang-flag" src="/icon/flag/{getLocale()}.svg" alt="English flag" />
 				</button>
 
-				{#if langMenuOpen}
+				{#if langMenuOpen && $navbarVisible}
 					<div id="lang-menu" transition:slide={{ duration: 300 }}>
 						{#each languages as lang (lang.code)}
 							<a
