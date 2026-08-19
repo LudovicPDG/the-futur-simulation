@@ -5,7 +5,7 @@
 	import { locales, localizeHref } from '$lib/paraglide/runtime';
 	import favicon from '$lib/assets/favicon.svg';
 	import '@fontsource-variable/roboto/wght.css';
-	import Navbar from './Navbar.svelte';
+	import Navbar from './navbar.svelte';
 	import Footer from './Footer.svelte';
 
 	let { data, children } = $props();

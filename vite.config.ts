@@ -22,7 +22,13 @@ export default defineConfig({
 			project: './project.inlang',
 			outdir: './src/lib/paraglide',
 			emitTsDeclarations: true,
-			strategy: ['url', 'cookie', 'baseLocale']
+			strategy: ['preferredLanguage', 'url', 'cookie', 'baseLocale'],
+			routeStrategies: [
+				{
+					match: '/:locale(en|es|fr|de)/:path(.*)?',
+					strategy: ['url', 'cookie', 'baseLocale']
+				}
+			]
 		})
 	]
 });

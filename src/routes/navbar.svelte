@@ -4,7 +4,7 @@
 	import type { Pathname } from '$app/types';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { localizeHref, getLocale } from '$lib/paraglide/runtime';
+	import { localizeHref, getLocale, setLocale } from '$lib/paraglide/runtime';
 	import * as m from '$lib/paraglide/messages';
 	import { clickOutside } from '$lib/actions/clickOutside';
 
@@ -40,6 +40,10 @@
 		{ code: 'de', name: 'Deutsch' }
 	] as const;
 
+	function selectLanguage(locale: (typeof languages)[number]['code']) {
+		setLocale(locale, { reload: false });
+	}
+
 	$effect(() => {
 		if (!browser) return;
 
@@ -70,7 +74,12 @@
 							<a
 								data-sveltekit-reload
 								class="lang-option"
-								href={resolve(localizeHref(page.url.pathname, { locale: lang.code }) as Pathname)}
+								onclick={() => selectLanguage(lang.code)}
+								href={resolve(
+									(lang.code === 'en'
+										? '/en'
+										: localizeHref(page.url.pathname, { locale: lang.code })) as Pathname
+								)}
 							>
 								<img src="/icon/flag/{lang.code}.svg" alt="{lang.name} flag" />
 
