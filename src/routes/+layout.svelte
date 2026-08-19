@@ -1,4 +1,8 @@
 <script lang="ts">
+	import type { Pathname } from '$app/types';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import { locales, localizeHref } from '$lib/paraglide/runtime';
 	import favicon from '$lib/assets/favicon.svg';
 	import '@fontsource-variable/roboto/wght.css';
 	import Navbar from './Navbar.svelte';
@@ -7,17 +11,16 @@
 	let { data, children } = $props();
 </script>
 
-<svelte:head>
-	<link rel="icon" href={favicon} />
-</svelte:head>
+<svelte:head><link rel="icon" href={favicon} /></svelte:head>
+<Navbar />
+<main>{@render children()}</main>
+<Footer />
 
-<Navbar></Navbar>
-
-<main>
-	{@render children()}
-</main>
-
-<Footer></Footer>
+<div style="display:none">
+	{#each locales as locale (locale)}
+		<a href={resolve(localizeHref(page.url.pathname, { locale }) as Pathname)}>{locale}</a>
+	{/each}
+</div>
 
 <style>
 	:global(html),
