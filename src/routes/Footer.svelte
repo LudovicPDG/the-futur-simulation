@@ -15,7 +15,7 @@
 	}
 
 	:global(body.dark) footer {
-		background-color: rgba(255, 255, 255, 0.15);
+		background-color: rgba(255, 255, 255, 0.08);
 	}
 
 	p {

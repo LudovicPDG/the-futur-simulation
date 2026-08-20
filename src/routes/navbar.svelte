@@ -142,7 +142,7 @@
 	}
 
 	:global(body.dark) {
-		background-color: black;
+		background-color: #0b0f19;
 		color: white;
 		transition:
 			background-color 0.3s,
