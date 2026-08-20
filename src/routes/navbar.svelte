@@ -13,10 +13,18 @@
 
 	let langMenuOpen = $state(false);
 	import { browser } from '$app/environment';
-	import { theme } from '$lib/stores/theme';
 
-	function toggleLigthMode() {
-		theme.update((t) => (t === 'dark' ? 'light' : 'dark'));
+	const initialTheme: 'light' | 'dark' =
+		browser && localStorage.getItem('theme')
+			? (localStorage.getItem('theme') as 'light' | 'dark')
+			: browser && window.matchMedia('(prefers-color-scheme: dark)').matches
+				? 'dark'
+				: 'light';
+
+	let theme = $state<'light' | 'dark'>(initialTheme);
+
+	function toggleLightMode() {
+		theme = theme === 'dark' ? 'light' : 'dark';
 	}
 
 	let {
@@ -48,11 +56,11 @@
 		if (!browser) return;
 
 		document.body.classList.remove('light', 'dark');
-		document.body.classList.add($theme);
+		document.body.classList.add(theme);
+		localStorage.setItem('theme', theme);
 	});
 
 	console.log(getLocale());
-	console.log($theme);
 </script>
 
 <header class:visible={$navbarVisible}>
@@ -89,8 +97,8 @@
 					</div>
 				{/if}
 			</div>
-			<button class="left-btn" id="light-mode" onclick={toggleLigthMode}>
-				<img src="/icon/{$theme}-mode.svg" alt="change the color theme" />
+			<button class="left-btn" id="light-mode" onclick={toggleLightMode}>
+				<img src="/icon/{theme}-mode.svg" alt="change the color theme" />
 			</button>
 		{/if}
 		{#if onTheHeader}
