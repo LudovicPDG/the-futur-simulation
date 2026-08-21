@@ -19,7 +19,7 @@
 
 		if (!isClicked) {
 			agitation_level = 7;
-			ballSize = 110;
+			ballSize = 105;
 		}
 	}
 
@@ -37,7 +37,7 @@
 
 		// Forte agitation
 		agitation_level = 10;
-		ballSize = 110;
+		ballSize = 105;
 
 		// Annule le précédent timer s'il existe
 		clearTimeout(clickTimeout);
@@ -49,7 +49,7 @@
 			if (isHovered) {
 				// La souris est toujours dessus
 				agitation_level = 7;
-				ballSize = 110;
+				ballSize = 105;
 			} else {
 				// La souris n'est plus dessus
 				agitation_level = 4;
@@ -97,11 +97,11 @@
 
 <style>
 	.page {
-		margin-top: 10vh;
-		position: relative;
+		padding-top: 10vh;
 		width: 100%;
-		height: 100dvh;
+		height: 90vh;
 		overflow: hidden;
+		position: relative;
 	}
 
 	.content {
@@ -111,7 +111,7 @@
 
 	.character {
 		position: absolute;
-		top: 24px;
+		top: calc(10vh + 24px);
 		right: 24px;
 
 		display: flex;
