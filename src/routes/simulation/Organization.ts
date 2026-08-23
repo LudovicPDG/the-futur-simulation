@@ -1,6 +1,7 @@
-import type { Action } from 'lottie-react';
+import type { Relation } from './Relation.js';
+import type { Simulation_Action } from './Action.js';
 
-class Organization {
+export class Organization {
 	constructor(
 		private name: string,
 		private description: string,

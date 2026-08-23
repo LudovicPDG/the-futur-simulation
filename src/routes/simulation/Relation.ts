@@ -1,4 +1,4 @@
-class Relation<T> {
+export class Relation<T> {
 	constructor(
 		private name: string,
 		private description: string,
@@ -8,3 +8,4 @@ class Relation<T> {
 		private valueToModify: string
 	) {}
 }
+
