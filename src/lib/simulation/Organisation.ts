@@ -23,4 +23,6 @@ type OrganisationData = z.infer<typeof OrganisationSchema>;
 
 export class Organisation {
 	constructor(public data: OrganisationData) {}
+
+	add_to_DB() {}
 }

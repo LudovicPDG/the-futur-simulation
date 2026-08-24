@@ -73,9 +73,11 @@ class Genie {
 		}
 		const action = ActionSchema.parse(json);
 
+		console.log(action.data);
+
 		switch (action.action) {
 			case 'create_organisation':
-				new Organisation(action);
+				new Organisation(action.data);
 				break;
 		}
 	}
