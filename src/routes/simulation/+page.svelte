@@ -58,11 +58,35 @@
 			}
 		}, 500);
 	}
-	function submit() {
-		if (!prompt.trim()) return;
+	let isLoading = $state(false);
 
-		console.log(prompt);
+	async function submit() {
+		if (!prompt.trim() || isLoading) return;
+
+		const userPrompt = prompt;
 		prompt = '';
+		isLoading = true;
+
+		try {
+			const response = await fetch('/api/genie', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ prompt: userPrompt })
+			});
+
+			const data = await response.json();
+			if (!response.ok) {
+				console.error('Genie error:', data.error);
+			} else {
+				console.log('Genie result:', data.result);
+			}
+		} catch (error) {
+			console.error('Failed to call Genie.ask:', error);
+		} finally {
+			isLoading = false;
+		}
 	}
 
 	let displayedPlaceholder = $state('');
