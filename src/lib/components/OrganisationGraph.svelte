@@ -286,11 +286,7 @@
 	}
 </script>
 
-<div
-	class="graph-container"
-	bind:clientWidth={containerWidth}
-	bind:clientHeight={containerHeight}
->
+<div class="graph-container" bind:clientWidth={containerWidth} bind:clientHeight={containerHeight}>
 	<svg
 		width="100%"
 		height="100%"
@@ -300,21 +296,6 @@
 		onpointerup={handlePointerUp}
 		onpointercancel={handlePointerUp}
 	>
-		<!-- Connections lines between organisations of same type -->
-		<g class="connections">
-			{#each connections as conn (conn.id)}
-				<line
-					x1={conn.x1}
-					y1={conn.y1}
-					x2={conn.x2}
-					y2={conn.y2}
-					stroke="rgba(255, 255, 255, 0.12)"
-					stroke-width="1.5"
-					stroke-dasharray="4,4"
-				/>
-			{/each}
-		</g>
-
 		<!-- Graph Nodes -->
 		<g class="nodes">
 			{#each nodes as node (node.id)}
@@ -363,21 +344,9 @@
 							font-weight="600"
 							class="node-text"
 						>
-							{node.data.resource?.human ?? 1} 👤
+							{node.data.name.length > 18 ? node.data.name.slice(0, 16) + '...' : node.data.name}
 						</text>
 					{/if}
-
-					<!-- Name label below node -->
-					<text
-						y={node.radius + 18}
-						text-anchor="middle"
-						fill={isHovered ? '#ffffff' : '#cbd5e1'}
-						font-size={isHovered ? 13 : 12}
-						font-weight="500"
-						class="node-label"
-					>
-						{node.data.name.length > 18 ? node.data.name.slice(0, 16) + '...' : node.data.name}
-					</text>
 				</g>
 			{/each}
 		</g>
@@ -385,10 +354,7 @@
 
 	<!-- Glassmorphism Tooltip -->
 	{#if hoveredNode}
-		<div
-			class="tooltip"
-			style="left: {tooltipPos.x + 15}px; top: {tooltipPos.y + 15}px;"
-		>
+		<div class="tooltip" style="left: {tooltipPos.x + 15}px; top: {tooltipPos.y + 15}px;">
 			<div class="tooltip-header">
 				<span class="tooltip-title">{hoveredNode.data.name}</span>
 				<span class="type-badge">{hoveredNode.data.type || 'Organisation'}</span>
@@ -437,6 +403,10 @@
 		width: 100%;
 		height: 100%;
 		overflow: hidden;
+		background: radial-gradient(circle at center, #e8eaeb 0%, #f5f5f5 100%);
+	}
+
+	:global(body.dark) .graph-container {
 		background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
 	}
 
@@ -457,11 +427,15 @@
 	}
 
 	.glow-circle {
-		transition: r 0.2s ease, opacity 0.2s ease;
+		transition:
+			r 0.2s ease,
+			opacity 0.2s ease;
 	}
 
 	.main-circle {
-		transition: stroke-width 0.15s ease, stroke 0.15s ease;
+		transition:
+			stroke-width 0.15s ease,
+			stroke 0.15s ease;
 	}
 
 	.node-text,
