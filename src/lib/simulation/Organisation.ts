@@ -26,8 +26,12 @@ export const OrganisationSchema = z.object({
 type OrganisationData = z.infer<typeof OrganisationSchema>;
 
 export class Organisation {
-	constructor(public data: OrganisationData) {
-		this.add_to_DB();
+	constructor(public data: OrganisationData) {}
+
+	public static async init(data: OrganisationData) {
+		const organisation = new Organisation(data);
+		await organisation.add_to_DB();
+		return organisation;
 	}
 
 	async add_to_DB() {

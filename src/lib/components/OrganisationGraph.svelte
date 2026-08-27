@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 
 	export interface OrganisationData {
 		name: string;
@@ -28,14 +28,15 @@
 		isDragging?: boolean;
 	}
 
-	let canvas: HTMLCanvasElement | null = $state(null);
-	let nodes: GraphNode[] = $state([]);
-	let hoveredNode: GraphNode | null = $state(null);
+	let nodes = $state<GraphNode[]>([]);
+	let hoveredNode = $state<GraphNode | null>(null);
 	let tooltipPos = $state({ x: 0, y: 0 });
 
-	let animationFrameId: number;
-	let width = $state(800);
-	let height = $state(600);
+	let containerWidth = $state(800);
+	let containerHeight = $state(600);
+
+	let animationFrameId: number | null = null;
+	let isRunning = false;
 
 	// Helper to calculate exact satisfaction color interpolation
 	// 0 => Red (239, 68, 68)
@@ -62,19 +63,22 @@
 
 	function calculateRadius(humanResource: number): number {
 		const members = Math.max(1, humanResource || 1);
-		// Sqrt scaling for visual balance
 		return Math.max(22, Math.min(75, 18 + Math.sqrt(members) * 5.5));
 	}
 
-	// Sync prop organisations into internal physics graph nodes
+	// Sync prop organisations into graph nodes cleanly using untrack to prevent reactive loops
 	$effect(() => {
-		const currentNodesMap = new Map(nodes.map((n) => [n.id, n]));
+		const orgs = organisations;
+		const width = containerWidth || 800;
+		const height = containerHeight || 600;
+		const centerX = width / 2;
+		const centerY = height / 2;
+
+		const currentNodes = untrack(() => nodes);
+		const currentNodesMap = new Map(currentNodes.map((n) => [n.id, n]));
 		const updatedNodes: GraphNode[] = [];
 
-		const centerX = width / 2 || 400;
-		const centerY = height / 2 || 300;
-
-		organisations.forEach((org, idx) => {
+		orgs.forEach((org, idx) => {
 			const id = org.name;
 			const radius = calculateRadius(org.resource?.human ?? 1);
 			const color = getSatisfactionColor(org.satisfaction ?? 50);
@@ -86,16 +90,15 @@
 				existing.color = color;
 				updatedNodes.push(existing);
 			} else {
-				// Spawn new node around center with slight random offset
-				const angle = (idx / Math.max(1, organisations.length)) * Math.PI * 2 + Math.random() * 0.5;
+				const angle = (idx / Math.max(1, orgs.length)) * Math.PI * 2 + Math.random() * 0.5;
 				const dist = 50 + Math.random() * 100;
 				updatedNodes.push({
 					id,
 					data: org,
 					x: centerX + Math.cos(angle) * dist,
 					y: centerY + Math.sin(angle) * dist,
-					vx: (Math.random() - 0.5) * 2,
-					vy: (Math.random() - 0.5) * 2,
+					vx: (Math.random() - 0.5) * 4,
+					vy: (Math.random() - 0.5) * 4,
 					radius,
 					color
 				});
@@ -103,77 +106,65 @@
 		});
 
 		nodes = updatedNodes;
+		startPhysics();
 	});
 
-	let draggedNode: GraphNode | null = null;
-	let dragOffsetX = 0;
-	let dragOffsetY = 0;
-
-	function handleMouseDown(e: MouseEvent) {
-		if (!canvas) return;
-		const rect = canvas.getBoundingClientRect();
-		const mouseX = e.clientX - rect.left;
-		const mouseY = e.clientY - rect.top;
-
-		for (let i = nodes.length - 1; i >= 0; i--) {
-			const node = nodes[i];
-			const dx = mouseX - node.x;
-			const dy = mouseY - node.y;
-			if (dx * dx + dy * dy <= node.radius * node.radius) {
-				draggedNode = node;
-				node.isDragging = true;
-				dragOffsetX = dx;
-				dragOffsetY = dy;
-				break;
-			}
-		}
-	}
-
-	function handleMouseMove(e: MouseEvent) {
-		if (!canvas) return;
-		const rect = canvas.getBoundingClientRect();
-		const mouseX = e.clientX - rect.left;
-		const mouseY = e.clientY - rect.top;
-
-		if (draggedNode) {
-			draggedNode.x = mouseX - dragOffsetX;
-			draggedNode.y = mouseY - dragOffsetY;
-			draggedNode.vx = 0;
-			draggedNode.vy = 0;
-		} else {
-			// Check hover
-			let found: GraphNode | null = null;
-			for (let i = nodes.length - 1; i >= 0; i--) {
-				const node = nodes[i];
-				const dx = mouseX - node.x;
-				const dy = mouseY - node.y;
-				if (dx * dx + dy * dy <= node.radius * node.radius) {
-					found = node;
-					break;
+	// Derived connections array for rendering SVG lines between same-type orgs
+	let connections = $derived.by(() => {
+		const list: Array<{ id: string; x1: number; y1: number; x2: number; y2: number }> = [];
+		for (let i = 0; i < nodes.length; i++) {
+			for (let j = i + 1; j < nodes.length; j++) {
+				const a = nodes[i];
+				const b = nodes[j];
+				if (a.data.type === b.data.type) {
+					list.push({
+						id: `${a.id}-${b.id}`,
+						x1: a.x,
+						y1: a.y,
+						x2: b.x,
+						y2: b.y
+					});
 				}
 			}
-			hoveredNode = found;
-			tooltipPos = { x: e.clientX, y: e.clientY };
+		}
+		return list;
+	});
+
+	function startPhysics() {
+		if (isRunning) return;
+		isRunning = true;
+		if (typeof window !== 'undefined') {
+			animationFrameId = requestAnimationFrame(loop);
 		}
 	}
 
-	function handleMouseUp() {
-		if (draggedNode) {
-			draggedNode.isDragging = false;
-			draggedNode = null;
+	function stopPhysics() {
+		isRunning = false;
+		if (animationFrameId !== null) {
+			cancelAnimationFrame(animationFrameId);
+			animationFrameId = null;
 		}
 	}
 
-	function updatePhysics() {
+	// Physics step returning true if nodes are still moving significantly or being dragged
+	function updatePhysics(): boolean {
+		const width = containerWidth || 800;
+		const height = containerHeight || 600;
 		const centerX = width / 2;
 		const centerY = height / 2;
-		const dampening = 0.88;
-		const centerForce = 0.0008;
-		const repulsion = 1200;
+		const dampening = 0.85;
+		const centerForce = 0.001;
+		const repulsion = 1400;
+
+		let totalMovement = 0;
+		let anyDragging = false;
 
 		for (let i = 0; i < nodes.length; i++) {
 			const nodeA = nodes[i];
-			if (nodeA.isDragging) continue;
+			if (nodeA.isDragging) {
+				anyDragging = true;
+				continue;
+			}
 
 			// Pull toward center
 			nodeA.vx += (centerX - nodeA.x) * centerForce;
@@ -224,122 +215,175 @@
 			nodeA.x += nodeA.vx;
 			nodeA.y += nodeA.vy;
 
-			// Keep within canvas bounds
+			// Keep within container bounds
 			nodeA.x = Math.max(nodeA.radius, Math.min(width - nodeA.radius, nodeA.x));
 			nodeA.y = Math.max(nodeA.radius, Math.min(height - nodeA.radius, nodeA.y));
-		}
-	}
 
-	function render() {
-		if (!canvas) return;
-		const ctx = canvas.getContext('2d');
-		if (!ctx) return;
-
-		ctx.clearRect(0, 0, width, height);
-
-		// Draw connections between nodes of same type or connected objectives
-		for (let i = 0; i < nodes.length; i++) {
-			for (let j = i + 1; j < nodes.length; j++) {
-				const a = nodes[i];
-				const b = nodes[j];
-				if (a.data.type === b.data.type) {
-					ctx.beginPath();
-					ctx.moveTo(a.x, a.y);
-					ctx.lineTo(b.x, b.y);
-					ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-					ctx.lineWidth = 1.5;
-					ctx.setLineDash([4, 4]);
-					ctx.stroke();
-					ctx.setLineDash([]);
-				}
-			}
+			totalMovement += Math.abs(nodeA.vx) + Math.abs(nodeA.vy);
 		}
 
-		// Draw Nodes
-		nodes.forEach((node) => {
-			const isHovered = hoveredNode === node;
-
-			// Glow aura
-			ctx.beginPath();
-			ctx.arc(node.x, node.y, node.radius + (isHovered ? 8 : 4), 0, Math.PI * 2);
-			ctx.fillStyle = node.color.replace('rgb', 'rgba').replace(')', ', 0.25)');
-			ctx.fill();
-
-			// Main Circle
-			ctx.beginPath();
-			ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-			ctx.fillStyle = node.color;
-			ctx.fill();
-
-			// Border
-			ctx.strokeStyle = isHovered ? '#ffffff' : 'rgba(255, 255, 255, 0.6)';
-			ctx.lineWidth = isHovered ? 3 : 1.5;
-			ctx.stroke();
-
-			// Member count inner text if radius permits
-			if (node.radius >= 22) {
-				ctx.fillStyle = '#ffffff';
-				ctx.font = `600 ${Math.max(11, Math.min(16, node.radius * 0.45))}px Inter, sans-serif`;
-				ctx.textAlign = 'center';
-				ctx.textBaseline = 'middle';
-				ctx.fillText(`${node.data.resource?.human ?? 1} 👤`, node.x, node.y);
-			}
-
-			// Name label below circle
-			ctx.fillStyle = isHovered ? '#ffffff' : '#cbd5e1';
-			ctx.font = `500 ${isHovered ? 13 : 12}px Inter, sans-serif`;
-			ctx.textAlign = 'center';
-			ctx.textBaseline = 'top';
-			const nameText = node.data.name.length > 18 ? node.data.name.slice(0, 16) + '...' : node.data.name;
-			ctx.fillText(nameText, node.x, node.y + node.radius + 6);
-		});
+		return anyDragging || totalMovement > 0.05;
 	}
 
 	function loop() {
-		updatePhysics();
-		render();
-		if (typeof window !== 'undefined') {
+		const shouldContinue = updatePhysics();
+		if (shouldContinue && isRunning) {
 			animationFrameId = requestAnimationFrame(loop);
-		}
-	}
-
-	function resize() {
-		if (canvas && canvas.parentElement) {
-			width = canvas.parentElement.clientWidth;
-			height = canvas.parentElement.clientHeight;
-			canvas.width = width;
-			canvas.height = height;
+		} else {
+			stopPhysics();
 		}
 	}
 
 	onMount(() => {
-		if (typeof window !== 'undefined') {
-			resize();
-			window.addEventListener('resize', resize);
-			animationFrameId = requestAnimationFrame(loop);
-		}
+		startPhysics();
 	});
 
 	onDestroy(() => {
-		if (typeof window !== 'undefined') {
-			window.removeEventListener('resize', resize);
-			if (animationFrameId) {
-				cancelAnimationFrame(animationFrameId);
+		stopPhysics();
+	});
+
+	// Dragging with Pointer Events
+	let activeDraggedNode: GraphNode | null = null;
+	let dragPointerId: number | null = null;
+
+	function handlePointerDown(node: GraphNode, e: PointerEvent) {
+		activeDraggedNode = node;
+		node.isDragging = true;
+		dragPointerId = e.pointerId;
+		(e.currentTarget as Element)?.setPointerCapture?.(e.pointerId);
+		startPhysics();
+	}
+
+	function handlePointerMove(e: PointerEvent) {
+		if (activeDraggedNode && e.pointerId === dragPointerId) {
+			const svgElement = (e.currentTarget as Element).closest('svg');
+			if (svgElement) {
+				const rect = svgElement.getBoundingClientRect();
+				activeDraggedNode.x = Math.max(
+					activeDraggedNode.radius,
+					Math.min(rect.width - activeDraggedNode.radius, e.clientX - rect.left)
+				);
+				activeDraggedNode.y = Math.max(
+					activeDraggedNode.radius,
+					Math.min(rect.height - activeDraggedNode.radius, e.clientY - rect.top)
+				);
+				activeDraggedNode.vx = 0;
+				activeDraggedNode.vy = 0;
 			}
 		}
-	});
+
+		if (hoveredNode) {
+			tooltipPos = { x: e.clientX, y: e.clientY };
+		}
+	}
+
+	function handlePointerUp(e: PointerEvent) {
+		if (activeDraggedNode && e.pointerId === dragPointerId) {
+			activeDraggedNode.isDragging = false;
+			activeDraggedNode = null;
+			dragPointerId = null;
+		}
+	}
 </script>
 
-<div class="graph-container">
-	<canvas
-		bind:this={canvas}
-		onmousedown={handleMouseDown}
-		onmousemove={handleMouseMove}
-		onmouseup={handleMouseUp}
-		onmouseleave={handleMouseUp}
-	></canvas>
+<div
+	class="graph-container"
+	bind:clientWidth={containerWidth}
+	bind:clientHeight={containerHeight}
+>
+	<svg
+		width="100%"
+		height="100%"
+		role="application"
+		aria-label="Graphe interactif des organisations"
+		onpointermove={handlePointerMove}
+		onpointerup={handlePointerUp}
+		onpointercancel={handlePointerUp}
+	>
+		<!-- Connections lines between organisations of same type -->
+		<g class="connections">
+			{#each connections as conn (conn.id)}
+				<line
+					x1={conn.x1}
+					y1={conn.y1}
+					x2={conn.x2}
+					y2={conn.y2}
+					stroke="rgba(255, 255, 255, 0.12)"
+					stroke-width="1.5"
+					stroke-dasharray="4,4"
+				/>
+			{/each}
+		</g>
 
-	<!-- Interactive Glassmorphism Tooltip -->
+		<!-- Graph Nodes -->
+		<g class="nodes">
+			{#each nodes as node (node.id)}
+				{@const isHovered = hoveredNode?.id === node.id}
+				<g
+					class="node-group"
+					class:hovered={isHovered}
+					class:dragging={node.isDragging}
+					role="button"
+					tabindex="0"
+					aria-label={node.data.name}
+					transform="translate({node.x}, {node.y})"
+					onpointerdown={(e) => handlePointerDown(node, e)}
+					onpointerenter={(e) => {
+						hoveredNode = node;
+						tooltipPos = { x: e.clientX, y: e.clientY };
+					}}
+					onpointerleave={() => {
+						if (hoveredNode?.id === node.id) hoveredNode = null;
+					}}
+				>
+					<!-- Aura / Glow Circle -->
+					<circle
+						r={node.radius + (isHovered ? 8 : 4)}
+						fill={node.color}
+						opacity={isHovered ? 0.45 : 0.2}
+						class="glow-circle"
+					/>
+
+					<!-- Main Circle -->
+					<circle
+						r={node.radius}
+						fill={node.color}
+						stroke={isHovered ? '#ffffff' : 'rgba(255, 255, 255, 0.6)'}
+						stroke-width={isHovered ? 3 : 1.5}
+						class="main-circle"
+					/>
+
+					<!-- Member count inner text -->
+					{#if node.radius >= 22}
+						<text
+							text-anchor="middle"
+							dominant-baseline="central"
+							fill="#ffffff"
+							font-size={Math.max(11, Math.min(16, node.radius * 0.45))}
+							font-weight="600"
+							class="node-text"
+						>
+							{node.data.resource?.human ?? 1} 👤
+						</text>
+					{/if}
+
+					<!-- Name label below node -->
+					<text
+						y={node.radius + 18}
+						text-anchor="middle"
+						fill={isHovered ? '#ffffff' : '#cbd5e1'}
+						font-size={isHovered ? 13 : 12}
+						font-weight="500"
+						class="node-label"
+					>
+						{node.data.name.length > 18 ? node.data.name.slice(0, 16) + '...' : node.data.name}
+					</text>
+				</g>
+			{/each}
+		</g>
+	</svg>
+
+	<!-- Glassmorphism Tooltip -->
 	{#if hoveredNode}
 		<div
 			class="tooltip"
@@ -396,15 +440,39 @@
 		background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
 	}
 
-	canvas {
+	svg {
 		display: block;
 		width: 100%;
 		height: 100%;
-		cursor: grab;
+		user-select: none;
 	}
 
-	canvas:active {
+	.node-group {
+		cursor: grab;
+		transition: transform 0.05s linear;
+	}
+
+	.node-group.dragging {
 		cursor: grabbing;
+	}
+
+	.glow-circle {
+		transition: r 0.2s ease, opacity 0.2s ease;
+	}
+
+	.main-circle {
+		transition: stroke-width 0.15s ease, stroke 0.15s ease;
+	}
+
+	.node-text,
+	.node-label {
+		user-select: none;
+		pointer-events: none;
+	}
+
+	.node-label {
+		font-family: Inter, system-ui, sans-serif;
+		transition: fill 0.15s ease;
 	}
 
 	.tooltip {

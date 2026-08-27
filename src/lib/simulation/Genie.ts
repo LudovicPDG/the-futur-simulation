@@ -134,7 +134,7 @@ export class Genie {
 
 		console.log('organisation:', organisation);
 
-		return new Organisation(organisation);
+		return Organisation.init(organisation);
 	}
 }
 
