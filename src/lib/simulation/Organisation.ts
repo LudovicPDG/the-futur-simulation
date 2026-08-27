@@ -15,6 +15,7 @@ export const OrganisationSchema = z.object({
 	description: z.string(),
 	type: z.string(),
 	objective: z.array(z.string()),
+	satisfaction: z.number().nonnegative().max(100),
 	resource: z.object({
 		human: z.number().nonnegative(),
 		material: z.array(MaterialResourceSchema),
@@ -42,6 +43,7 @@ export class Organisation {
 				description: $description,
 				type: $type,
 				objective: $objective,
+				satisfaction: $satisfaction,
 				human_resource: $human,
 				financial_resource: $financial
 			})
@@ -63,6 +65,7 @@ export class Organisation {
 					description: this.data.description,
 					type: this.data.type,
 					objective: this.data.objective,
+					satisfaction: this.data.satisfaction,
 					human: this.data.resource.human,
 					financial: this.data.resource.financial,
 

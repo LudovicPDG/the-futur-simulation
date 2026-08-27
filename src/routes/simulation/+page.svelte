@@ -1,9 +1,30 @@
 <script lang="ts">
 	import { navbarVisible } from '$lib/stores/navbar';
 	import CrystalBall from '../Crystal-ball.svelte';
+	import OrganisationGraph, {
+		type OrganisationData
+	} from '$lib/components/OrganisationGraph.svelte';
 	import { onMount } from 'svelte';
 
 	navbarVisible.set(true);
+
+	let organisations = $state<OrganisationData[]>([]);
+
+	async function loadOrganisations() {
+		try {
+			const res = await fetch('/api/organisations');
+			const data = await res.json();
+			if (data.organisations) {
+				organisations = data.organisations;
+			}
+		} catch (err) {
+			console.error('Error loading organisations:', err);
+		}
+	}
+
+	onMount(() => {
+		loadOrganisations();
+	});
 
 	let prompt = $state('');
 
@@ -81,6 +102,17 @@
 				console.error('Genie error:', data.error);
 			} else {
 				console.log('Genie result:', data.result);
+				if (data.result?.organisation) {
+					const newOrg = data.result.organisation;
+					// Append new organisation immediately if not already present
+					if (!organisations.some((o) => o.name === newOrg.name)) {
+						organisations = [...organisations, newOrg];
+					}
+					console.log('organisations', organisations);
+				} else {
+					// Fallback re-fetch from DB
+					await loadOrganisations();
+				}
 			}
 		} catch (error) {
 			console.error('Failed to call Genie.ask:', error);
@@ -182,7 +214,7 @@
 	</button>
 
 	<main class="content">
-		<!-- Ton contenu ici -->
+		<OrganisationGraph {organisations} />
 	</main>
 
 	<!-- Prompt -->

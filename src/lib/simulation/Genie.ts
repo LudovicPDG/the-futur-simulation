@@ -78,9 +78,12 @@ export class Genie {
 		console.log(actionResult);
 
 		switch (actionResult.action) {
-			case 'create_organisation':
-				await this.createOrganisation(question);
-				break;
+			case 'create_organisation': {
+				const org = await this.createOrganisation(question);
+				return { action: actionResult.action, organisation: org.data };
+			}
+			default:
+				return { action: actionResult.action, organisation: null };
 		}
 	}
 
