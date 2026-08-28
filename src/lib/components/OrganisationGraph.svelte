@@ -1,20 +1,66 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
+	import { getLocale } from '$lib/paraglide/runtime.js';
 
 	export interface OrganisationData {
 		name: string;
 		description: string;
 		type: string;
 		objective?: string[];
+		name_fr?: string;
+		name_en?: string;
+		name_de?: string;
+		name_es?: string;
+		description_fr?: string;
+		description_en?: string;
+		description_de?: string;
+		description_es?: string;
+		type_fr?: string;
+		type_en?: string;
+		type_de?: string;
+		type_es?: string;
+		objective_fr?: string[];
+		objective_en?: string[];
+		objective_de?: string[];
+		objective_es?: string[];
 		satisfaction: number;
 		resource: {
 			human: number;
 			financial?: number;
-			material?: Array<{ name: string; quantity: number }>;
+			material?: Array<{
+				name: string;
+				name_fr?: string;
+				name_en?: string;
+				name_de?: string;
+				name_es?: string;
+				quantity: number;
+			}>;
 		};
 	}
 
 	let { organisations = [] }: { organisations: OrganisationData[] } = $props();
+
+	function getLocalized<T>(
+		org: OrganisationData,
+		field: 'name' | 'description' | 'type' | 'objective'
+	): T {
+		const lang = typeof getLocale === 'function' ? getLocale() : 'fr';
+		const key = `${field}_${lang}` as keyof OrganisationData;
+		const val = org[key];
+		if (val && (typeof val === 'string' ? val.trim().length > 0 : (val as string[]).length > 0)) {
+			return val as T;
+		}
+		// Fallback to fr, then en, then default single field
+		const frVal = org[`${field}_fr` as keyof OrganisationData];
+		if (frVal && (typeof frVal === 'string' ? frVal.trim().length > 0 : (frVal as string[]).length > 0)) {
+			return frVal as T;
+		}
+		const enVal = org[`${field}_en` as keyof OrganisationData];
+		if (enVal && (typeof enVal === 'string' ? enVal.trim().length > 0 : (enVal as string[]).length > 0)) {
+			return enVal as T;
+		}
+		return (org[field] ?? (field === 'objective' ? [] : '')) as T;
+	}
 
 	interface GraphNode {
 		id: string;
@@ -336,6 +382,7 @@
 
 					<!-- Member count inner text -->
 					{#if node.radius >= 22}
+						{@const displayName = getLocalized<string>(node.data, 'name')}
 						<text
 							text-anchor="middle"
 							dominant-baseline="central"
@@ -344,7 +391,7 @@
 							font-weight="600"
 							class="node-text"
 						>
-							{node.data.name.length > 18 ? node.data.name.slice(0, 16) + '...' : node.data.name}
+							{displayName.length > 18 ? displayName.slice(0, 16) + '...' : displayName}
 						</text>
 					{/if}
 				</g>
@@ -354,13 +401,17 @@
 
 	<!-- Glassmorphism Tooltip -->
 	{#if hoveredNode}
+		{@const name = getLocalized<string>(hoveredNode.data, 'name')}
+		{@const type = getLocalized<string>(hoveredNode.data, 'type')}
+		{@const description = getLocalized<string>(hoveredNode.data, 'description')}
+		{@const objectives = getLocalized<string[]>(hoveredNode.data, 'objective')}
 		<div class="tooltip" style="left: {tooltipPos.x + 15}px; top: {tooltipPos.y + 15}px;">
 			<div class="tooltip-header">
-				<span class="tooltip-title">{hoveredNode.data.name}</span>
-				<span class="type-badge">{hoveredNode.data.type || 'Organisation'}</span>
+				<span class="tooltip-title">{name}</span>
+				<span class="type-badge">{type || 'Organisation'}</span>
 			</div>
 
-			<p class="tooltip-desc">{hoveredNode.data.description || 'Aucune description disponible.'}</p>
+			<p class="tooltip-desc">{description || 'Aucune description disponible.'}</p>
 
 			<div class="tooltip-stats">
 				<div class="stat-item">
@@ -383,11 +434,11 @@
 				{/if}
 			</div>
 
-			{#if hoveredNode.data.objective && hoveredNode.data.objective.length > 0}
+			{#if objectives && objectives.length > 0}
 				<div class="objectives">
 					<span class="stat-label">Objectifs:</span>
 					<div class="tags">
-						{#each hoveredNode.data.objective as obj}
+						{#each objectives as obj}
 							<span class="tag">{obj}</span>
 						{/each}
 					</div>
@@ -438,15 +489,9 @@
 			stroke 0.15s ease;
 	}
 
-	.node-text,
-	.node-label {
+	.node-text {
 		user-select: none;
 		pointer-events: none;
-	}
-
-	.node-label {
-		font-family: Inter, system-ui, sans-serif;
-		transition: fill 0.15s ease;
 	}
 
 	.tooltip {

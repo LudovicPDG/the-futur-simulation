@@ -18,11 +18,44 @@ export const GET: RequestHandler = async () => {
 		const organisations = result.records.map((record) => {
 			const props = record.get('o').properties;
 			console.log('props', props);
+			const name_fr = props.name_fr ?? props.name ?? '';
+			const name_en = props.name_en ?? props.name ?? '';
+			const name_de = props.name_de ?? props.name ?? '';
+			const name_es = props.name_es ?? props.name ?? '';
+			const description_fr = props.description_fr ?? props.description ?? '';
+			const description_en = props.description_en ?? props.description ?? '';
+			const description_de = props.description_de ?? props.description ?? '';
+			const description_es = props.description_es ?? props.description ?? '';
+			const type_fr = props.type_fr ?? props.type ?? '';
+			const type_en = props.type_en ?? props.type ?? '';
+			const type_de = props.type_de ?? props.type ?? '';
+			const type_es = props.type_es ?? props.type ?? '';
+			const objective_fr = props.objective_fr ?? props.objective ?? [];
+			const objective_en = props.objective_en ?? props.objective ?? [];
+			const objective_de = props.objective_de ?? props.objective ?? [];
+			const objective_es = props.objective_es ?? props.objective ?? [];
+
 			return {
-				name: props.name,
-				description: props.description,
-				type: props.type,
-				objective: props.objective,
+				name: name_fr || name_en || name_de || name_es,
+				description: description_fr || description_en || description_de || description_es,
+				type: type_fr || type_en || type_de || type_es,
+				objective: objective_fr.length ? objective_fr : (objective_en.length ? objective_en : (objective_de.length ? objective_de : objective_es)),
+				name_fr,
+				name_en,
+				name_de,
+				name_es,
+				description_fr,
+				description_en,
+				description_de,
+				description_es,
+				type_fr,
+				type_en,
+				type_de,
+				type_es,
+				objective_fr,
+				objective_en,
+				objective_de,
+				objective_es,
 				satisfaction:
 					typeof props.satisfaction === 'object' &&
 					props.satisfaction !== null &&
