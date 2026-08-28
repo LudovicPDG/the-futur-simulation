@@ -33,7 +33,12 @@
 				name_en?: string;
 				name_de?: string;
 				name_es?: string;
+				description_fr?: string;
+				description_en?: string;
+				description_de?: string;
+				description_es?: string;
 				quantity: number;
+				value?: number;
 			}>;
 		};
 	}
@@ -52,14 +57,32 @@
 		}
 		// Fallback to fr, then en, then default single field
 		const frVal = org[`${field}_fr` as keyof OrganisationData];
-		if (frVal && (typeof frVal === 'string' ? frVal.trim().length > 0 : (frVal as string[]).length > 0)) {
+		if (
+			frVal &&
+			(typeof frVal === 'string' ? frVal.trim().length > 0 : (frVal as string[]).length > 0)
+		) {
 			return frVal as T;
 		}
 		const enVal = org[`${field}_en` as keyof OrganisationData];
-		if (enVal && (typeof enVal === 'string' ? enVal.trim().length > 0 : (enVal as string[]).length > 0)) {
+		if (
+			enVal &&
+			(typeof enVal === 'string' ? enVal.trim().length > 0 : (enVal as string[]).length > 0)
+		) {
 			return enVal as T;
 		}
 		return (org[field] ?? (field === 'objective' ? [] : '')) as T;
+	}
+
+	function getLocalizedMaterialName(
+		material: NonNullable<OrganisationData['resource']['material']>[number]
+	): string {
+		const lang = typeof getLocale === 'function' ? getLocale() : 'fr';
+		const localizedName = material[`name_${lang}` as keyof typeof material];
+		if (typeof localizedName === 'string' && localizedName.trim().length > 0) {
+			return localizedName;
+		}
+
+		return material.name_fr?.trim() || material.name_en?.trim() || material.name;
 	}
 
 	interface GraphNode {
@@ -77,6 +100,7 @@
 	let nodes = $state<GraphNode[]>([]);
 	let hoveredNode = $state<GraphNode | null>(null);
 	let tooltipPos = $state({ x: 0, y: 0 });
+	let tooltipElement = $state<HTMLDivElement | null>(null);
 
 	let containerWidth = $state(800);
 	let containerHeight = $state(600);
@@ -319,8 +343,33 @@
 		}
 
 		if (hoveredNode) {
-			tooltipPos = { x: e.clientX, y: e.clientY };
+			updateTooltipPosition(e.clientX, e.clientY);
 		}
+	}
+
+	function updateTooltipPosition(cursorX: number, cursorY: number) {
+		const margin = 12;
+		const gap = 15;
+		const preferredX = cursorX + gap;
+		const preferredY = cursorY + gap;
+
+		tooltipPos = { x: preferredX, y: preferredY };
+
+		if (typeof window === 'undefined') return;
+
+		requestAnimationFrame(() => {
+			const tooltip = tooltipElement;
+			if (!tooltip) return;
+
+			const { width, height } = tooltip.getBoundingClientRect();
+			const maxX = Math.max(margin, window.innerWidth - width - margin);
+			const maxY = Math.max(margin, window.innerHeight - height - margin);
+
+			tooltipPos = {
+				x: Math.max(margin, Math.min(preferredX, maxX)),
+				y: Math.max(margin, Math.min(preferredY, maxY))
+			};
+		});
 	}
 
 	function handlePointerUp(e: PointerEvent) {
@@ -357,7 +406,7 @@
 					onpointerdown={(e) => handlePointerDown(node, e)}
 					onpointerenter={(e) => {
 						hoveredNode = node;
-						tooltipPos = { x: e.clientX, y: e.clientY };
+						updateTooltipPosition(e.clientX, e.clientY);
 					}}
 					onpointerleave={() => {
 						if (hoveredNode?.id === node.id) hoveredNode = null;
@@ -405,7 +454,12 @@
 		{@const type = getLocalized<string>(hoveredNode.data, 'type')}
 		{@const description = getLocalized<string>(hoveredNode.data, 'description')}
 		{@const objectives = getLocalized<string[]>(hoveredNode.data, 'objective')}
-		<div class="tooltip" style="left: {tooltipPos.x + 15}px; top: {tooltipPos.y + 15}px;">
+		{@const materialResources = hoveredNode.data.resource?.material ?? []}
+		<div
+			bind:this={tooltipElement}
+			class="tooltip"
+			style="left: {tooltipPos.x}px; top: {tooltipPos.y}px;"
+		>
 			<div class="tooltip-header">
 				<span class="tooltip-title">{name}</span>
 				<span class="type-badge">{type || 'Organisation'}</span>
@@ -440,6 +494,20 @@
 					<div class="tags">
 						{#each objectives as obj}
 							<span class="tag">{obj}</span>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
+			{#if materialResources.length > 0}
+				<div class="material-resources">
+					<span class="stat-label">Ressources matérielles:</span>
+					<div class="material-list">
+						{#each materialResources as material, index (material.name + index)}
+							<div class="material-item">
+								<span class="material-name">{getLocalizedMaterialName(material)}</span>
+								<span class="material-quantity">x{material.quantity}</span>
+							</div>
 						{/each}
 					</div>
 				</div>
@@ -501,6 +569,9 @@
 
 		min-width: 240px;
 		max-width: 320px;
+		max-height: calc(100vh - 24px);
+		box-sizing: border-box;
+		overflow-y: auto;
 		padding: 14px 16px;
 
 		background: rgba(15, 23, 42, 0.85);
@@ -582,6 +653,39 @@
 		margin-top: 8px;
 		border-top: 1px solid rgba(255, 255, 255, 0.08);
 		padding-top: 6px;
+	}
+
+	.material-resources {
+		margin-top: 8px;
+		border-top: 1px solid rgba(255, 255, 255, 0.08);
+		padding-top: 6px;
+	}
+
+	.material-list {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		margin-top: 4px;
+	}
+
+	.material-item {
+		display: flex;
+		justify-content: space-between;
+		gap: 12px;
+		font-size: 12px;
+	}
+
+	.material-name {
+		color: #e2e8f0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.material-quantity {
+		flex-shrink: 0;
+		color: #fbbf24;
+		font-weight: 600;
 	}
 
 	.tags {

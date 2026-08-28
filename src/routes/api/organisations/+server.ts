@@ -10,13 +10,17 @@ export const GET: RequestHandler = async () => {
 	try {
 		const result = await session.run(`
 			MATCH (o:Organisation)
-			RETURN o
+			OPTIONAL MATCH (o)-[:HAS_RESOURCE]->(r:MaterialResource)
+			RETURN o, collect(r) AS materialResources
 		`);
 
 		console.log('result', result);
 
 		const organisations = result.records.map((record) => {
 			const props = record.get('o').properties;
+			const materialResources = record.get('materialResources') as Array<{
+				properties: Record<string, unknown>;
+			}>;
 			console.log('props', props);
 			const name_fr = props.name_fr ?? props.name ?? '';
 			const name_en = props.name_en ?? props.name ?? '';
@@ -39,7 +43,13 @@ export const GET: RequestHandler = async () => {
 				name: name_fr || name_en || name_de || name_es,
 				description: description_fr || description_en || description_de || description_es,
 				type: type_fr || type_en || type_de || type_es,
-				objective: objective_fr.length ? objective_fr : (objective_en.length ? objective_en : (objective_de.length ? objective_de : objective_es)),
+				objective: objective_fr.length
+					? objective_fr
+					: objective_en.length
+						? objective_en
+						: objective_de.length
+							? objective_de
+							: objective_es,
 				name_fr,
 				name_en,
 				name_de,
@@ -75,7 +85,29 @@ export const GET: RequestHandler = async () => {
 						'toNumber' in props.financial_resource
 							? (props.financial_resource as { toNumber: () => number }).toNumber()
 							: Number(props.financial_resource ?? 0),
-					material: []
+					material: materialResources
+						.filter((resource) => resource !== null)
+						.map((resource) => {
+							const material = resource.properties;
+							const toNumber = (value: unknown) =>
+								typeof value === 'object' && value !== null && 'toNumber' in value
+									? (value as { toNumber: () => number }).toNumber()
+									: Number(value ?? 0);
+
+							return {
+								name: String(material.name_fr ?? material.name_en ?? ''),
+								name_fr: String(material.name_fr ?? ''),
+								name_en: String(material.name_en ?? ''),
+								name_de: String(material.name_de ?? ''),
+								name_es: String(material.name_es ?? ''),
+								description_fr: String(material.description_fr ?? ''),
+								description_en: String(material.description_en ?? ''),
+								description_de: String(material.description_de ?? ''),
+								description_es: String(material.description_es ?? ''),
+								quantity: toNumber(material.quantity),
+								value: toNumber(material.value)
+							};
+						})
 				}
 			};
 		});
