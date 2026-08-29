@@ -99,8 +99,10 @@
 
 	let nodes = $state<GraphNode[]>([]);
 	let hoveredNode = $state<GraphNode | null>(null);
+	let selectedNode = $state<GraphNode | null>(null);
 	let tooltipPos = $state({ x: 0, y: 0 });
 	let tooltipElement = $state<HTMLDivElement | null>(null);
+	let graphContainer = $state<HTMLElement | null>(null);
 
 	let containerWidth = $state(800);
 	let containerHeight = $state(600);
@@ -200,6 +202,22 @@
 		return list;
 	});
 
+	function updateSelectedTooltipPosition() {
+		if (!selectedNode || !graphContainer) return;
+
+		const svg = graphContainer.querySelector('svg');
+		if (!svg) return;
+
+		// Convertit les coordonnées du node dans le SVG
+		// en coordonnées écran (viewport)
+		const point = new DOMPoint(selectedNode.x, selectedNode.y);
+		const screenPoint = point.matrixTransform(svg.getScreenCTM()!);
+
+		tooltipPos = {
+			x: screenPoint.x + selectedNode.radius + 15,
+			y: screenPoint.y - selectedNode.radius
+		};
+	}
 	function startPhysics() {
 		if (isRunning) return;
 		isRunning = true;
@@ -297,6 +315,11 @@
 
 	function loop() {
 		const shouldContinue = updatePhysics();
+
+		if (selectedNode) {
+			updateSelectedTooltipPosition();
+		}
+
 		if (shouldContinue && isRunning) {
 			animationFrameId = requestAnimationFrame(loop);
 		} else {
@@ -306,6 +329,21 @@
 
 	onMount(() => {
 		startPhysics();
+		const handleDocumentPointerDown = (event: PointerEvent) => {
+			const target = event.target;
+			if (!(target instanceof Element)) return;
+			const clickedInsideNode = target.closest('.node-group');
+			const clickedInsideTooltip = target.closest('[data-tooltip="organisation"]');
+			if (selectedNode && !clickedInsideNode && !clickedInsideTooltip) {
+				selectedNode = null;
+				hoveredNode = null;
+			}
+		};
+
+		document.addEventListener('pointerdown', handleDocumentPointerDown, true);
+		return () => {
+			document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
+		};
 	});
 
 	onDestroy(() => {
@@ -317,10 +355,18 @@
 	let dragPointerId: number | null = null;
 
 	function handlePointerDown(node: GraphNode, e: PointerEvent) {
+		e.stopPropagation();
+
+		selectedNode = node;
+		hoveredNode = node;
+
 		activeDraggedNode = node;
 		node.isDragging = true;
 		dragPointerId = e.pointerId;
+
 		(e.currentTarget as Element)?.setPointerCapture?.(e.pointerId);
+
+		updateSelectedTooltipPosition();
 		startPhysics();
 	}
 
@@ -342,7 +388,7 @@
 			}
 		}
 
-		if (hoveredNode) {
+		if (hoveredNode && !selectedNode) {
 			updateTooltipPosition(e.clientX, e.clientY);
 		}
 	}
@@ -379,9 +425,20 @@
 			dragPointerId = null;
 		}
 	}
+
+	function openTooltipFor(node: GraphNode) {
+		selectedNode = node;
+		hoveredNode = node;
+		updateSelectedTooltipPosition();
+	}
 </script>
 
-<div class="graph-container" bind:clientWidth={containerWidth} bind:clientHeight={containerHeight}>
+<div
+	class="graph-container"
+	bind:this={graphContainer}
+	bind:clientWidth={containerWidth}
+	bind:clientHeight={containerHeight}
+>
 	<svg
 		width="100%"
 		height="100%"
@@ -405,11 +462,12 @@
 					transform="translate({node.x}, {node.y})"
 					onpointerdown={(e) => handlePointerDown(node, e)}
 					onpointerenter={(e) => {
+						if (selectedNode) return;
 						hoveredNode = node;
 						updateTooltipPosition(e.clientX, e.clientY);
 					}}
 					onpointerleave={() => {
-						if (hoveredNode?.id === node.id) hoveredNode = null;
+						if (!selectedNode && hoveredNode?.id === node.id) hoveredNode = null;
 					}}
 				>
 					<!-- Aura / Glow Circle -->
@@ -449,16 +507,21 @@
 	</svg>
 
 	<!-- Glassmorphism Tooltip -->
-	{#if hoveredNode}
-		{@const name = getLocalized<string>(hoveredNode.data, 'name')}
-		{@const type = getLocalized<string>(hoveredNode.data, 'type')}
-		{@const description = getLocalized<string>(hoveredNode.data, 'description')}
-		{@const objectives = getLocalized<string[]>(hoveredNode.data, 'objective')}
-		{@const materialResources = hoveredNode.data.resource?.material ?? []}
+	{#if selectedNode}
+		{@const activeNode = selectedNode}
+		{@const name = getLocalized<string>(activeNode.data, 'name')}
+		{@const type = getLocalized<string>(activeNode.data, 'type')}
+		{@const description = getLocalized<string>(activeNode.data, 'description')}
+		{@const objectives = getLocalized<string[]>(activeNode.data, 'objective')}
+		{@const materialResources = activeNode.data.resource?.material ?? []}
 		<div
 			bind:this={tooltipElement}
 			class="tooltip"
+			data-tooltip="organisation"
+			role="dialog"
+			aria-label="Détails de l'organisation"
 			style="left: {tooltipPos.x}px; top: {tooltipPos.y}px;"
+			onpointerdown={(e) => e.stopPropagation()}
 		>
 			<div class="tooltip-header">
 				<span class="tooltip-title">{name}</span>
@@ -470,20 +533,90 @@
 			<div class="tooltip-stats">
 				<div class="stat-item">
 					<span class="stat-label">Membres:</span>
-					<span class="stat-value">{hoveredNode.data.resource?.human ?? 1} 👤</span>
+					<span class="stat-value">{activeNode.data.resource?.human ?? 1} 👤</span>
 				</div>
 
 				<div class="stat-item">
 					<span class="stat-label">Satisfaction:</span>
-					<div class="satisfaction-badge" style="background-color: {hoveredNode.color};">
-						{hoveredNode.data.satisfaction ?? 50}%
+					<div class="satisfaction-badge" style="background-color: {activeNode.color};">
+						{activeNode.data.satisfaction ?? 50}%
 					</div>
 				</div>
 
-				{#if hoveredNode.data.resource?.financial}
+				{#if activeNode.data.resource?.financial}
 					<div class="stat-item">
 						<span class="stat-label">Budget:</span>
-						<span class="stat-value">{hoveredNode.data.resource.financial} 🪙</span>
+						<span class="stat-value">{activeNode.data.resource.financial} 🪙</span>
+					</div>
+				{/if}
+			</div>
+
+			{#if objectives && objectives.length > 0}
+				<div class="objectives">
+					<span class="stat-label">Objectifs:</span>
+					<div class="tags">
+						{#each objectives as obj}
+							<span class="tag">{obj}</span>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
+			{#if materialResources.length > 0}
+				<div class="material-resources">
+					<span class="stat-label">Ressources matérielles:</span>
+					<div class="material-list">
+						{#each materialResources as material, index (material.name + index)}
+							<div class="material-item">
+								<span class="material-name">{getLocalizedMaterialName(material)}</span>
+								<span class="material-quantity">x{material.quantity}</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+		</div>
+	{:else if hoveredNode}
+		{@const activeNode = hoveredNode}
+		{@const name = getLocalized<string>(activeNode.data, 'name')}
+		{@const type = getLocalized<string>(activeNode.data, 'type')}
+		{@const description = getLocalized<string>(activeNode.data, 'description')}
+		{@const objectives = getLocalized<string[]>(activeNode.data, 'objective')}
+		{@const materialResources = activeNode.data.resource?.material ?? []}
+		<div
+			bind:this={tooltipElement}
+			class="tooltip"
+			data-tooltip="organisation"
+			role="dialog"
+			aria-label="Détails de l'organisation"
+			tabindex="0"
+			style="left: {tooltipPos.x}px; top: {tooltipPos.y}px;"
+			onpointerdown={(e) => e.stopPropagation()}
+		>
+			<div class="tooltip-header">
+				<span class="tooltip-title">{name}</span>
+				<span class="type-badge">{type || 'Organisation'}</span>
+			</div>
+
+			<p class="tooltip-desc">{description || 'Aucune description disponible.'}</p>
+
+			<div class="tooltip-stats">
+				<div class="stat-item">
+					<span class="stat-label">Membres:</span>
+					<span class="stat-value">{activeNode.data.resource?.human ?? 1} 👤</span>
+				</div>
+
+				<div class="stat-item">
+					<span class="stat-label">Satisfaction:</span>
+					<div class="satisfaction-badge" style="background-color: {activeNode.color};">
+						{activeNode.data.satisfaction ?? 50}%
+					</div>
+				</div>
+
+				{#if activeNode.data.resource?.financial}
+					<div class="stat-item">
+						<span class="stat-label">Budget:</span>
+						<span class="stat-value">{activeNode.data.resource.financial} 🪙</span>
 					</div>
 				{/if}
 			</div>
@@ -565,14 +698,18 @@
 	.tooltip {
 		position: fixed;
 		z-index: 100;
-		pointer-events: none;
+		pointer-events: auto;
+		touch-action: pan-y;
 
 		min-width: 240px;
-		max-width: 320px;
-		max-height: calc(100vh - 24px);
+		max-width: min(320px, calc(100vw - 24px));
+		max-height: min(400px, calc(100vh - 24px));
 		box-sizing: border-box;
 		overflow-y: auto;
+		overflow-x: hidden;
 		padding: 14px 16px;
+		word-break: break-word;
+		overflow-wrap: anywhere;
 
 		background: rgba(15, 23, 42, 0.85);
 		backdrop-filter: blur(12px);
@@ -596,6 +733,9 @@
 	.tooltip-title {
 		font-weight: 700;
 		font-size: 15px;
+		line-height: 1.35;
+		word-break: break-word;
+		overflow-wrap: anywhere;
 		color: #ffffff;
 	}
 
@@ -613,6 +753,9 @@
 		color: #cbd5e1;
 		margin-bottom: 10px;
 		line-height: 1.4;
+		word-break: break-word;
+		overflow-wrap: anywhere;
+		white-space: normal;
 	}
 
 	.tooltip-stats {
@@ -677,9 +820,9 @@
 
 	.material-name {
 		color: #e2e8f0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		word-break: break-word;
+		overflow-wrap: anywhere;
+		white-space: normal;
 	}
 
 	.material-quantity {
@@ -702,5 +845,7 @@
 		color: #60a5fa;
 		border: 1px solid rgba(59, 130, 246, 0.3);
 		border-radius: 4px;
+		word-break: break-word;
+		overflow-wrap: anywhere;
 	}
 </style>
