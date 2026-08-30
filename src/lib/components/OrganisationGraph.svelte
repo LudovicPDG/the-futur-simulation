@@ -135,7 +135,12 @@
 
 	function calculateRadius(humanResource: number): number {
 		const members = Math.max(1, humanResource || 1);
-		return Math.max(22, Math.min(75, 18 + Math.sqrt(members) * 5.5));
+
+		const scale = Math.min(1, Math.max(0.65, containerWidth / 800));
+
+		const baseRadius = 18 + Math.sqrt(members) * 5.5;
+
+		return Math.max(16, Math.min(75, baseRadius * scale));
 	}
 
 	// Sync prop organisations into graph nodes cleanly using untrack to prevent reactive loops
@@ -206,18 +211,55 @@
 		if (!selectedNode || !graphContainer) return;
 
 		const svg = graphContainer.querySelector('svg');
-		if (!svg) return;
+		const tooltip = tooltipElement;
 
-		// Convertit les coordonnées du node dans le SVG
-		// en coordonnées écran (viewport)
+		if (!svg || !tooltip) return;
+
+		const ctm = svg.getScreenCTM();
+		if (!ctm) return;
+
 		const point = new DOMPoint(selectedNode.x, selectedNode.y);
-		const screenPoint = point.matrixTransform(svg.getScreenCTM()!);
+		const screenPoint = point.matrixTransform(ctm);
 
-		tooltipPos = {
-			x: screenPoint.x + selectedNode.radius + 15,
-			y: screenPoint.y - selectedNode.radius
-		};
+		const margin = 12;
+		const gap = 15;
+
+		const tooltipRect = tooltip.getBoundingClientRect();
+
+		const tooltipWidth = tooltipRect.width;
+		const tooltipHeight = tooltipRect.height;
+
+		const viewportWidth = window.innerWidth;
+		const viewportHeight = window.innerHeight;
+
+		let x = screenPoint.x + selectedNode.radius + gap;
+		let y = screenPoint.y - selectedNode.radius;
+
+		// Pas assez de place à droite → gauche
+		if (x + tooltipWidth > viewportWidth - margin) {
+			x = screenPoint.x - selectedNode.radius - gap - tooltipWidth;
+		}
+
+		// Toujours hors écran horizontalement → centrer
+		if (x < margin) {
+			x = Math.max(
+				margin,
+				Math.min(screenPoint.x - tooltipWidth / 2, viewportWidth - tooltipWidth - margin)
+			);
+		}
+
+		// Verticalement
+		if (y + tooltipHeight > viewportHeight - margin) {
+			y = viewportHeight - tooltipHeight - margin;
+		}
+
+		if (y < margin) {
+			y = margin;
+		}
+
+		tooltipPos = { x, y };
 	}
+
 	function startPhysics() {
 		if (isRunning) return;
 		isRunning = true;
@@ -246,6 +288,14 @@
 
 		let totalMovement = 0;
 		let anyDragging = false;
+
+		if (activeDraggedNode && dragTargetX !== null && dragTargetY !== null) {
+			activeDraggedNode.x = dragTargetX;
+			activeDraggedNode.y = dragTargetY;
+
+			activeDraggedNode.vx = 0;
+			activeDraggedNode.vy = 0;
+		}
 
 		for (let i = 0; i < nodes.length; i++) {
 			const nodeA = nodes[i];
@@ -364,28 +414,46 @@
 		node.isDragging = true;
 		dragPointerId = e.pointerId;
 
-		(e.currentTarget as Element)?.setPointerCapture?.(e.pointerId);
+		const svg = graphContainer?.querySelector('svg');
 
-		updateSelectedTooltipPosition();
+		if (svg) {
+			try {
+				svg.setPointerCapture(e.pointerId);
+			} catch {
+				// Le pointeur peut déjà avoir été capturé ou être invalide.
+			}
+		}
+
+		// Attendre que Svelte ait créé le tooltip dans le DOM
+		requestAnimationFrame(() => {
+			updateSelectedTooltipPosition();
+		});
+
 		startPhysics();
 	}
+
+	let dragTargetX: number | null = null;
+	let dragTargetY: number | null = null;
 
 	function handlePointerMove(e: PointerEvent) {
 		if (activeDraggedNode && e.pointerId === dragPointerId) {
 			const svgElement = (e.currentTarget as Element).closest('svg');
+
 			if (svgElement) {
 				const rect = svgElement.getBoundingClientRect();
-				activeDraggedNode.x = Math.max(
+
+				dragTargetX = Math.max(
 					activeDraggedNode.radius,
 					Math.min(rect.width - activeDraggedNode.radius, e.clientX - rect.left)
 				);
-				activeDraggedNode.y = Math.max(
+
+				dragTargetY = Math.max(
 					activeDraggedNode.radius,
 					Math.min(rect.height - activeDraggedNode.radius, e.clientY - rect.top)
 				);
-				activeDraggedNode.vx = 0;
-				activeDraggedNode.vy = 0;
 			}
+
+			return;
 		}
 
 		if (hoveredNode && !selectedNode) {
@@ -419,11 +487,15 @@
 	}
 
 	function handlePointerUp(e: PointerEvent) {
-		if (activeDraggedNode && e.pointerId === dragPointerId) {
-			activeDraggedNode.isDragging = false;
-			activeDraggedNode = null;
-			dragPointerId = null;
-		}
+		if (!activeDraggedNode || e.pointerId !== dragPointerId) return;
+
+		activeDraggedNode.isDragging = false;
+
+		activeDraggedNode = null;
+		dragPointerId = null;
+
+		dragTargetX = null;
+		dragTargetY = null;
 	}
 
 	function openTooltipFor(node: GraphNode) {
@@ -667,11 +739,14 @@
 		width: 100%;
 		height: 100%;
 		user-select: none;
+		-webkit-user-select: none;
+		touch-action: none;
 	}
 
 	.node-group {
 		cursor: grab;
 		transition: transform 0.05s linear;
+		touch-action: none;
 	}
 
 	.node-group.dragging {
@@ -701,8 +776,10 @@
 		pointer-events: auto;
 		touch-action: pan-y;
 
-		min-width: 240px;
-		max-width: min(320px, calc(100vw - 24px));
+		min-width: 0;
+		width: min(320px, calc(100vw - 24px));
+		max-width: calc(100vw - 24px);
+
 		max-height: min(400px, calc(100vh - 24px));
 		box-sizing: border-box;
 		overflow-y: auto;
