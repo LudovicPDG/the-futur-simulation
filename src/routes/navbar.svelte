@@ -83,11 +83,7 @@
 								data-sveltekit-reload
 								class="lang-option"
 								onclick={() => selectLanguage(lang.code)}
-								href={resolve(
-									(lang.code === 'en'
-										? '/en'
-										: localizeHref(page.url.pathname, { locale: lang.code })) as Pathname
-								)}
+								href={resolve(localizeHref(page.url.pathname, { locale: lang.code }) as Pathname)}
 							>
 								<img src="/icon/flag/{lang.code}.svg" alt="{lang.name} flag" />
 
