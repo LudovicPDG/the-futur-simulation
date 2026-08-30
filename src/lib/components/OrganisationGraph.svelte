@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { getLocale } from '$lib/paraglide/runtime.js';
+	import type { ProofData } from '$lib/simulation/Proof';
 
 	export interface OrganisationData {
 		name: string;
@@ -43,7 +44,94 @@
 		};
 	}
 
-	let { organisations = [] }: { organisations: OrganisationData[] } = $props();
+	let {
+		organisations = [],
+		onAddArgument
+	}: {
+		organisations: OrganisationData[];
+		onAddArgument?: (mode: 'argument' | 'counter_argument', targetName: string, targetId?: string) => void;
+	} = $props();
+
+	// Proofs / Arguments state
+	let showArguments = $state(false);
+	let proofs = $state<ProofData[]>([]);
+	let proofsPage = $state(1);
+	let proofsTotalPages = $state(1);
+	let proofsTotal = $state(0);
+	let isLoadingProofs = $state(false);
+
+	// Nested child proofs states: key = proofId_argument / proofId_counterArgument
+	let childProofsMap = $state<Record<string, { list: ProofData[]; page: number; totalPages: number; total: number; isOpen: boolean; isLoading: boolean }>>({});
+
+	async function loadProofsForNode(orgName: string, page: number = 1) {
+		isLoadingProofs = true;
+		try {
+			const res = await fetch(`/api/proofs?targetId=${encodeURIComponent(orgName)}&page=${page}&pageSize=5`);
+			const data = await res.json();
+			if (data.proofs) {
+				proofs = data.proofs;
+				proofsPage = data.page;
+				proofsTotalPages = data.totalPages;
+				proofsTotal = data.total;
+			}
+		} catch (err) {
+			console.error('Error fetching proofs:', err);
+		} finally {
+			isLoadingProofs = false;
+		}
+	}
+
+	async function toggleChildProofs(proofId: string, type: 'argument' | 'counterArgument', page: number = 1) {
+		const key = `${proofId}_${type}`;
+		const current = childProofsMap[key] || { list: [], page: 1, totalPages: 1, total: 0, isOpen: false, isLoading: false };
+		
+		if (current.isOpen && page === current.page) {
+			// Toggle close
+			childProofsMap = {
+				...childProofsMap,
+				[key]: { ...current, isOpen: false }
+			};
+			return;
+		}
+
+		childProofsMap = {
+			...childProofsMap,
+			[key]: { ...current, isLoading: true, isOpen: true }
+		};
+
+		try {
+			const res = await fetch(`/api/proofs?proofId=${encodeURIComponent(proofId)}&type=${type}&page=${page}&pageSize=5`);
+			const data = await res.json();
+			if (data.proofs) {
+				childProofsMap = {
+					...childProofsMap,
+					[key]: {
+						list: data.proofs,
+						page: data.page,
+						totalPages: data.totalPages,
+						total: data.total,
+						isOpen: true,
+						isLoading: false
+					}
+				};
+			}
+		} catch (err) {
+			console.error('Error fetching child proofs:', err);
+			childProofsMap = {
+				...childProofsMap,
+				[key]: { ...current, isLoading: false, isOpen: true }
+			};
+		}
+	}
+
+	function getProofLocalized(proof: ProofData, field: 'name' | 'description'): string {
+		const lang = typeof getLocale === 'function' ? getLocale() : 'fr';
+		const key = `${field}_${lang}` as keyof ProofData;
+		const val = proof[key];
+		if (typeof val === 'string' && val.trim().length > 0) return val;
+		return (proof[`${field}_fr` as keyof ProofData] as string) || (proof[`${field}_en` as keyof ProofData] as string) || '';
+	}
+
 
 	function getLocalized<T>(
 		org: OrganisationData,
@@ -647,6 +735,251 @@
 					</div>
 				</div>
 			{/if}
+
+			<!-- Proofs / Arguments Section -->
+			<div class="proofs-section">
+				<div class="proofs-header-actions">
+					<button
+						type="button"
+						class="toggle-proofs-btn"
+						onclick={() => {
+							showArguments = !showArguments;
+							if (showArguments) {
+								loadProofsForNode(name, 1);
+							}
+						}}
+					>
+						<span>{showArguments ? 'Masquer les arguments' : 'Afficher les arguments'}</span>
+						{#if proofsTotal > 0}
+							<span class="proofs-count-badge">{proofsTotal}</span>
+						{/if}
+					</button>
+
+					<button
+						type="button"
+						class="add-proof-quick-btn"
+						title="Créer un argument sur cette organisation"
+						onclick={() => onAddArgument?.('argument', name, activeNode.id)}
+					>
+						+ Argument
+					</button>
+				</div>
+
+				{#if showArguments}
+					<div class="proofs-content">
+						{#if isLoadingProofs}
+							<div class="proofs-loading">Chargement des arguments...</div>
+						{:else if proofs.length === 0}
+							<div class="proofs-empty">
+								<p>Aucun argument pour le moment.</p>
+								<div class="proof-actions-row">
+									<button
+										type="button"
+										class="action-btn argument-btn"
+										onclick={() => onAddArgument?.('argument', name, activeNode.id)}
+									>
+										Ajouter un argument
+									</button>
+									<button
+										type="button"
+										class="action-btn counter-btn"
+										onclick={() => onAddArgument?.('counter_argument', name, activeNode.id)}
+									>
+										Ajouter un contre-argument
+									</button>
+								</div>
+							</div>
+						{:else}
+							<div class="proofs-list">
+								{#each proofs as proof (proof.id || proof.name_fr)}
+									{@const pName = getProofLocalized(proof, 'name')}
+									{@const pDesc = getProofLocalized(proof, 'description')}
+									{@const argKey = `${proof.id}_argument`}
+									{@const counterKey = `${proof.id}_counterArgument`}
+									{@const childArgs = childProofsMap[argKey]}
+									{@const childCounters = childProofsMap[counterKey]}
+
+									<div class="proof-card">
+										<div class="proof-title-row">
+											<span class="proof-title">{pName}</span>
+											<div class="proof-metrics">
+												<span class="proof-credibility" title="Crédibilité: {proof.credibility}%">
+													{proof.credibility}% ⭐
+												</span>
+												<span
+													class="proof-impact"
+													class:positive={proof.impact >= 0}
+													class:negative={proof.impact < 0}
+													title="Impact: {proof.impact}"
+												>
+													{proof.impact > 0 ? `+${proof.impact}` : proof.impact} ⚡
+												</span>
+											</div>
+										</div>
+
+										<p class="proof-desc">{pDesc}</p>
+
+										{#if proof.source && proof.source.length > 0}
+											<div class="proof-sources">
+												<span class="sources-label">Sources:</span>
+												{#each proof.source as src}
+													<span class="source-tag">{src}</span>
+												{/each}
+											</div>
+										{/if}
+
+										<!-- Action buttons for this proof -->
+										<div class="proof-interactive-bar">
+											<!-- View argument / counter-argument toggles -->
+											<button
+												type="button"
+												class="sub-toggle-btn"
+												class:active={childArgs?.isOpen}
+												onclick={() => proof.id && toggleChildProofs(proof.id, 'argument', childArgs?.page || 1)}
+											>
+												Arguments {childArgs?.total ? `(${childArgs.total})` : ''}
+											</button>
+											<button
+												type="button"
+												class="sub-toggle-btn"
+												class:active={childCounters?.isOpen}
+												onclick={() => proof.id && toggleChildProofs(proof.id, 'counterArgument', childCounters?.page || 1)}
+											>
+												Contre-arguments {childCounters?.total ? `(${childCounters.total})` : ''}
+											</button>
+
+											<!-- Add argument / counter-argument buttons -->
+											<button
+												type="button"
+												class="mini-action-btn add-arg"
+												onclick={() => onAddArgument?.('argument', pName, proof.id)}
+												title="Ajouter un argument"
+											>
+												+ Arg
+											</button>
+											<button
+												type="button"
+												class="mini-action-btn add-counter"
+												onclick={() => onAddArgument?.('counter_argument', pName, proof.id)}
+												title="Ajouter un contre-argument"
+											>
+												+ Contre
+											</button>
+										</div>
+
+										<!-- Sub-list of Arguments (Paginated 5 per 5) -->
+										{#if childArgs?.isOpen}
+											<div class="sub-proofs-tree">
+												<span class="sub-tree-title">Arguments en faveur :</span>
+												{#if childArgs.isLoading}
+													<div class="sub-loading">Chargement...</div>
+												{:else if childArgs.list.length === 0}
+													<div class="sub-empty">Aucun sous-argument pour le moment.</div>
+												{:else}
+													{#each childArgs.list as child (child.id || child.name_fr)}
+														<div class="sub-proof-item argument-item">
+															<div class="sub-proof-header">
+																<span class="sub-name">{getProofLocalized(child, 'name')}</span>
+																<span class="sub-badge">{child.credibility}% ⭐</span>
+															</div>
+															<p class="sub-desc">{getProofLocalized(child, 'description')}</p>
+														</div>
+													{/each}
+
+													{#if childArgs.totalPages > 1}
+														<div class="sub-pagination">
+															<button
+																type="button"
+																disabled={childArgs.page <= 1}
+																onclick={() => proof.id && toggleChildProofs(proof.id, 'argument', childArgs.page - 1)}
+															>
+																◀
+															</button>
+															<span>{childArgs.page} / {childArgs.totalPages}</span>
+															<button
+																type="button"
+																disabled={childArgs.page >= childArgs.totalPages}
+																onclick={() => proof.id && toggleChildProofs(proof.id, 'argument', childArgs.page + 1)}
+															>
+																▶
+															</button>
+														</div>
+													{/if}
+												{/if}
+											</div>
+										{/if}
+
+										<!-- Sub-list of Counter-Arguments (Paginated 5 per 5) -->
+										{#if childCounters?.isOpen}
+											<div class="sub-proofs-tree counter-tree">
+												<span class="sub-tree-title">Contre-arguments :</span>
+												{#if childCounters.isLoading}
+													<div class="sub-loading">Chargement...</div>
+												{:else if childCounters.list.length === 0}
+													<div class="sub-empty">Aucun contre-argument pour le moment.</div>
+												{:else}
+													{#each childCounters.list as child (child.id || child.name_fr)}
+														<div class="sub-proof-item counter-item">
+															<div class="sub-proof-header">
+																<span class="sub-name">{getProofLocalized(child, 'name')}</span>
+																<span class="sub-badge">{child.credibility}% ⭐</span>
+															</div>
+															<p class="sub-desc">{getProofLocalized(child, 'description')}</p>
+														</div>
+													{/each}
+
+													{#if childCounters.totalPages > 1}
+														<div class="sub-pagination">
+															<button
+																type="button"
+																disabled={childCounters.page <= 1}
+																onclick={() => proof.id && toggleChildProofs(proof.id, 'counterArgument', childCounters.page - 1)}
+															>
+																◀
+															</button>
+															<span>{childCounters.page} / {childCounters.totalPages}</span>
+															<button
+																type="button"
+																disabled={childCounters.page >= childCounters.totalPages}
+																onclick={() => proof.id && toggleChildProofs(proof.id, 'counterArgument', childCounters.page + 1)}
+															>
+																▶
+															</button>
+														</div>
+													{/if}
+												{/if}
+											</div>
+										{/if}
+									</div>
+								{/each}
+
+								<!-- Main Proofs Pagination (5 per 5) -->
+								{#if proofsTotalPages > 1}
+									<div class="proofs-pagination">
+										<button
+											type="button"
+											class="page-btn"
+											disabled={proofsPage <= 1}
+											onclick={() => loadProofsForNode(name, proofsPage - 1)}
+										>
+											Précédent
+										</button>
+										<span class="page-indicator">Page {proofsPage} / {proofsTotalPages}</span>
+										<button
+											type="button"
+											class="page-btn"
+											disabled={proofsPage >= proofsTotalPages}
+											onclick={() => loadProofsForNode(name, proofsPage + 1)}
+										>
+											Suivant
+										</button>
+									</div>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
 		</div>
 	{:else if hoveredNode}
 		{@const activeNode = hoveredNode}
@@ -925,4 +1258,296 @@
 		word-break: break-word;
 		overflow-wrap: anywhere;
 	}
+
+	/* Proofs & Arguments Styling */
+	.proofs-section {
+		margin-top: 10px;
+		border-top: 1px solid rgba(255, 255, 255, 0.12);
+		padding-top: 8px;
+	}
+
+	.proofs-header-actions {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.toggle-proofs-btn {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		background: rgba(59, 130, 246, 0.2);
+		border: 1px solid rgba(59, 130, 246, 0.4);
+		color: #93c5fd;
+		padding: 4px 10px;
+		border-radius: 8px;
+		font-size: 11px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: background 0.15s ease;
+	}
+
+	.toggle-proofs-btn:hover {
+		background: rgba(59, 130, 246, 0.35);
+	}
+
+	.proofs-count-badge {
+		background: #3b82f6;
+		color: white;
+		border-radius: 10px;
+		padding: 0 5px;
+		font-size: 10px;
+	}
+
+	.add-proof-quick-btn {
+		background: rgba(239, 68, 68, 0.2);
+		border: 1px solid rgba(239, 68, 68, 0.4);
+		color: #fca5a5;
+		padding: 4px 8px;
+		border-radius: 8px;
+		font-size: 11px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: background 0.15s ease;
+	}
+
+	.add-proof-quick-btn:hover {
+		background: rgba(239, 68, 68, 0.35);
+	}
+
+	.proofs-content {
+		margin-top: 8px;
+	}
+
+	.proofs-loading,
+	.proofs-empty {
+		font-size: 11px;
+		color: #94a3b8;
+		padding: 6px 0;
+	}
+
+	.proof-actions-row {
+		display: flex;
+		gap: 6px;
+		margin-top: 6px;
+	}
+
+	.action-btn {
+		padding: 4px 8px;
+		border-radius: 6px;
+		font-size: 10px;
+		font-weight: 600;
+		cursor: pointer;
+		border: none;
+	}
+
+	.argument-btn {
+		background: rgba(34, 197, 94, 0.2);
+		border: 1px solid rgba(34, 197, 94, 0.4);
+		color: #86efac;
+	}
+
+	.counter-btn {
+		background: rgba(239, 68, 68, 0.2);
+		border: 1px solid rgba(239, 68, 68, 0.4);
+		color: #fca5a5;
+	}
+
+	.proofs-list {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.proof-card {
+		background: rgba(255, 255, 255, 0.04);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 8px;
+		padding: 8px;
+	}
+
+	.proof-title-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 6px;
+		margin-bottom: 4px;
+	}
+
+	.proof-title {
+		font-size: 12px;
+		font-weight: 600;
+		color: #f8fafc;
+		line-height: 1.3;
+	}
+
+	.proof-metrics {
+		display: flex;
+		gap: 4px;
+		flex-shrink: 0;
+	}
+
+	.proof-credibility {
+		font-size: 10px;
+		background: rgba(234, 179, 8, 0.2);
+		color: #fde047;
+		padding: 1px 4px;
+		border-radius: 4px;
+	}
+
+	.proof-impact {
+		font-size: 10px;
+		padding: 1px 4px;
+		border-radius: 4px;
+	}
+
+	.proof-impact.positive {
+		background: rgba(34, 197, 94, 0.2);
+		color: #86efac;
+	}
+
+	.proof-impact.negative {
+		background: rgba(239, 68, 68, 0.2);
+		color: #fca5a5;
+	}
+
+	.proof-desc {
+		font-size: 11px;
+		color: #cbd5e1;
+		line-height: 1.35;
+		margin-bottom: 6px;
+	}
+
+	.proof-sources {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		margin-bottom: 6px;
+	}
+
+	.sources-label {
+		font-size: 10px;
+		color: #94a3b8;
+	}
+
+	.source-tag {
+		font-size: 9px;
+		background: rgba(255, 255, 255, 0.08);
+		color: #cbd5e1;
+		padding: 1px 4px;
+		border-radius: 3px;
+	}
+
+	.proof-interactive-bar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		margin-top: 4px;
+		padding-top: 4px;
+		border-top: 1px solid rgba(255, 255, 255, 0.05);
+	}
+
+	.sub-toggle-btn {
+		font-size: 10px;
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		color: #cbd5e1;
+		padding: 2px 6px;
+		border-radius: 4px;
+		cursor: pointer;
+	}
+
+	.sub-toggle-btn.active {
+		background: rgba(59, 130, 246, 0.3);
+		border-color: #3b82f6;
+		color: #93c5fd;
+	}
+
+	.mini-action-btn {
+		font-size: 10px;
+		padding: 2px 5px;
+		border-radius: 4px;
+		border: none;
+		cursor: pointer;
+		font-weight: 600;
+	}
+
+	.mini-action-btn.add-arg {
+		background: rgba(34, 197, 94, 0.25);
+		color: #86efac;
+	}
+
+	.mini-action-btn.add-counter {
+		background: rgba(239, 68, 68, 0.25);
+		color: #fca5a5;
+	}
+
+	.sub-proofs-tree {
+		margin-top: 6px;
+		padding: 6px;
+		background: rgba(0, 0, 0, 0.25);
+		border-left: 2px solid #22c55e;
+		border-radius: 4px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.sub-proofs-tree.counter-tree {
+		border-left-color: #ef4444;
+	}
+
+	.sub-tree-title {
+		font-size: 10px;
+		font-weight: 600;
+		color: #94a3b8;
+	}
+
+	.sub-proof-item {
+		background: rgba(255, 255, 255, 0.03);
+		padding: 4px 6px;
+		border-radius: 4px;
+	}
+
+	.sub-proof-header {
+		display: flex;
+		justify-content: space-between;
+		font-size: 10px;
+		font-weight: 600;
+		color: #e2e8f0;
+	}
+
+	.sub-desc {
+		font-size: 10px;
+		color: #94a3b8;
+		margin-top: 2px;
+	}
+
+	.sub-pagination,
+	.proofs-pagination {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 8px;
+		margin-top: 6px;
+		font-size: 10px;
+		color: #94a3b8;
+	}
+
+	.page-btn {
+		background: rgba(255, 255, 255, 0.1);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		color: #f8fafc;
+		padding: 2px 8px;
+		border-radius: 4px;
+		cursor: pointer;
+		font-size: 10px;
+	}
+
+	.page-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
 </style>
+
