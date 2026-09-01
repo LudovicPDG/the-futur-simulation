@@ -78,7 +78,7 @@ export type ProofPaginationResult = {
 export class Proof {
 	constructor(public data: ProofData) {}
 
-	public static async init(data: ProofData, targetId?: string, relationshipType?: 'TARGETS' | 'HAS_ARGUMENT' | 'HAS_COUNTER_ARGUMENT') {
+	public static async init(data: ProofData, targetId: string, relationshipType?: 'TARGETS' | 'HAS_ARGUMENT' | 'HAS_COUNTER_ARGUMENT') {
 		const parsed = ProofSchema.parse(data);
 		
 		// Anti-spam validation: verify credibility and impact are not negligible
@@ -107,13 +107,63 @@ export class Proof {
 	// Database Persistence
 	// -----------------------------------------------------
 
-	async addToDB(targetId?: string, relationshipType: 'TARGETS' | 'HAS_ARGUMENT' | 'HAS_COUNTER_ARGUMENT' = 'TARGETS'): Promise<ProofData> {
+	async addToDB(targetId: string, relationshipType: 'TARGETS' | 'HAS_ARGUMENT' | 'HAS_COUNTER_ARGUMENT' = 'TARGETS'): Promise<ProofData> {
+		if (!targetId || targetId.trim() === '') {
+			throw new Error('A Proof cannot exist without being connected to a target (Organisation or parent Proof).');
+		}
+
 		const driver = neo4j.driver(NEO4J_URI!, neo4j.auth.basic(NEO4J_USERNAME!, NEO4J_PASSWORD!));
 		const session = driver.session();
 
 		try {
+			// 1. Verify target exists first to avoid orphan proof nodes
+			let targetMatchQuery = '';
+			if (relationshipType === 'HAS_ARGUMENT' || relationshipType === 'HAS_COUNTER_ARGUMENT') {
+				targetMatchQuery = `
+					MATCH (target:Proof)
+					WHERE elementId(target) = $targetId 
+					   OR target.name_fr = $targetId 
+					   OR target.name_en = $targetId 
+					   OR target.name_de = $targetId 
+					   OR target.name_es = $targetId
+					RETURN target, elementId(target) AS resolvedTargetId
+					LIMIT 1
+				`;
+			} else {
+				targetMatchQuery = `
+					MATCH (target)
+					WHERE (target:Organisation OR target:Fact OR target:Action OR target:Proof)
+					  AND (elementId(target) = $targetId 
+					   OR target.name_fr = $targetId 
+					   OR target.name_en = $targetId 
+					   OR target.name_de = $targetId 
+					   OR target.name_es = $targetId
+					   OR target.name = $targetId)
+					RETURN target, elementId(target) AS resolvedTargetId
+					LIMIT 1
+				`;
+			}
+
+			const targetCheck = await session.run(targetMatchQuery, { targetId });
+			if (targetCheck.records.length === 0) {
+				throw new Error(`Target element "${targetId}" not found in database. Proof must be attached to an existing element.`);
+			}
+			const resolvedTargetId = targetCheck.records[0].get('resolvedTargetId');
+
+			// 2. Create the Proof and link it atomically in a single query
+			let relQuery = '';
+			if (relationshipType === 'HAS_ARGUMENT') {
+				relQuery = 'CREATE (target)-[:HAS_ARGUMENT]->(p)';
+			} else if (relationshipType === 'HAS_COUNTER_ARGUMENT') {
+				relQuery = 'CREATE (target)-[:HAS_COUNTER_ARGUMENT]->(p)';
+			} else {
+				relQuery = 'CREATE (target)-[:HAS_PROOF]->(p)';
+			}
+
 			const result = await session.run(
 				`
+				MATCH (target)
+				WHERE elementId(target) = $resolvedTargetId
 				CREATE (p:Proof {
 					name_fr: $name_fr,
 					name_en: $name_en,
@@ -130,9 +180,11 @@ export class Proof {
 					impact: $impact,
 					createdAt: datetime()
 				})
+				${relQuery}
 				RETURN p, elementId(p) AS proofId
 				`,
 				{
+					resolvedTargetId,
 					name_fr: this.data.name_fr,
 					name_en: this.data.name_en,
 					name_de: this.data.name_de,
@@ -149,44 +201,12 @@ export class Proof {
 				}
 			);
 
+			if (result.records.length === 0) {
+				throw new Error(`Failed to create proof attached to target "${targetId}".`);
+			}
+
 			const proofNode = result.records[0].get('p');
 			const proofId = result.records[0].get('proofId');
-
-			// Link to target (Organisation or parent Proof)
-			if (targetId) {
-				if (relationshipType === 'HAS_ARGUMENT') {
-					await session.run(
-						`
-						MATCH (parent:Proof), (p:Proof)
-						WHERE (elementId(parent) = $targetId OR parent.name_fr = $targetId OR parent.name_en = $targetId)
-						AND elementId(p) = $proofId
-						CREATE (parent)-[:HAS_ARGUMENT]->(p)
-						`,
-						{ targetId, proofId }
-					);
-				} else if (relationshipType === 'HAS_COUNTER_ARGUMENT') {
-					await session.run(
-						`
-						MATCH (parent:Proof), (p:Proof)
-						WHERE (elementId(parent) = $targetId OR parent.name_fr = $targetId OR parent.name_en = $targetId)
-						AND elementId(p) = $proofId
-						CREATE (parent)-[:HAS_COUNTER_ARGUMENT]->(p)
-						`,
-						{ targetId, proofId }
-					);
-				} else {
-					// Default: link to Organisation or entity
-					await session.run(
-						`
-						MATCH (target), (p:Proof)
-						WHERE (elementId(target) = $targetId OR target.name_fr = $targetId OR target.name_en = $targetId OR target.name = $targetId)
-						AND elementId(p) = $proofId
-						CREATE (target)-[:HAS_PROOF]->(p)
-						`,
-						{ targetId, proofId }
-					);
-				}
-			}
 
 			// Add nested arguments if provided
 			if (this.data.argument && this.data.argument.length > 0) {

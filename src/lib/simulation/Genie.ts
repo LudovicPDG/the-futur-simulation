@@ -185,8 +185,63 @@ All text fields in the simulation must be provided in four languages: French (_f
 		private level_of_reasoning: string = 'low'
 	) {}
 
+	/**
+	 * Fetch existing simulation elements (Organisations, Facts, Actions, Proofs) from Neo4j in English
+	 * to provide context without saturating the prompt token window.
+	 */
+	async getSimulationElementsContext(): Promise<string> {
+		const driver = neo4j.driver(NEO4J_URI!, neo4j.auth.basic(NEO4J_USERNAME!, NEO4J_PASSWORD!));
+		const session = driver.session();
+
+		try {
+			const res = await session.run(`
+				MATCH (n)
+				WHERE n:Organisation OR n:Fact OR n:Action OR n:Proof
+				RETURN labels(n)[0] AS type,
+				       elementId(n) AS id,
+				       coalesce(n.name_en, n.name, n.name_fr, 'Unnamed') AS name,
+				       coalesce(n.description_en, n.description, n.description_fr, '') AS description,
+				       n.satisfaction AS satisfaction,
+				       n.human_resource AS human,
+				       n.financial_resource AS financial
+				LIMIT 60
+			`);
+
+			if (res.records.length === 0) {
+				return 'No existing simulation elements found.';
+			}
+
+			const lines = res.records.map((r) => {
+				const type = r.get('type');
+				const id = r.get('id');
+				const name = r.get('name');
+				const desc = (r.get('description') || '').slice(0, 120);
+				const sat = r.get('satisfaction');
+				const extra = sat !== null && sat !== undefined ? ` [sat: ${sat}]` : '';
+				return `- [${type}] ID: "${id}" | Name: "${name}"${extra} | Desc: ${desc}`;
+			});
+
+			return `Current Simulation Elements (English summary):\n${lines.join('\n')}`;
+		} catch (err) {
+			console.error('Error fetching simulation elements context:', err);
+			return 'Unable to load simulation context.';
+		} finally {
+			await session.close();
+			await driver.close();
+		}
+	}
+
 	async ask(question: string) {
 		console.log('Genie prompt:', question);
+		const elementsContext = await this.getSimulationElementsContext();
+
+		const systemPromptWithContext = `${this.system_prompt}
+
+IMPORTANT - EXISTING SIMULATION ELEMENTS (English):
+Use these real IDs and names when selecting a targetId for proofs, arguments, or relationships.
+${elementsContext}
+`;
+
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
 			headers: {
@@ -196,7 +251,7 @@ All text fields in the simulation must be provided in four languages: French (_f
 			body: JSON.stringify({
 				model: this.model_name,
 				messages: [
-					{ role: 'system', content: this.system_prompt },
+					{ role: 'system', content: systemPromptWithContext },
 					{ role: 'user', content: question }
 				],
 				response_format: {
@@ -237,7 +292,7 @@ All text fields in the simulation must be provided in four languages: French (_f
 
 		switch (actionResult.action) {
 			case 'create_organisation': {
-				const org = await this.createOrganisation(question);
+				const org = await this.createOrganisation(question, elementsContext);
 				return { action: actionResult.action, organisation: org.data };
 			}
 			case 'create_proof':
@@ -254,7 +309,8 @@ All text fields in the simulation must be provided in four languages: French (_f
 					question,
 					actionResult.targetId,
 					relType,
-					actionResult.targetField
+					actionResult.targetField,
+					elementsContext
 				);
 				return { action: actionResult.action, ...proofResult };
 			}
@@ -341,8 +397,15 @@ Is this candidate an exact or essentially identical duplicate of an existing pro
 		userPrompt: string,
 		targetId?: string,
 		relType: 'TARGETS' | 'HAS_ARGUMENT' | 'HAS_COUNTER_ARGUMENT' = 'TARGETS',
-		targetField?: string
+		targetField?: string,
+		elementsContext?: string
 	) {
+		if (!targetId || targetId.trim() === '') {
+			throw new Error('Cannot create proof: targetId is required so the proof is connected to a simulation element.');
+		}
+
+		const simContext = elementsContext || (await this.getSimulationElementsContext());
+
 		// 1. Generate structured proof in 4 languages
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
@@ -353,10 +416,13 @@ Is this candidate an exact or essentially identical duplicate of an existing pro
 			body: JSON.stringify({
 				model: this.model_name,
 				messages: [
-					{ role: 'system', content: this.system_prompt },
+					{
+						role: 'system',
+						content: `${this.system_prompt}\n\nSimulation elements in English:\n${simContext}`
+					},
 					{
 						role: 'user',
-						content: `Generate a structured proof/argument from this user input: "${userPrompt}". Target: "${targetId || 'general'}", field: "${targetField || 'satisfaction'}". Ensure credible scoring (credibility 0-100, impact non-zero).`
+						content: `Generate a structured proof/argument from this user input: "${userPrompt}". Target: "${targetId}", field: "${targetField || 'satisfaction'}". Ensure credible scoring (credibility 0-100, impact non-zero).`
 					}
 				],
 				response_format: {
@@ -388,7 +454,7 @@ Is this candidate an exact or essentially identical duplicate of an existing pro
 			}
 		}
 
-		// 3. Save Proof to Neo4j
+		// 3. Save Proof to Neo4j (must be connected to targetId)
 		const proof = await Proof.init(
 			{
 				...generated,
@@ -547,7 +613,9 @@ Update and integrate the new findings from this proof into the description in al
 		return NonNumericUpdateSchema.parse(JSON.parse(content));
 	}
 
-	async createOrganisation(question: string) {
+	async createOrganisation(question: string, elementsContext?: string) {
+		const simContext = elementsContext || (await this.getSimulationElementsContext());
+
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
 			headers: {
@@ -557,7 +625,10 @@ Update and integrate the new findings from this proof into the description in al
 			body: JSON.stringify({
 				model: this.model_name,
 				messages: [
-					{ role: 'system', content: this.system_prompt },
+					{
+						role: 'system',
+						content: `${this.system_prompt}\n\nIMPORTANT - EXISTING SIMULATION ELEMENTS (English):\n${simContext}`
+					},
 					{ role: 'user', content: question }
 				],
 				response_format: {
