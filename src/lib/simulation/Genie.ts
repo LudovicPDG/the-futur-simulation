@@ -10,16 +10,10 @@ const ActionSchema = z.object({
 		'create_organisation',
 		'create_person',
 		'create_event',
-		'delete_organisation',
-		'delete_person',
-		'delete_event',
-		'modify_organisation',
-		'modify_person',
-		'modify_event',
 		'create_proof',
 		'add_argument',
 		'add_counter_argument',
-		'no_action'
+		'question'
 	]),
 	targetId: z.string().default(''),
 	targetField: z.string().default('')
@@ -58,10 +52,30 @@ const SimilarityCheckSchema = z.object({
 });
 
 const NonNumericUpdateSchema = z.object({
-	updatedText_fr: z.string(),
-	updatedText_en: z.string(),
-	updatedText_de: z.string(),
-	updatedText_es: z.string()
+	updatedText_fr: z.string().optional(),
+	updatedText_en: z.string().optional(),
+	updatedText_de: z.string().optional(),
+	updatedText_es: z.string().optional(),
+	updatedObjectives_fr: z.array(z.string()).optional(),
+	updatedObjectives_en: z.array(z.string()).optional(),
+	updatedObjectives_de: z.array(z.string()).optional(),
+	updatedObjectives_es: z.array(z.string()).optional(),
+	updatedMaterialResources: z
+		.array(
+			z.object({
+				name_fr: z.string(),
+				name_en: z.string(),
+				name_de: z.string(),
+				name_es: z.string(),
+				description_fr: z.string(),
+				description_en: z.string(),
+				description_de: z.string(),
+				description_es: z.string(),
+				quantity: z.number().nonnegative(),
+				value: z.number().nonnegative()
+			})
+		)
+		.optional()
 });
 
 export class Genie {
@@ -177,6 +191,8 @@ Spam prevention rules:
 - Any proof with negligible credibility (<10) or negligible impact (<0.05) must be rejected.
 - Before creating a proof, the Genius checks if a similar proof already exists on this target to prevent redundant spamming.
 
+If the user's question does not match any response type, simply respond with the “question” response type.
+
 All text fields in the simulation must be provided in four languages: French (_fr), English (_en), German (_de), and Spanish (_es).
 `;
 
@@ -276,7 +292,10 @@ ${elementsContext}
 		const content = data.choices?.[0]?.message?.content;
 
 		if (!content) {
-			console.error('OpenRouter returned empty content. Full response:', JSON.stringify(data, null, 2));
+			console.error(
+				'OpenRouter returned empty content. Full response:',
+				JSON.stringify(data, null, 2)
+			);
 			throw new Error('OpenRouter returned an empty response');
 		}
 
@@ -401,7 +420,9 @@ Is this candidate an exact or essentially identical duplicate of an existing pro
 		elementsContext?: string
 	) {
 		if (!targetId || targetId.trim() === '') {
-			throw new Error('Cannot create proof: targetId is required so the proof is connected to a simulation element.');
+			throw new Error(
+				'Cannot create proof: targetId is required so the proof is connected to a simulation element.'
+			);
 		}
 
 		const simContext = elementsContext || (await this.getSimulationElementsContext());
@@ -439,7 +460,9 @@ Is this candidate an exact or essentially identical duplicate of an existing pro
 		const data = await response.json();
 		if (!response.ok || data.error) {
 			console.error('OpenRouter API error in processProofSubmission():', data.error || data);
-			throw new Error(`OpenRouter API error in proof generation: ${JSON.stringify(data.error || data)}`);
+			throw new Error(
+				`OpenRouter API error in proof generation: ${JSON.stringify(data.error || data)}`
+			);
 		}
 		const content = data.choices?.[0]?.message?.content;
 		if (!content) throw new Error('Failed to generate proof structure from Genie (empty content)');
@@ -479,102 +502,275 @@ Is this candidate an exact or essentially identical duplicate of an existing pro
 		const session = driver.session();
 
 		try {
-			// Check if target is an Organisation
-			const orgRes = await session.run(
+			// Check if target is an Organisation or any simulation node
+			const nodeRes = await session.run(
 				`
-				MATCH (o:Organisation)
-				WHERE elementId(o) = $targetId OR o.name_fr = $targetId OR o.name_en = $targetId OR o.name = $targetId
-				RETURN o, elementId(o) AS orgId
+				MATCH (n)
+				WHERE (n:Organisation OR n:Fact OR n:Action OR n:Proof)
+				  AND (elementId(n) = $targetId OR n.name_fr = $targetId OR n.name_en = $targetId OR n.name = $targetId)
+				OPTIONAL MATCH (n)-[:HAS_RESOURCE]->(r:MaterialResource)
+				RETURN n, labels(n) AS labels, elementId(n) AS nodeId, collect(r) AS materialResources
+				LIMIT 1
 				`,
 				{ targetId }
 			);
 
-			if (orgRes.records.length > 0) {
-				const orgProps = orgRes.records[0].get('o').properties;
-				const field = proofData.targetField || 'satisfaction';
-
-				// Numeric fields: satisfaction, human_resource, financial_resource
-				if (
-					field === 'satisfaction' ||
-					field === 'human' ||
-					field === 'financial' ||
-					field === 'human_resource' ||
-					field === 'financial_resource'
-				) {
-					const propKey =
-						field === 'human'
-							? 'human_resource'
-							: field === 'financial'
-								? 'financial_resource'
-								: 'satisfaction';
-					const currentVal = Number(orgProps[propKey] ?? (propKey === 'satisfaction' ? 50 : 0));
-					const delta = proofData.value ?? 10;
-					let newVal = Proof.computeNumericModification(
-						currentVal,
-						delta,
-						proofData.impact,
-						proofData.credibility
-					);
-					if (propKey === 'satisfaction') {
-						newVal = Math.max(0, Math.min(100, Math.round(newVal)));
-					} else {
-						newVal = Math.max(0, Math.round(newVal));
-					}
-
-					await session.run(
-						`
-						MATCH (o:Organisation)
-						WHERE elementId(o) = $orgId
-						SET o.${propKey} = $newVal
-						RETURN o
-						`,
-						{ orgId: orgRes.records[0].get('orgId'), newVal }
-					);
-
-					return { modifiedField: propKey, previousValue: currentVal, newValue: newVal };
-				} else {
-					// Non-numeric field (e.g. description)
-					const updatedTexts = await this.synthesizeNonNumericText(
-						String(orgProps.description_fr || ''),
-						proofData
-					);
-
-					await session.run(
-						`
-						MATCH (o:Organisation)
-						WHERE elementId(o) = $orgId
-						SET o.description_fr = $fr,
-						    o.description_en = $en,
-						    o.description_de = $de,
-						    o.description_es = $es
-						RETURN o
-						`,
-						{
-							orgId: orgRes.records[0].get('orgId'),
-							fr: updatedTexts.updatedText_fr,
-							en: updatedTexts.updatedText_en,
-							de: updatedTexts.updatedText_de,
-							es: updatedTexts.updatedText_es
-						}
-					);
-
-					return { modifiedField: 'description', updatedTexts };
-				}
+			if (nodeRes.records.length === 0) {
+				return null;
 			}
 
-			return null;
+			const record = nodeRes.records[0];
+			const node = record.get('n');
+			const nodeProps = node.properties;
+			const nodeId = record.get('nodeId');
+			const labels = record.get('labels') as string[];
+			const rawMaterials = record.get('materialResources') as Array<{
+				properties: Record<string, unknown>;
+			}>;
+			const field = (proofData.targetField || 'satisfaction').trim();
+
+			// 1. Check if the targetField corresponds to a numeric property on the node
+			const isSatisfaction = field === 'satisfaction';
+			const isHuman =
+				field === 'human' ||
+				field === 'human_resource' ||
+				field === 'human_resources' ||
+				field === 'resource.human' ||
+				field === 'resources.human';
+			const isFinancial =
+				field === 'financial' ||
+				field === 'financial_resource' ||
+				field === 'financial_resources' ||
+				field === 'resource.financial' ||
+				field === 'resources.financial';
+
+			const isGenericNumeric =
+				typeof nodeProps[field] === 'number' ||
+				(typeof nodeProps[field] === 'object' &&
+					nodeProps[field] !== null &&
+					'toNumber' in nodeProps[field]);
+
+			if (isSatisfaction || isHuman || isFinancial || isGenericNumeric) {
+				const propKey = isHuman
+					? 'human_resource'
+					: isFinancial
+						? 'financial_resource'
+						: isSatisfaction
+							? 'satisfaction'
+							: field;
+				const rawVal = nodeProps[propKey];
+				const currentVal =
+					typeof rawVal === 'object' && rawVal !== null && 'toNumber' in rawVal
+						? (rawVal as { toNumber: () => number }).toNumber()
+						: Number(rawVal ?? (propKey === 'satisfaction' ? 50 : 0));
+
+				const delta = proofData.value ?? 10;
+				let newVal = Proof.computeNumericModification(
+					currentVal,
+					delta,
+					proofData.impact,
+					proofData.credibility
+				);
+
+				if (propKey === 'satisfaction') {
+					newVal = Math.max(0, Math.min(100, Math.round(newVal)));
+				} else {
+					newVal = Math.max(0, Math.round(newVal));
+				}
+
+				await session.run(
+					`
+					MATCH (n)
+					WHERE elementId(n) = $nodeId
+					SET n.${propKey} = $newVal
+					RETURN n
+					`,
+					{ nodeId, newVal }
+				);
+
+				return { modifiedField: propKey, previousValue: currentVal, newValue: newVal };
+			}
+
+			// 2. Non-numeric or complex element (description, name, type, objective, material resources, etc.)
+			// We ask the Genie to synthesize the updated state for this field based on proof impact and credibility.
+			const currentFieldData = {
+				fieldName: field,
+				nodeLabels: labels,
+				nodeName: nodeProps.name_en || nodeProps.name_fr || nodeProps.name || 'Unknown',
+				existingProps: {
+					name_fr: nodeProps.name_fr,
+					name_en: nodeProps.name_en,
+					name_de: nodeProps.name_de,
+					name_es: nodeProps.name_es,
+					description_fr: nodeProps.description_fr,
+					description_en: nodeProps.description_en,
+					description_de: nodeProps.description_de,
+					description_es: nodeProps.description_es,
+					type_fr: nodeProps.type_fr,
+					type_en: nodeProps.type_en,
+					type_de: nodeProps.type_de,
+					type_es: nodeProps.type_es,
+					objective_fr: nodeProps.objective_fr,
+					objective_en: nodeProps.objective_en,
+					objective_de: nodeProps.objective_de,
+					objective_es: nodeProps.objective_es
+				},
+				existingMaterials: rawMaterials.map((r) => r.properties)
+			};
+
+			const updateResult = await this.synthesizeNonNumericUpdate(
+				field,
+				currentFieldData,
+				proofData
+			);
+
+			// Apply the synthesized changes according to what field was updated
+			if (field.startsWith('objective') || field === 'objectives') {
+				await session.run(
+					`
+					MATCH (n)
+					WHERE elementId(n) = $nodeId
+					SET n.objective_fr = $fr,
+					    n.objective_en = $en,
+					    n.objective_de = $de,
+					    n.objective_es = $es
+					RETURN n
+					`,
+					{
+						nodeId,
+						fr: updateResult.updatedObjectives_fr ?? nodeProps.objective_fr ?? [],
+						en: updateResult.updatedObjectives_en ?? nodeProps.objective_en ?? [],
+						de: updateResult.updatedObjectives_de ?? nodeProps.objective_de ?? [],
+						es: updateResult.updatedObjectives_es ?? nodeProps.objective_es ?? []
+					}
+				);
+				return { modifiedField: 'objective', updateResult };
+			} else if (
+				field.startsWith('material') ||
+				field === 'resource.material' ||
+				field === 'resources'
+			) {
+				if (
+					updateResult.updatedMaterialResources &&
+					updateResult.updatedMaterialResources.length > 0
+				) {
+					// Replace or update material resources
+					await session.run(
+						`
+						MATCH (n)
+						WHERE elementId(n) = $nodeId
+						OPTIONAL MATCH (n)-[r:HAS_RESOURCE]->(m:MaterialResource)
+						DELETE r, m
+						WITH n
+						UNWIND $materials AS mat
+						CREATE (m:MaterialResource {
+							name_fr: mat.name_fr,
+							name_en: mat.name_en,
+							name_de: mat.name_de,
+							name_es: mat.name_es,
+							description_fr: mat.description_fr,
+							description_en: mat.description_en,
+							description_de: mat.description_de,
+							description_es: mat.description_es,
+							quantity: mat.quantity,
+							value: mat.value
+						})
+						CREATE (n)-[:HAS_RESOURCE]->(m)
+						RETURN n
+						`,
+						{ nodeId, materials: updateResult.updatedMaterialResources }
+					);
+				}
+				return { modifiedField: 'materialResources', updateResult };
+			} else if (field.startsWith('name')) {
+				await session.run(
+					`
+					MATCH (n)
+					WHERE elementId(n) = $nodeId
+					SET n.name_fr = $fr,
+					    n.name_en = $en,
+					    n.name_de = $de,
+					    n.name_es = $es
+					RETURN n
+					`,
+					{
+						nodeId,
+						fr: updateResult.updatedText_fr ?? nodeProps.name_fr,
+						en: updateResult.updatedText_en ?? nodeProps.name_en,
+						de: updateResult.updatedText_de ?? nodeProps.name_de,
+						es: updateResult.updatedText_es ?? nodeProps.name_es
+					}
+				);
+				return { modifiedField: 'name', updateResult };
+			} else if (field.startsWith('type')) {
+				await session.run(
+					`
+					MATCH (n)
+					WHERE elementId(n) = $nodeId
+					SET n.type_fr = $fr,
+					    n.type_en = $en,
+					    n.type_de = $de,
+					    n.type_es = $es
+					RETURN n
+					`,
+					{
+						nodeId,
+						fr: updateResult.updatedText_fr ?? nodeProps.type_fr,
+						en: updateResult.updatedText_en ?? nodeProps.type_en,
+						de: updateResult.updatedText_de ?? nodeProps.type_de,
+						es: updateResult.updatedText_es ?? nodeProps.type_es
+					}
+				);
+				return { modifiedField: 'type', updateResult };
+			} else {
+				// Default non-numeric modification (description or custom text field)
+				await session.run(
+					`
+					MATCH (n)
+					WHERE elementId(n) = $nodeId
+					SET n.description_fr = $fr,
+					    n.description_en = $en,
+					    n.description_de = $de,
+					    n.description_es = $es
+					RETURN n
+					`,
+					{
+						nodeId,
+						fr: updateResult.updatedText_fr ?? nodeProps.description_fr,
+						en: updateResult.updatedText_en ?? nodeProps.description_en,
+						de: updateResult.updatedText_de ?? nodeProps.description_de,
+						es: updateResult.updatedText_es ?? nodeProps.description_es
+					}
+				);
+				return { modifiedField: field || 'description', updateResult };
+			}
 		} finally {
 			await session.close();
 			await driver.close();
 		}
 	}
 
-	async synthesizeNonNumericText(currentText: string, proofData: ProofData) {
-		const prompt = `Current description: "${currentText}"
-New Proof: "${proofData.name_fr} - ${proofData.description_fr}"
-Credibility: ${proofData.credibility}/100, Impact: ${proofData.impact}
+	async synthesizeNonNumericUpdate(
+		fieldName: string,
+		currentData: Record<string, unknown>,
+		proofData: ProofData
+	) {
+		const prompt = `You are tasked with modifying a simulation element's field "${fieldName}" based on a newly validated Proof.
+Current element state: ${JSON.stringify(currentData, null, 2)}
 
-Update and integrate the new findings from this proof into the description in all 4 languages (French, English, German, Spanish).`;
+Proof details:
+- Name: "${proofData.name_en || proofData.name_fr}"
+- Description: "${proofData.description_en || proofData.description_fr}"
+- Credibility: ${proofData.credibility}/100
+- Impact: ${proofData.impact}
+- Target field: "${fieldName}"
+
+Instructions:
+1. Proportionally integrate the changes or new facts described in the proof according to its credibility (${proofData.credibility}/100) and impact (${proofData.impact}).
+2. If the field is text (description, name, type), update the text in all 4 languages (fr, en, de, es).
+3. If the field is objectives, update the list of objectives in all 4 languages (fr, en, de, es).
+4. If the field is material resources, update or adjust the array of material resources (name, description, quantity, value in all 4 languages).
+5. Output the result strictly matching the schema.`;
 
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
@@ -603,10 +799,10 @@ Update and integrate the new findings from this proof into the description in al
 		const content = data.choices?.[0]?.message?.content;
 		if (!content) {
 			return {
-				updatedText_fr: currentText,
-				updatedText_en: currentText,
-				updatedText_de: currentText,
-				updatedText_es: currentText
+				updatedText_fr: (currentData.existingProps as Record<string, string>)?.description_fr || '',
+				updatedText_en: (currentData.existingProps as Record<string, string>)?.description_en || '',
+				updatedText_de: (currentData.existingProps as Record<string, string>)?.description_de || '',
+				updatedText_es: (currentData.existingProps as Record<string, string>)?.description_es || ''
 			};
 		}
 
