@@ -399,6 +399,7 @@ Is this candidate an exact or essentially identical duplicate of an existing pro
 			if (!content) return { isDuplicate: false, reason: 'Unable to evaluate similarity.' };
 
 			const parsed = SimilarityCheckSchema.parse(JSON.parse(content));
+			console.log('Similarity check parsed:', parsed);
 			return {
 				isDuplicate: parsed.isDuplicate || parsed.similarityScore > 0.85,
 				reason: parsed.reason
