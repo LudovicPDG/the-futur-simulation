@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { EventSchema } from './fact/event';
-import { EvolutionSchema } from './fact/Evolution';
+import { FactSchema } from './fact';
+import { EvolutionSchema } from './event/Evolution';
 
-export const ActionSchema: z.ZodType = EventSchema.extend({
+export const ActionSchema: z.ZodType = FactSchema.extend({
+	type: z.literal('action').default('action').describe('The type of action'),
 	material_ressource_used: z
 		.array(
 			z.object({

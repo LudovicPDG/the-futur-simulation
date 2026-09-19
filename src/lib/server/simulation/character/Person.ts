@@ -1,11 +1,8 @@
 import { z } from 'zod';
-import { FactSchema } from '../fact/fact';
-import { EvolutionSchema } from '../fact/Evolution';
-import { TranslationSchema } from '../Translation';
+import { CharacterSchema } from './Character';
 
-export const PersonSchema = FactSchema.extend({
-	financial_resource: EvolutionSchema.describe('Financial resource of the person'),
-	power: z.array(TranslationSchema).describe('list of what this person can do')
+export const PersonSchema = CharacterSchema.extend({
+	type: z.literal('person').default('person').describe('The type of person')
 });
 
 export type PersonData = z.infer<typeof PersonSchema>;

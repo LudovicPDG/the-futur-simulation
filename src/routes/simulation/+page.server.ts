@@ -11,7 +11,8 @@ export const actions: Actions = {
 			return fail(400, { missing: true, message: 'Prompt is required' });
 		}
 
-		const result = await Genie.ask(prompt);
+		const genie = new Genie();
+		const result = await genie.ask(prompt);
 		return { success: true, result };
 	}
 };

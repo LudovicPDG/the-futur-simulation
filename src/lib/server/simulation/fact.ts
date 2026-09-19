@@ -1,10 +1,12 @@
 import { z } from 'zod';
-import { TranslationSchema } from '../Translation';
-import { ProofSchema } from '../Proof';
-import { RelationSchema } from '../Relation';
+import { TranslationSchema } from './Translation';
+import { ProofSchema } from './Proof';
+import { RelationSchema } from './Relation';
 
 export const FactSchema = z.object({
 	name: TranslationSchema.describe('The name of the fact'),
+
+	type: z.string().default('fact').describe('The type of the fact'),
 
 	description: TranslationSchema.describe('The description of the fact'),
 

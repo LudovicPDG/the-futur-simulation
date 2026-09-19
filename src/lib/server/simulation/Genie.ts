@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { db } from '../utils/database';
+import { OPENROUTER_API_KEY } from '$env/static/private';
 
 const ActionSchema = z.object({
 	action: z.enum([
@@ -18,10 +19,7 @@ const ActionSchema = z.object({
 });
 
 export class Genie {
-	get system_prompt() {
-		const data = db.query('SELECT * FROM facts;');
-
-		return `
+	private system_prompt = `
 	You are the master of a simulation whose purpose is to attempt to predict the most probable futures and analyze the different actions that the actors represented in the simulation may undertake. These actors represent real-world entities such as important individuals, organizations, institutions, and other relevant actors.
 
 	Your role is to analyze:
@@ -94,18 +92,94 @@ export class Genie {
 
 
 	The simulation should not assume that an event will occur simply because it is possible. Its probability should depend on the relevant facts, actors, resources, relationships, actions, and evidence available within the simulation.
-
-	### Data representation
-
-	All the data of this simulation is stored in a postgresSQL database. 
-
-	## Data of the simulation
-
-	here are the data of the simulation :
 	`;
-	}
-	static async ask(prompt: string) {
+
+	constructor(
+		private model_name: string = 'openai/gpt-5.6-luna',
+		private level_of_reasoning: string = 'low'
+	) {}
+
+	async ask(prompt: string) {
 		console.log('demande au genie :', prompt);
-		return {};
+		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				model: this.model_name,
+				messages: [
+					{ role: 'system', content: this.system_prompt },
+					{ role: 'user', content: prompt }
+				],
+				reasoning: {
+					effort: this.level_of_reasoning
+				},
+				response_format: {
+					type: 'json_schema',
+					json_schema: {
+						name: 'simulation_action',
+						strict: true,
+						schema: z.toJSONSchema(ActionSchema)
+					}
+				}
+			})
+		});
+
+		const data = await response.json();
+		console.log('OpenRouter ask response:', data);
+
+		if (!response.ok || data.error) {
+			console.error('OpenRouter API error in ask():', data.error || data);
+			throw new Error(`OpenRouter API error: ${JSON.stringify(data.error || data)}`);
+		}
+
+		const content = data.choices?.[0]?.message?.content;
+
+		if (!content) {
+			console.error(
+				'OpenRouter returned empty content. Full response:',
+				JSON.stringify(data, null, 2)
+			);
+			throw new Error('OpenRouter returned an empty response');
+		}
+
+		let json: unknown;
+		try {
+			json = JSON.parse(content);
+		} catch {
+			throw new Error('OpenRouter returned invalid JSON');
+		}
+
+		const actionResult = ActionSchema.parse(json);
+		console.log('Action parsed:', actionResult);
+
+		switch (actionResult.action) {
+			case 'create_organisation': {
+			}
+			case 'create_action': {
+			}
+			case 'create_person': {
+			}
+			case 'create_interest_group': {
+			}
+			case 'create_evolution': {
+			}
+			case 'create_fact': {
+			}
+			case 'create_event': {
+			}
+			case 'create_ranking': {
+			}
+			case 'create_material_resource': {
+			}
+			case 'add_proof': {
+			}
+			case 'add_relation': {
+			}
+			default:
+				return { action: actionResult.action, organisation: null };
+		}
 	}
 }
