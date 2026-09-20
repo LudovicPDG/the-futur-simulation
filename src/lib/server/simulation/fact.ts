@@ -34,7 +34,7 @@ export const FactSchema = z.object({
 			'Originality of the fact compared with other facts. Its for avoid that people spam same thing and increase the probability of certain things.'
 		),
 
-	relation: z.array(RelationSchema).default([]).describe('Relation of the fact with other data'),
+	relations: z.array(RelationSchema).default([]).describe('Relation of the fact with other data'),
 
 	proofs: z.array(ProofSchema).default([]).describe('Proofs for the fact')
 });
