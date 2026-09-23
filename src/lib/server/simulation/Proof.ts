@@ -1,23 +1,13 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 
-const ChangesSchema = z.object({
-	targetElement: z.string().describe('The element that is changed'),
-	new_value: z.any().describe('The new value of the element'),
-	impact: z.number().min(0).max(100).describe('Impact of the change')
-});
-
 export const ProofSchema: z.ZodType = z.lazy(() =>
 	z.object({
 		name: TranslationSchema.describe('The name of the proof'),
 
 		description: TranslationSchema.describe('The description of the proof'),
 
-		changes: z.array(ChangesSchema).describe('List of change this proof implies'),
-		debates: z
-			.array(ProofSchema)
-			.default([])
-			.describe('Proofs for debate about the truth of the proof'),
+		new_value: z.any().describe('The new value of the element'),
 
 		verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
 		falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),

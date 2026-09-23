@@ -32,11 +32,7 @@ export const FactSchema = z.object({
 		.max(100)
 		.describe(
 			'Originality of the fact compared with other facts. Its for avoid that people spam same thing and increase the probability of certain things.'
-		),
-
-	relations: z.array(RelationSchema).default([]).describe('Relation of the fact with other data'),
-
-	proofs: z.array(ProofSchema).default([]).describe('Proofs for the fact')
+		)
 });
 
 export type FactData = z.infer<typeof FactSchema>;
