@@ -1,5 +1,5 @@
 import type { Actions } from './$types';
-import { Genie } from '$lib/server/simulation/Genie';
+import { Genie } from '$lib/server/simulation_object/Genie';
 import { fail } from '@sveltejs/kit';
 
 export const actions: Actions = {

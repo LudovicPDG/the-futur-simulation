@@ -32,7 +32,3 @@ export const ProofSchema: z.ZodType = z.lazy(() =>
 );
 
 export type ProofData = z.infer<typeof ProofSchema>;
-
-export class Provable {
-	add_proof(description: string) {}
-}

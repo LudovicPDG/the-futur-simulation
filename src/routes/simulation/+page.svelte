@@ -161,7 +161,7 @@
 		<CrystalBall {agitation_level} />
 	</button>
 
-	<MainBackground />
+	<MainBackground new_element={form?.result} />
 
 	<!-- Prompt -->
 	<form
@@ -176,7 +176,12 @@
 		}}
 		class="prompt-container"
 	>
-		<input name="prompt" bind:value={prompt} placeholder={displayedPlaceholder} aria-label="Prompt" />
+		<input
+			name="prompt"
+			bind:value={prompt}
+			placeholder={displayedPlaceholder}
+			aria-label="Prompt"
+		/>
 		<button id="submit" type="submit" aria-label="Envoyer"> ➤ </button>
 	</form>
 </div>

@@ -1,6 +1,79 @@
 import { z } from 'zod';
 import { db } from '../utils/database';
 import { OPENROUTER_API_KEY } from '$env/static/private';
+import type { FactData } from '$lib/simulation_declaration/fact';
+import type { OrganizationData } from '$lib/simulation_declaration/character/Organization';
+import type { PersonData } from '$lib/simulation_declaration/character/Person';
+import type { InterestGroupData } from '$lib/simulation_declaration/character/Interest_group';
+import type { EvolutionData } from '$lib/simulation_declaration/event/Evolution';
+import type { EventData } from '$lib/simulation_declaration/event/event';
+import type { RankingData } from '$lib/simulation_declaration/event/Ranking';
+import type { ActionData } from '$lib/simulation_declaration/Action';
+import type { MaterialResourceData } from '$lib/simulation_declaration/Material_resouce';
+import type { ProofData } from '$lib/simulation_declaration/Proof';
+import type { RelationData } from '$lib/simulation_declaration/Relation';
+import { Fact } from './fact';
+
+function escapePgString(value: string): string {
+	return value
+		.replace(/\\/g, '\\\\')
+		.replace(/"/g, '\\"')
+		.replace(/\n/g, '\\n')
+		.replace(/\r/g, '\\r');
+}
+
+function convertToPgArrayElement(value: unknown): string {
+	const converted = convertToPg(value);
+
+	// PostgreSQL array element containing a composite
+	return `"${converted.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+export function convertToPg(value: unknown): string {
+	if (value === null || value === undefined) {
+		return '';
+	}
+
+	// PostgreSQL array
+	if (Array.isArray(value)) {
+		return `{${value.map((item) => convertToPgArrayElement(item)).join(',')}}`;
+	}
+
+	// PostgreSQL composite
+	if (typeof value === 'object') {
+		const object = value as Record<string, unknown>;
+
+		// other_fact_t:
+		// (
+		//     name TEXT,
+		//     value JSONB
+		// )
+		if ('name' in object && 'value' in object) {
+			const name = convertToPg(object.name);
+
+			// JSON.stringify is important here because value is JSONB
+			const jsonValue = JSON.stringify(object.value);
+
+			return `(${name},"${escapePgString(jsonValue)}")`;
+		}
+
+		// Other PostgreSQL composite types
+		const values = Object.values(object);
+
+		return `(${values.map((item) => convertToPg(item)).join(',')})`;
+	}
+
+	// PostgreSQL composite string
+	if (typeof value === 'string') {
+		return `"${escapePgString(value)}"`;
+	}
+
+	if (typeof value === 'number' || typeof value === 'boolean') {
+		return String(value);
+	}
+
+	throw new Error(`Unsupported value: ${typeof value}`);
+}
 
 const ActionSchema = z.object({
 	action: z.enum([
@@ -14,12 +87,27 @@ const ActionSchema = z.object({
 		'create_action',
 		'create_material_resource',
 		'add_proof',
-		'add_relation'
+		'add_relation',
+		'answer_user'
 	])
 });
 
+export type WorldData =
+	| FactData
+	| OrganizationData
+	| PersonData
+	| InterestGroupData
+	| EvolutionData
+	| EventData
+	| RankingData
+	| ActionData
+	| MaterialResourceData
+	| ProofData
+	| RelationData
+	| string;
+
 export class Genie {
-	private system_prompt = `
+	static system_prompt = `
 	You are the master of a simulation whose purpose is to attempt to predict the most probable futures and analyze the different actions that the actors represented in the simulation may undertake. These actors represent real-world entities such as important individuals, organizations, institutions, and other relevant actors.
 
 	Your role is to analyze:
@@ -63,7 +151,7 @@ export class Genie {
 
 	For example, a Character cannot directly change an Event simply because the Character is connected to that Event. The Character must perform an Action, and that Action may then modify the Event.
 
-	When an Action modifies an element, other elements connected to or dependent on that element may also be affected. You must therefore take into account both the Action itself and the existing relationships in order to analyze the direct and indirect consequences of a change.
+	When an Action modifies an element, other elements connected to or dependent on that element may also be affected.
 
 	### Proof System
 
@@ -75,21 +163,9 @@ export class Genie {
 
 	You must therefore treat the simulation as a dynamic system in which a local modification can produce a chain of direct and indirect consequences throughout the simulation.
 
-	However, propagation of information or consequences through relationships must not be confused with an actor performing an action. **Only an appropriate Action can represent an intentional intervention by a Character or other actor.**
-
 	### General Objective
 
 	Your objective is to maintain a representation of the simulated world that is as coherent and realistic as possible, and to use this representation to explore possible futures.
-
-	For every relevant scenario or action, you should attempt to determine:
-
-	* its probability of occurring;
-	* the actors capable of carrying it out;
-	* the resources required to carry it out;
-	* the potential consequences it could produce;
-	* the indirect consequences resulting from interactions between different elements;
-	* the alternative futures that could emerge depending on different actions and events.
-
 
 	The simulation should not assume that an event will occur simply because it is possible. Its probability should depend on the relevant facts, actors, resources, relationships, actions, and evidence available within the simulation.
 	`;
@@ -99,8 +175,36 @@ export class Genie {
 		private level_of_reasoning: string = 'low'
 	) {}
 
-	async ask(prompt: string) {
+	async ask(prompt: string): Promise<WorldData | string> {
 		console.log('demande au genie :', prompt);
+		const task_prompt =
+			Genie.system_prompt +
+			`
+
+		## Task
+
+		Here is the user's question:
+
+		${prompt}
+
+		Based on the user's question, you must choose to perform one of the following actions:
+
+		- create_organisation
+		- create_person
+		- create_interest_group
+		- create_evolution
+		- create_fact
+		- create_event
+		- create_ranking
+		- create_action
+		- create_material_resource
+		- add_proof
+		- add_relation
+		- answer_user (if the question of the user does not require an action and he just want some information)
+
+
+
+		`;
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
 			headers: {
@@ -110,7 +214,7 @@ export class Genie {
 			body: JSON.stringify({
 				model: this.model_name,
 				messages: [
-					{ role: 'system', content: this.system_prompt },
+					{ role: 'system', content: task_prompt },
 					{ role: 'user', content: prompt }
 				],
 				reasoning: {
@@ -157,29 +261,44 @@ export class Genie {
 
 		switch (actionResult.action) {
 			case 'create_organisation': {
+				console.log('create_organisation');
 			}
 			case 'create_action': {
+				console.log('create_action');
 			}
 			case 'create_person': {
+				console.log('create_person');
 			}
 			case 'create_interest_group': {
+				console.log('create_interest_group');
 			}
 			case 'create_evolution': {
+				console.log('create_evolution');
 			}
 			case 'create_fact': {
+				const fact = await Fact.create(this.model_name, this.level_of_reasoning, prompt);
+				return fact.data;
 			}
 			case 'create_event': {
+				console.log('create_event');
 			}
 			case 'create_ranking': {
+				console.log('create_ranking');
 			}
 			case 'create_material_resource': {
+				console.log('create_material_resource');
 			}
 			case 'add_proof': {
+				console.log('add_proof');
 			}
 			case 'add_relation': {
+				console.log('add_relation');
+			}
+			case 'answer_user': {
+				console.log('answer_user');
 			}
 			default:
-				return { action: actionResult.action, organisation: null };
+				return new Error('Action not recognized');
 		}
 	}
 }

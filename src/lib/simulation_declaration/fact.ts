@@ -1,7 +1,14 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
-import { ProofSchema } from './Proof';
-import { RelationSchema } from './Relation';
+
+const otherSchema = z.array(
+	z.object({
+		name: z.string().describe('The name of one other data of the fact'),
+		value: z
+			.union([z.string(), z.number(), z.boolean()])
+			.describe('The value of one other data of the fact')
+	})
+);
 
 export const FactSchema = z.object({
 	name: TranslationSchema.describe('The name of the fact'),
@@ -10,7 +17,7 @@ export const FactSchema = z.object({
 
 	description: TranslationSchema.describe('The description of the fact'),
 
-	other: z.any().optional().describe('Other data about the fact'),
+	other: otherSchema.describe('Other data about the fact').nullable(),
 
 	impossibility: z
 		.number()

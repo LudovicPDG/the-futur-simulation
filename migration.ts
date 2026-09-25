@@ -10,14 +10,6 @@ export const db = new Pool({
 	password: process.env.POSTGRES_PASSWORD
 });
 
-console.log(
-	process.env.POSTGRES_HOST,
-	process.env.POSTGRES_PORT,
-	process.env.POSTGRES_DATABASE,
-	process.env.POSTGRES_USER,
-	process.env.POSTGRES_PASSWORD
-);
-
 export async function createDatabase() {
 	const client = await db.connect();
 
@@ -99,6 +91,18 @@ export async function createDatabase() {
 			END $$;
 		`);
 
+		// Type composite pour les données autres d'un fait
+		await client.query(`
+			DO $$ BEGIN
+				CREATE TYPE other_fact_t AS (
+					name TEXT,
+					value JSONB
+				);
+			EXCEPTION
+				WHEN duplicate_object THEN null;
+			END $$;
+		`);
+
 		// ==========================================
 		// 2. TABLE RACINE : FACTS
 		// ==========================================
@@ -108,7 +112,7 @@ export async function createDatabase() {
 				type TEXT NOT NULL DEFAULT 'fact',
 				name translation_t NOT NULL,
 				description translation_t NOT NULL,
-				other JSONB DEFAULT '{}'::jsonb,
+				other other_fact_t[],
 				impossibility NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (impossibility >= 0 AND impossibility <= 1),
 				probability_distribution TEXT NOT NULL,
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100)
@@ -258,19 +262,19 @@ export async function createDatabase() {
 		// 9. INDEXES
 		// ==========================================
 		await client.query(`
-			CREATE INDEX idx_facts_type
+			CREATE INDEX IF NOT EXISTS idx_facts_type
 			ON facts(type);
 
-			CREATE INDEX idx_relations_element1_id
+			CREATE INDEX IF NOT EXISTS idx_relations_element1_id
 			ON relations(element1_id);
 
-			CREATE INDEX idx_relations_element2_id
+			CREATE INDEX IF NOT EXISTS idx_relations_element2_id
 			ON relations(element2_id);
 
-			CREATE INDEX idx_proof_relations_source_id
+			CREATE INDEX IF NOT EXISTS idx_proof_relations_source_id
 			ON proof_relations(source_id);
 
-			CREATE INDEX idx_proof_relations_target_id
+			CREATE INDEX IF NOT EXISTS idx_proof_relations_target_id
 			ON proof_relations(target_id);
 		`);
 

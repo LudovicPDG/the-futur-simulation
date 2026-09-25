@@ -12,7 +12,8 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check .",
 		"format": "prettier --write .",
-		"db:init": "tsx --env-file=.env ./migration.ts"
+		"db:init": "tsx --env-file=.env ./migration.ts",
+		"db:reset": "tsx --env-file=.env ./delete_db.ts"
 	},
 	"devDependencies": {
 		"@inlang/paraglide-js": "^2.18.2",

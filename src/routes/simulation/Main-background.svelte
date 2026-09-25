@@ -1,4 +1,9 @@
 <script lang="ts">
+	import type { WorldData } from '$lib/server/simulation_object/Genie';
+	import { untrack } from 'svelte';
+	let { new_element }: { new_element?: WorldData | string } = $props();
+	let nodes = $state<WorldData[]>([]);
+
 	let cameraX = $state(0);
 	let cameraY = $state(0);
 	let zoom = $state(1);
@@ -64,6 +69,15 @@
 
 		zoom = newZoom;
 	}
+
+	$effect(() => {
+		// Only run when new_element exists and is valid
+		if (new_element && typeof new_element !== 'string') {
+			untrack(() => {
+				nodes.push(new_element);
+			});
+		}
+	});
 </script>
 
 <main
