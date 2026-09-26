@@ -1,18 +1,29 @@
 import { z } from 'zod';
 import { db } from '../utils/database';
 import { OPENROUTER_API_KEY } from '$env/static/private';
-import type { FactData } from '$lib/simulation_declaration/fact';
-import type { OrganizationData } from '$lib/simulation_declaration/character/Organization';
-import type { PersonData } from '$lib/simulation_declaration/character/Person';
-import type { InterestGroupData } from '$lib/simulation_declaration/character/Interest_group';
-import type { EvolutionData } from '$lib/simulation_declaration/event/Evolution';
-import type { EventData } from '$lib/simulation_declaration/event/event';
-import type { RankingData } from '$lib/simulation_declaration/event/Ranking';
-import type { ActionData } from '$lib/simulation_declaration/Action';
-import type { MaterialResourceData } from '$lib/simulation_declaration/Material_resouce';
-import type { ProofData } from '$lib/simulation_declaration/Proof';
-import type { RelationData } from '$lib/simulation_declaration/Relation';
+import type { FactData } from '$lib/simulation/fact';
+import type { OrganizationData } from '$lib/simulation/character/Organization';
+import type { PersonData } from '$lib/simulation/character/Person';
+import type { InterestGroupData } from '$lib/simulation/character/Interest_group';
+import type { EvolutionData } from '$lib/simulation/event/Evolution';
+import type { EventData } from '$lib/simulation/event/event';
+import type { RankingData } from '$lib/simulation/event/Ranking';
+import type { ActionData } from '$lib/simulation/Action';
+import type { MaterialResourceData } from '$lib/simulation/Material_resouce';
+import type { ProofData } from '$lib/simulation/Proof';
+import type { RelationData } from '$lib/simulation/Relation';
+
 import { Fact } from './fact';
+import { Person } from './character/Person';
+import { Organization } from './character/Organization';
+import { InterestGroup } from './character/Interest_group';
+import { Event } from './event/event';
+import { Evolution } from './event/Evolution';
+import { Ranking } from './event/Ranking';
+import { Action } from './Action';
+import { MaterialResource } from './Material_resouce';
+import { Proof } from './Proof';
+import { Relation } from './Relation';
 
 function escapePgString(value: string): string {
 	return value
@@ -48,7 +59,7 @@ export function convertToPg(value: unknown): string {
 		//     name TEXT,
 		//     value JSONB
 		// )
-		if ('name' in object && 'value' in object) {
+		if ('name' in object && 'value' in object && !('description' in object)) {
 			const name = convertToPg(object.name);
 
 			// JSON.stringify is important here because value is JSONB
@@ -202,8 +213,6 @@ export class Genie {
 		- add_relation
 		- answer_user (if the question of the user does not require an action and he just want some information)
 
-
-
 		`;
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
@@ -261,44 +270,98 @@ export class Genie {
 
 		switch (actionResult.action) {
 			case 'create_organisation': {
-				console.log('create_organisation');
+				return Organization.create(this.model_name, this.level_of_reasoning, prompt);
 			}
 			case 'create_action': {
-				console.log('create_action');
+				return Action.create(this.model_name, this.level_of_reasoning, prompt);
 			}
 			case 'create_person': {
-				console.log('create_person');
+				return Person.create(this.model_name, this.level_of_reasoning, prompt);
 			}
 			case 'create_interest_group': {
-				console.log('create_interest_group');
+				return InterestGroup.create(this.model_name, this.level_of_reasoning, prompt);
 			}
 			case 'create_evolution': {
-				console.log('create_evolution');
+				return Evolution.create(this.model_name, this.level_of_reasoning, prompt);
 			}
 			case 'create_fact': {
-				const fact = await Fact.create(this.model_name, this.level_of_reasoning, prompt);
-				return fact.data;
+				return Fact.create(this.model_name, this.level_of_reasoning, prompt);
 			}
 			case 'create_event': {
-				console.log('create_event');
+				return Event.create(this.model_name, this.level_of_reasoning, prompt);
 			}
 			case 'create_ranking': {
-				console.log('create_ranking');
+				return Ranking.create(this.model_name, this.level_of_reasoning, prompt);
 			}
 			case 'create_material_resource': {
-				console.log('create_material_resource');
+				return MaterialResource.create(this.model_name, this.level_of_reasoning, prompt);
 			}
 			case 'add_proof': {
-				console.log('add_proof');
+				return Proof.create(this.model_name, this.level_of_reasoning, prompt);
 			}
 			case 'add_relation': {
-				console.log('add_relation');
+				return Relation.create(this.model_name, this.level_of_reasoning, prompt);
 			}
 			case 'answer_user': {
-				console.log('answer_user');
+				return 'Answer from Genie';
 			}
 			default:
-				return new Error('Action not recognized');
+				throw new Error('Action not recognized');
 		}
+	}
+
+	static async get_all_data() {
+		const [
+			facts,
+			persons,
+			organizations,
+			interest_groups,
+			events,
+			evolutions,
+			rankings,
+			actions,
+			material_resources,
+			proofs,
+			relations
+		] = await Promise.all([
+			Fact.get_all_facts(),
+			Person.get_all(),
+			Organization.get_all(),
+			InterestGroup.get_all(),
+			Event.get_all(),
+			Evolution.get_all(),
+			Ranking.get_all(),
+			Action.get_all(),
+			MaterialResource.get_all(),
+			Proof.get_all(),
+			Relation.get_all()
+		]);
+
+		return {
+			facts,
+			persons,
+			organizations,
+			interest_groups,
+			events,
+			evolutions,
+			rankings,
+			actions,
+			material_resources,
+			proofs,
+			relations,
+			all_elements: [
+				...facts,
+				...persons,
+				...organizations,
+				...interest_groups,
+				...events,
+				...evolutions,
+				...rankings,
+				...actions,
+				...material_resources,
+				...proofs,
+				...relations
+			]
+		};
 	}
 }

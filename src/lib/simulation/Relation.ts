@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
-import { ProofSchema } from './Proof';
+import type { SvgShapeOptions } from './fact';
 
 export const RelationConnexionSchema = z.object({
 	SourceProperty: z.string().describe('The property of the source that is the source of the link'),
@@ -9,12 +9,13 @@ export const RelationConnexionSchema = z.object({
 });
 
 export const RelationSchema = z.object({
+	type: z.literal('relation').default('relation').describe('The type of relation'),
 	name: TranslationSchema.describe('The name of the relation'),
 	description: TranslationSchema.describe('The description of the relation'),
 	Element1ID: z.string().describe('The ID of element 1'),
-	Element1Type: z.enum(['organization', 'fact', 'action']), // TODO : extend this list
+	Element1Type: z.enum(['organization', 'fact', 'action', 'person', 'interest_group', 'event', 'evolution', 'ranking', 'material_resource']),
 	Element2ID: z.string().describe('The ID of element 2'),
-	Element2Type: z.enum(['organization', 'fact', 'action']), // TODO : extend this list
+	Element2Type: z.enum(['organization', 'fact', 'action', 'person', 'interest_group', 'event', 'evolution', 'ranking', 'material_resource']),
 	element1_element2_connexions: z
 		.array(RelationConnexionSchema)
 		.default([])
@@ -53,12 +54,60 @@ export const ProofRelationConnexionSchema = z.object({
 });
 
 export const ProofRelationSchema = z.object({
+	type: z.literal('proof_relation').default('proof_relation').describe('The type of proof relation'),
 	name: TranslationSchema.describe('The name of the relation'),
 	description: TranslationSchema.describe('The description of the relation'),
 	SourceID: z.string().describe('The ID of element that are the source of the link'),
-	SourceType: z.enum(['organization', 'fact', 'action']), // TODO : extend this list
+	SourceType: z.enum(['organization', 'fact', 'action', 'person', 'interest_group', 'event', 'evolution', 'ranking', 'material_resource']),
 	TargetID: z.string().describe('The ID of element that are the target of the link'),
 	connexions: z.array(RelationConnexionSchema).default([]).describe('Connexions of the relation')
 });
 
 export type ProofRelationData = z.infer<typeof ProofRelationSchema>;
+
+/**
+ * Relation SVG shape
+ */
+export function svg_shape(relation: RelationData, options: SvgShapeOptions = {}): string {
+	const { x = 0, y = 0, color = '#64748b', locale = 'fr' } = options;
+
+	let label = 'Relation';
+	if (relation.name && typeof relation.name === 'object') {
+		label = relation.name[locale] || relation.name.fr || relation.name.en || 'Relation';
+	} else if (typeof relation.name === 'string') {
+		label = relation.name;
+	}
+
+	const shortLabel = label.length > 18 ? label.slice(0, 16) + '…' : label;
+
+	return `
+		<g
+			class="fact-node relation-node"
+			transform="translate(${x}, ${y})"
+			data-type="relation"
+		>
+			<ellipse
+				cx="0"
+				cy="0"
+				rx="50"
+				ry="25"
+				fill="${color}"
+				fill-opacity="0.3"
+				stroke="${color}"
+				stroke-width="2"
+				stroke-dasharray="3 3"
+			/>
+			<text
+				text-anchor="middle"
+				dy="0.35em"
+				fill="#ffffff"
+				font-size="12"
+				font-weight="600"
+				font-family="system-ui, -apple-system, sans-serif"
+				pointer-events="none"
+			>
+				${shortLabel}
+			</text>
+		</g>
+	`.trim();
+}

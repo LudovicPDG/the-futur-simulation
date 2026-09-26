@@ -16,3 +16,8 @@ export const actions: Actions = {
 		return { success: true, result };
 	}
 };
+
+export async function load() {
+	const all_data = await Genie.get_all_data();
+	return { all_data };
+}

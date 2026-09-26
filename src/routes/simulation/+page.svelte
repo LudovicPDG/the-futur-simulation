@@ -1,13 +1,24 @@
 <script lang="ts">
 	import { navbarVisible } from '$lib/stores/navbar';
+	import { simulationStore } from '$lib/stores/simulation';
 	import CrystalBall from '../Crystal-ball.svelte';
 	import MainBackground from './Main-background.svelte';
 	import { enhance } from '$app/forms';
-	import type { ActionData } from './$types';
+	import type { ActionData, PageData } from './$types';
 
-	let { form }: { form: ActionData } = $props();
+	let { form, data }: { form: ActionData; data: PageData } = $props();
 
 	navbarVisible.set(true);
+
+	$effect(() => {
+		simulationStore.init(data?.all_data);
+	});
+
+	$effect(() => {
+		if (form?.result && typeof form.result === 'object') {
+			simulationStore.addElement(form.result);
+		}
+	});
 
 	let prompt = $state('');
 
@@ -161,7 +172,7 @@
 		<CrystalBall {agitation_level} />
 	</button>
 
-	<MainBackground new_element={form?.result} />
+	<MainBackground new_element={form?.result} simulation_data={$simulationStore.all_elements} />
 
 	<!-- Prompt -->
 	<form

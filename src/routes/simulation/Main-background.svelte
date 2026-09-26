@@ -1,29 +1,46 @@
 <script lang="ts">
-	import type { WorldData } from '$lib/server/simulation_object/Genie';
-	import { untrack } from 'svelte';
-	let { new_element }: { new_element?: WorldData | string } = $props();
-	let nodes = $state<WorldData[]>([]);
+	import type { SimulationElement } from '$lib/stores/simulation';
+	import { renderSimulationElementSvg } from '$lib/simulation/renderSvg';
+	import { getLocale } from '$lib/paraglide/runtime';
+	import { onMount } from 'svelte';
 
-	let cameraX = $state(0);
-	let cameraY = $state(0);
+	let {
+		new_element,
+		simulation_data = []
+	}: { new_element?: any; simulation_data?: SimulationElement[] } = $props();
+
+	let cameraX = $state(400);
+	let cameraY = $state(300);
 	let zoom = $state(1);
+
+	onMount(() => {
+		cameraX = window.innerWidth / 2;
+		cameraY = window.innerHeight / 2;
+	});
 
 	let isPanning = $state(false);
 
 	let lastPointerX = 0;
 	let lastPointerY = 0;
 
+	// Compute positioning of elements in a circular / spiraling web layout
+	function getNodePosition(index: number, total: number) {
+		if (total <= 1) return { x: 0, y: 0 };
+		const angle = (index / total) * 2 * Math.PI;
+		const radius = Math.min(450, 140 + total * 28);
+		return {
+			x: Math.cos(angle) * radius,
+			y: Math.sin(angle) * radius
+		};
+	}
+
 	function handlePointerDown(event: PointerEvent) {
-		// Seulement bouton gauche pour la souris
 		if (event.pointerType === 'mouse' && event.button !== 0) return;
 
 		isPanning = true;
-
 		lastPointerX = event.clientX;
 		lastPointerY = event.clientY;
 
-		// Continue à recevoir les événements même si
-		// le doigt / curseur sort du canvas
 		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 	}
 
@@ -61,7 +78,6 @@
 		const worldY = (mouseY - cameraY) / zoom;
 
 		const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
-
 		const newZoom = Math.min(10, Math.max(0.1, zoom * zoomFactor));
 
 		cameraX = mouseX - worldX * newZoom;
@@ -70,13 +86,36 @@
 		zoom = newZoom;
 	}
 
-	$effect(() => {
-		// Only run when new_element exists and is valid
-		if (new_element && typeof new_element !== 'string') {
-			untrack(() => {
-				nodes.push(new_element);
-			});
+	const currentLocale = $derived.by(() => {
+		try {
+			return getLocale() as 'fr' | 'en' | 'de' | 'es';
+		} catch {
+			return 'fr';
 		}
+	});
+
+	const renderedElements = $derived.by(() => {
+		const list = (simulation_data || []).filter(
+			(item): item is SimulationElement => typeof item === 'object' && item !== null
+		);
+		return list.map((element, index) => {
+			const pos = getNodePosition(index, list.length);
+			const svgContent = renderSimulationElementSvg(element, {
+				x: pos.x,
+				y: pos.y,
+				radius: 50,
+				locale: currentLocale
+			});
+			return {
+				element,
+				pos,
+				svgContent
+			};
+		});
+	});
+
+	$effect(() => {
+		console.log('Rendered simulation elements count:', renderedElements.length);
 	});
 </script>
 
@@ -89,11 +128,20 @@
 	onpointercancel={handlePointerUp}
 	onwheel={handleWheel}
 >
-	<div class="world" style={`transform: translate(${cameraX}px, ${cameraY}px) scale(${zoom});`}>
-		<div class="node" style="left: 0px; top: 0px;">Organisation</div>
+	<svg class="world-svg" width="100%" height="100%">
+		<g transform={`translate(${cameraX}, ${cameraY}) scale(${zoom})`}>
+			<!-- Simulation Grid / Axes -->
+			<circle r="600" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
+			<circle r="400" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1" />
+			<circle r="200" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
 
-		<div class="node" style="left: 400px; top: 200px;">Fact</div>
-	</div>
+			<!-- Render each simulation element -->
+			{#each renderedElements as item}
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+				{@html item.svgContent}
+			{/each}
+		</g>
+	</svg>
 </main>
 
 <style>
@@ -102,42 +150,28 @@
 		width: 100%;
 		height: 100%;
 		overflow: hidden;
-
-		/* Très important pour le tactile */
 		touch-action: none;
-
 		cursor: grab;
+		background: radial-gradient(circle at center, #0b132b 0%, #050814 100%);
 	}
 
 	.canvas.panning {
 		cursor: grabbing;
 	}
 
-	.world {
-		position: absolute;
-		left: 0;
-		top: 0;
-
-		width: 1px;
-		height: 1px;
-
-		transform-origin: 0 0;
-
-		pointer-events: none;
+	.world-svg {
+		width: 100%;
+		height: 100%;
+		display: block;
+		user-select: none;
 	}
 
-	.node {
-		position: absolute;
+	:global(.fact-node) {
+		cursor: pointer;
+		transition: transform 0.2s ease;
+	}
 
-		width: 120px;
-		height: 50px;
-
-		display: flex;
-		align-items: center;
-		justify-content: center;
-
-		background: white;
-		border: 1px solid #ccc;
-		border-radius: 8px;
+	:global(.fact-node:hover) {
+		filter: drop-shadow(0 0 14px rgba(56, 189, 248, 0.8));
 	}
 </style>
