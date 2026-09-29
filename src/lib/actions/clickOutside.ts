@@ -1,8 +1,8 @@
 // clickOutside.ts
-export function clickOutside(node: HTMLElement, callback: () => void) {
+export function clickOutside(node: HTMLElement, callback: (event: MouseEvent) => void) {
 	function handleClick(event: MouseEvent) {
 		if (!node.contains(event.target as Node)) {
-			callback();
+			callback(event);
 		}
 	}
 

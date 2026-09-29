@@ -2,6 +2,7 @@
 	import type { SimulationElement } from '$lib/stores/simulation';
 	import { renderSimulationElementSvg } from '$lib/simulation/renderSvg';
 	import { parseTranslation } from '$lib/simulation/Translation';
+	import { clickOutside } from '$lib/actions/clickOutside';
 	import { getLocale } from '$lib/paraglide/runtime';
 	import { onMount } from 'svelte';
 
@@ -39,6 +40,7 @@
 
 	function handlePointerDown(event: PointerEvent) {
 		if (event.pointerType === 'mouse' && event.button !== 0) return;
+		if ((event.target as Element | null)?.closest('.element-details')) return;
 		if (getNodeElement(event.target)) {
 			selectedElement = getSimulationElement(event.target);
 			return;
@@ -145,6 +147,11 @@
 		hoveredElement = null;
 	}
 
+	function handleDetailsOutsideClick(event: MouseEvent) {
+		if ((event.target as Element | null)?.closest('.fact-node')) return;
+		closeDetails();
+	}
+
 	function handleWheel(event: WheelEvent) {
 		event.preventDefault();
 
@@ -240,7 +247,11 @@
 	</svg>
 
 	{#if activeElement}
-		<aside class="element-details" aria-label="Simulation element details">
+		<aside
+			class="element-details"
+			aria-label="Simulation element details"
+			use:clickOutside={handleDetailsOutsideClick}
+		>
 			<header class="details-header">
 				<div>
 					<p class="element-type">{formatLabel(activeElement.type || 'fact')}</p>
@@ -297,6 +308,15 @@
 		border-radius: 8px;
 		box-shadow: 0 12px 36px rgb(0 0 0 / 35%);
 		backdrop-filter: blur(12px);
+	}
+
+	@media (max-width: 600px) {
+		.element-details {
+			top: 112px;
+			left: 12px;
+			width: min(360px, calc(100% - 24px));
+			max-height: calc(100% - 124px);
+		}
 	}
 
 	.details-header {
