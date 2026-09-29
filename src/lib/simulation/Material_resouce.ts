@@ -23,16 +23,14 @@ export type MaterialResourceData = z.infer<typeof MaterialResourceSchema>;
  * One solid-colored outline,
  * No small rotating stroke around it.
  */
-export function svg_shape(
-	resource: MaterialResourceData,
-	options: SvgShapeOptions = {}
-): string {
-	const { x = 0, y = 0, color = '#14b8a6', locale = 'fr' } = options;
-	// 2:4 (1:2) aspect ratio: width = 140, height = 70
-	const width = 140;
-	const height = 70;
+export function svg_shape(resource: MaterialResourceData, options: SvgShapeOptions = {}): string {
+	const { x = 0, y = 0, color = 'rgb(234, 34, 8)', locale = 'fr' } = options;
+	// 2:3 aspect ratio horizontal rectangle: width: 120, height: 80
+	const width = 120;
+	const height = 60;
 	const halfW = width / 2;
 	const halfH = height / 2;
+	const rx = 14;
 
 	let label = 'Material Resource';
 
@@ -42,28 +40,44 @@ export function svg_shape(
 		label = resource.name;
 	}
 
-	const shortLabel = label.length > 20 ? label.slice(0, 18) + '…' : label;
+	const shortLabel = label.length > 18 ? label.slice(0, 16) + '…' : label;
+
+	const gradId = `event-grad-${Math.floor(x)}-${Math.floor(y)}-${Math.floor(Math.random() * 1000)}`;
 
 	return `
 		<g
-			class="fact-node material-resource-node"
+			class="fact-node event-node"
 			transform="translate(${x}, ${y})"
 			data-type="${resource.type || 'material_resource'}"
 		>
-			<!-- Sharp corners, no interior fill, one solid-colored outline, no rotating stroke -->
+			<defs>
+				<radialGradient
+					id="${gradId}"
+					cx="50%"
+					cy="50%"
+					r="50%"
+				>
+					<stop offset="0%" stop-color="${color}" stop-opacity="0.6" />
+					<stop offset="100%" stop-color="${color}" stop-opacity="0.15" />
+				</radialGradient>
+			</defs>
+
+			
+
+			<!-- Main rounded rectangle (2:3 aspect ratio) -->
 			<rect
 				x="${-halfW}"
 				y="${-halfH}"
 				width="${width}"
 				height="${height}"
-				fill="transparent"
+				fill="url(#${gradId})"
 				stroke="${color}"
 				stroke-width="2.5"
 			/>
 
 			<text
 				text-anchor="middle"
-				dy="0.35em"
+				dy="4"
 				fill="#f8fafc"
 				font-size="12"
 				font-weight="600"

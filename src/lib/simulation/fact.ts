@@ -13,7 +13,23 @@ const otherSchema = z.array(
 export const FactSchema = z.object({
 	name: TranslationSchema.describe('The name of the fact'),
 
-	type: z.string().default('fact').describe('The type of the fact'),
+	type: z
+		.enum([
+			'person',
+			'organization',
+			'interest_group',
+			'character',
+			'evolution',
+			'ranking',
+			'event',
+			'action',
+			'material_resource',
+			'proof',
+			'relation',
+			'fact'
+		])
+		.default('fact')
+		.describe('The type of the simulation element'),
 
 	description: TranslationSchema.describe('The description of the fact'),
 
@@ -55,7 +71,7 @@ export interface SvgShapeOptions {
  * Returns SVG markup for rendering a Fact node shape (circle/rond with text)
  */
 export function svg_shape(fact: FactData, options: SvgShapeOptions = {}): string {
-	const { x = 0, y = 0, radius = 50, color = '#38bdf8', locale = 'fr' } = options;
+	const { x = 0, y = 0, radius = 50, color = '#38f842ff', locale = 'fr' } = options;
 
 	let label = 'Fact';
 
@@ -93,37 +109,12 @@ export function svg_shape(fact: FactData, options: SvgShapeOptions = {}): string
 				</radialGradient>
 			</defs>
 
-			<!-- Petits traits qui tournent autour du cercle -->
-			<circle
-				r="${radius + 6}"
-				fill="none"
-				stroke="${color}"
-				stroke-opacity="0.25"
-				stroke-width="1.5"
-				stroke-dasharray="4 3"
-			>
-				<animate
-					attributeName="stroke-dashoffset"
-					from="0"
-					to="-14"
-					dur="2s"
-					repeatCount="indefinite"
-				/>
-			</circle>
-
 			<!-- Cercle principal -->
 			<circle
 				r="${radius}"
 				fill="url(#fact-grad-${Math.floor(x)}-${Math.floor(y)})"
 				stroke="${color}"
 				stroke-width="2.5"
-			/>
-
-			<!-- Cercle intérieur -->
-			<circle
-				r="${radius * 0.75}"
-				fill="${color}"
-				fill-opacity="0.2"
 			/>
 
 			<text

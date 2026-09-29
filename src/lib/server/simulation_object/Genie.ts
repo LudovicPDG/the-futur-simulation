@@ -25,19 +25,44 @@ import { MaterialResource } from './Material_resouce';
 import { Proof } from './Proof';
 import { Relation } from './Relation';
 
-function escapePgString(value: string): string {
-	return value
-		.replace(/\\/g, '\\\\')
-		.replace(/"/g, '\\"')
-		.replace(/\n/g, '\\n')
-		.replace(/\r/g, '\\r');
+function escapePgQuotedValue(value: string): string {
+	return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function quotePgValue(value: string): string {
+	return `"${escapePgQuotedValue(value)}"`;
 }
 
 function convertToPgArrayElement(value: unknown): string {
-	const converted = convertToPg(value);
+	if (value === null || value === undefined) {
+		return 'NULL';
+	}
 
-	// PostgreSQL array element containing a composite
-	return `"${converted.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+	if (typeof value === 'string') {
+		return quotePgValue(value);
+	}
+
+	if (typeof value === 'number' || typeof value === 'boolean') {
+		return String(value);
+	}
+
+	return quotePgValue(convertToPg(value));
+}
+
+function convertToPgCompositeField(value: unknown): string {
+	if (value === null || value === undefined) {
+		return '';
+	}
+
+	if (typeof value === 'string') {
+		return quotePgValue(value);
+	}
+
+	if (typeof value === 'number' || typeof value === 'boolean') {
+		return String(value);
+	}
+
+	return quotePgValue(convertToPg(value));
 }
 
 export function convertToPg(value: unknown): string {
@@ -45,38 +70,23 @@ export function convertToPg(value: unknown): string {
 		return '';
 	}
 
-	// PostgreSQL array
 	if (Array.isArray(value)) {
 		return `{${value.map((item) => convertToPgArrayElement(item)).join(',')}}`;
 	}
 
-	// PostgreSQL composite
 	if (typeof value === 'object') {
 		const object = value as Record<string, unknown>;
 
-		// other_fact_t:
-		// (
-		//     name TEXT,
-		//     value JSONB
-		// )
+		// other_fact_t stores its second field as JSONB.
 		if ('name' in object && 'value' in object && !('description' in object)) {
-			const name = convertToPg(object.name);
-
-			// JSON.stringify is important here because value is JSONB
-			const jsonValue = JSON.stringify(object.value);
-
-			return `(${name},"${escapePgString(jsonValue)}")`;
+			return `(${convertToPgCompositeField(object.name)},${convertToPgCompositeField(JSON.stringify(object.value))})`;
 		}
 
-		// Other PostgreSQL composite types
-		const values = Object.values(object);
-
-		return `(${values.map((item) => convertToPg(item)).join(',')})`;
+		return `(${Object.values(object).map(convertToPgCompositeField).join(',')})`;
 	}
 
-	// PostgreSQL composite string
 	if (typeof value === 'string') {
-		return `"${escapePgString(value)}"`;
+		return quotePgValue(value);
 	}
 
 	if (typeof value === 'number' || typeof value === 'boolean') {
@@ -164,6 +174,12 @@ export class Genie {
 
 	When an Action modifies an element, other elements connected to or dependent on that element may also be affected.
 
+	An event do not must edit modify directly an organisation or a person.
+
+	He must first modify an interst group that are linked to organisations or persons.
+
+	And after that this interest group will modify organisations or persons according to their link that they have.
+
 	### Proof System
 
 	All facts and their properties can be **challenged and debated by users** through an proofs system.
@@ -200,18 +216,18 @@ export class Genie {
 
 		Based on the user's question, you must choose to perform one of the following actions:
 
-		- create_organisation
-		- create_person
-		- create_interest_group
-		- create_evolution
-		- create_fact
-		- create_event
-		- create_ranking
+		- create_organisation (for create an organisation)
+		- create_person (for create a person)
+		- create_interest_group (for create an interest group. An interest group it's a thing that describe the will of certain person or organization, an interest group dosn't have structre like an organization it's simply a thing that represent interest of people like anti abortion, anti AI person etc.)
+		- create_evolution (for create an evolution. Create a evolution for all the things that can be dependant of a time variable like the price of a material resource, the level of accessible ressource of  a material resource,  etc.)
+		- create_fact (for create a fact)
+		- create_event (for create an event)
+		- create_ranking (for create a ranking. Create a ranking for all the things that can be dependant of a ranking system like a political election, a competition, etc.)
 		- create_action
 		- create_material_resource
 		- add_proof
 		- add_relation
-		- answer_user (if the question of the user does not require an action and he just want some information)
+		- answer_user (if the question of the user does not require an action and he just want some information. Use answer user only when every other action is not relevant. If you dosn't well what to choose, do not choose this action.)
 
 		`;
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {

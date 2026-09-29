@@ -16,15 +16,30 @@ export type OrganizationData = z.infer<typeof OrganizationSchema>;
  */
 export function svg_shape(organization: OrganizationData, options: SvgShapeOptions = {}): string {
 	const buildingIcon = `
-		<g class="symbol organization-symbol" transform="translate(-11, -27)">
-			<!-- Main building body -->
-			<rect x="2" y="4" width="18" height="15" rx="1" fill="none" stroke="#ffffff" stroke-width="1.8" />
-			<!-- Door -->
-			<rect x="9" y="12" width="4" height="7" fill="#ffffff" />
+		<g class="symbol organization-symbol" transform="translate(-9, -30)">
+			<!-- Building -->
+			<rect
+				x="1"
+				y="1"
+				width="16"
+				height="21"
+				rx="1"
+				fill="none"
+				stroke="#000000"
+				stroke-width="1.7"
+			/>
+
 			<!-- Windows -->
-			<rect x="5" y="7" width="3" height="3" fill="#ffffff" />
-			<rect x="14" y="7" width="3" height="3" fill="#ffffff" />
+			<rect x="4" y="5" width="3" height="3" fill="#000000" />
+			<rect x="11" y="5" width="3" height="3" fill="#000000" />
+
+			<rect x="4" y="11" width="3" height="3" fill="#000000" />
+			<rect x="11" y="11" width="3" height="3" fill="#000000" />
+
+			<!-- Entrance -->
+			<rect x="7" y="16" width="4" height="6" fill="#000000" />
 		</g>
 	`;
-	return character_svg_shape(organization, { color: '#3b82f6', ...options }, buildingIcon);
+
+	return character_svg_shape(organization, { color: '#fb4430ff', ...options }, buildingIcon);
 }

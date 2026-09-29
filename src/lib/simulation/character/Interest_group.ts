@@ -27,9 +27,9 @@ export function svg_shape(group: InterestGroupData, options: SvgShapeOptions = {
 		<g class="symbol interest-group-symbol" transform="translate(-10, -26)">
 			<path
 				d="M 10 17 L 3 10 C 0.5 7.5, 2 3, 5.5 3 C 7.5 3, 9 4.5, 10 6 C 11 4.5, 12.5 3, 14.5 3 C 18 3, 19.5 7.5, 17 10 Z"
-				fill="#ffffff"
+				fill="#000000ff"
 			/>
 		</g>
 	`;
-	return character_svg_shape(group, { color: '#ec4899', ...options }, heartIcon);
+	return character_svg_shape(group, { color: '#ec4848ff', ...options }, heartIcon);
 }

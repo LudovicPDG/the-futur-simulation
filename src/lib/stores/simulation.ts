@@ -76,21 +76,6 @@ function createSimulationStore() {
 		set,
 		update,
 		init(initialData?: Partial<SimulationStoreState> & { all_elements?: SimulationElement[] }) {
-			if (typeof window !== 'undefined') {
-				const saved = localStorage.getItem('simulation_elements_state');
-				if (saved) {
-					try {
-						const parsed = JSON.parse(saved);
-						if (parsed && Array.isArray(parsed.all_elements) && parsed.all_elements.length > 0) {
-							update((state) => ({ ...state, ...parsed }));
-							return;
-						}
-					} catch (e) {
-						console.error('Failed to parse cached simulation elements:', e);
-					}
-				}
-			}
-
 			if (initialData) {
 				const all_elements: SimulationElement[] = initialData.all_elements || [
 					...(initialData.facts || []),
@@ -122,10 +107,6 @@ function createSimulationStore() {
 				};
 
 				update(() => newState);
-
-				if (typeof window !== 'undefined') {
-					localStorage.setItem('simulation_elements_state', JSON.stringify(newState));
-				}
 			}
 		},
 
@@ -171,7 +152,10 @@ function createSimulationStore() {
 						]);
 						break;
 					case 'ranking':
-						newState.rankings = deduplicateElements([...state.rankings, typedElement as RankingData]);
+						newState.rankings = deduplicateElements([
+							...state.rankings,
+							typedElement as RankingData
+						]);
 						break;
 					case 'action':
 						newState.actions = deduplicateElements([...state.actions, typedElement as ActionData]);
@@ -191,10 +175,6 @@ function createSimulationStore() {
 							typedElement as RelationData
 						]);
 						break;
-				}
-
-				if (typeof window !== 'undefined') {
-					localStorage.setItem('simulation_elements_state', JSON.stringify(newState));
 				}
 
 				return newState;

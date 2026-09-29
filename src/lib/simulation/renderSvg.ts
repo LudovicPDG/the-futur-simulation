@@ -1,5 +1,6 @@
 import type { SimulationElement } from '$lib/stores/simulation';
 import type { SvgShapeOptions } from '$lib/simulation/fact';
+import { parseTranslation } from '$lib/simulation/Translation';
 import { svg_shape as fact_svg_shape } from '$lib/simulation/fact';
 import { svg_shape as person_svg_shape } from '$lib/simulation/character/Person';
 import { svg_shape as organization_svg_shape } from '$lib/simulation/character/Organization';
@@ -17,7 +18,12 @@ export function renderSimulationElementSvg(
 	element: SimulationElement,
 	options: SvgShapeOptions = {}
 ): string {
-	const type = element.type || 'fact';
+	const name = parseTranslation(element.name);
+	if (name) {
+		element = { ...element, name } as SimulationElement;
+	}
+
+	const type = element.type.toLowerCase() || 'fact';
 
 	switch (type) {
 		case 'person':

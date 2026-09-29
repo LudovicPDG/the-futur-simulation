@@ -14,12 +14,6 @@
 		simulationStore.init(data?.all_data);
 	});
 
-	$effect(() => {
-		if (form?.result && typeof form.result === 'object') {
-			simulationStore.addElement(form.result);
-		}
-	});
-
 	let prompt = $state('');
 
 	let agitation_level = $state(4);

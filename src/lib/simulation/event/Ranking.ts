@@ -27,12 +27,12 @@ export function svg_shape(ranking: RankingData, options: SvgShapeOptions = {}): 
 	const rankingIcon = `
 		<g class="symbol ranking-symbol" transform="translate(-15, -27)">
 			<!-- 2nd place bar -->
-			<rect x="2" y="6" width="7" height="12" rx="1" fill="#ffffff" fill-opacity="0.9" />
+			<rect x="2" y="6" width="7" height="12" rx="1" fill="#000000" fill-opacity="0.9" />
 			<!-- 1st place bar -->
-			<rect x="11" y="2" width="8" height="16" rx="1" fill="#ffffff" />
+			<rect x="11" y="2" width="8" height="16" rx="1" fill="#000000" />
 			<!-- 3rd place bar -->
-			<rect x="21" y="9" width="7" height="9" rx="1" fill="#ffffff" fill-opacity="0.8" />
+			<rect x="21" y="9" width="7" height="9" rx="1" fill="#000000" fill-opacity="0.8" />
 		</g>
 	`;
-	return event_svg_shape(ranking, { color: '#f59e0b', ...options }, rankingIcon);
+	return event_svg_shape(ranking, { color: '#f53a0b', ...options }, rankingIcon);
 }

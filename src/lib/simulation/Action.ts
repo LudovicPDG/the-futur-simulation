@@ -25,7 +25,7 @@ export type ActionData = z.infer<typeof ActionSchema>;
  * Diamond (rhombus) shape with middle color and rotating decorative stroke.
  */
 export function svg_shape(action: ActionData, options: SvgShapeOptions = {}): string {
-	const { x = 0, y = 0, color = '#8b5cf6', locale = 'fr' } = options;
+	const { x = 0, y = 0, color = '#69f65c', locale = 'fr' } = options;
 	const halfW = 60;
 	const halfH = 50;
 

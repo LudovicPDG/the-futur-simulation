@@ -32,7 +32,7 @@ export function svg_shape(evolution: EvolutionData, options: SvgShapeOptions = {
 			<path
 				d="M 0 6 Q 7.5 0, 15 6 T 30 6"
 				fill="none"
-				stroke="#ffffff"
+				stroke="#000000ff"
 				stroke-width="2.5"
 				stroke-linecap="round"
 			/>

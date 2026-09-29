@@ -15,9 +15,9 @@ export type PersonData = z.infer<typeof PersonSchema>;
 export function svg_shape(person: PersonData, options: SvgShapeOptions = {}): string {
 	const personIcon = `
 		<g class="symbol person-symbol" transform="translate(-10, -26)">
-			<circle cx="10" cy="5" r="4.5" fill="#ffffff" />
-			<path d="M 2 17 C 2 11.5, 6 11, 10 11 C 14 11, 18 11.5, 18 17" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" />
+			<circle cx="10" cy="5" r="4.5" fill="#000000ff" />
+			<path d="M 2 17 C 2 11.5, 6 11, 10 11 C 14 11, 18 11.5, 18 17" fill="none" stroke="#000000ff" stroke-width="2.2" stroke-linecap="round" />
 		</g>
 	`;
-	return character_svg_shape(person, { color: '#06b6d4', ...options }, personIcon);
+	return character_svg_shape(person, { color: '#d42c06ff', ...options }, personIcon);
 }

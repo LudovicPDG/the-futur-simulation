@@ -11,20 +11,12 @@ export const CharacterSchema = FactSchema.extend({
 
 export type CharacterData = z.infer<typeof CharacterSchema>;
 
-/**
- * Base character SVG shape:
- * - Simple circle
- * - One solid color
- * - No inner/middle circle
- * - No small rotating stroke around the circle
- * - Optional custom symbol above title
- */
 export function character_svg_shape(
 	character: CharacterData,
 	options: SvgShapeOptions = {},
 	symbolSvg: string = ''
 ): string {
-	const { x = 0, y = 0, radius = 50, color = '#3b82f6', locale = 'fr' } = options;
+	const { x = 0, y = 0, radius = 50, color = '#44f63bff', locale = 'fr' } = options;
 
 	let label = 'Character';
 
@@ -38,24 +30,69 @@ export function character_svg_shape(
 
 	return `
 		<g
-			class="fact-node character-node"
+			class="fact-node"
 			transform="translate(${x}, ${y})"
 			data-type="${character.type || 'character'}"
 		>
-			<!-- Base simple solid circle -->
+			<defs>
+				<radialGradient
+					id="fact-grad-${Math.floor(x)}-${Math.floor(y)}"
+					cx="50%"
+					cy="50%"
+					r="50%"
+				>
+					<stop
+						offset="0%"
+						stop-color="${color}"
+						stop-opacity="0.6"
+					/>
+					<stop
+						offset="100%"
+						stop-color="${color}"
+						stop-opacity="0.1"
+					/>
+				</radialGradient>
+			</defs>
+
+			<!-- Petits traits qui tournent autour du cercle -->
+			<circle
+				r="${radius + 6}"
+				fill="none"
+				stroke="${color}"
+				stroke-opacity="0.25"
+				stroke-width="1.5"
+				stroke-dasharray="4 3"
+			>
+				<animate
+					attributeName="stroke-dashoffset"
+					from="0"
+					to="-14"
+					dur="2s"
+					repeatCount="indefinite"
+				/>
+			</circle>
+
+			<!-- Cercle principal -->
 			<circle
 				r="${radius}"
-				fill="${color}"
+				fill="url(#fact-grad-${Math.floor(x)}-${Math.floor(y)})"
 				stroke="${color}"
-				stroke-width="2"
+				stroke-width="2.5"
+			/>
+
+			<!-- Cercle intérieur -->
+			<circle
+				r="${radius * 0.75}"
+				fill="${color}"
+				fill-opacity="0.2"
 			/>
 
 			${symbolSvg}
 
 			<text
 				text-anchor="middle"
-				dy="${symbolSvg ? '16' : '4'}"
-				fill="#ffffff"
+				dy="0.35em"
+				fill="#f8fafc"
 				font-size="12"
 				font-weight="600"
 				font-family="system-ui, -apple-system, sans-serif"

@@ -17,7 +17,7 @@ export function event_svg_shape(
 	options: SvgShapeOptions = {},
 	symbolSvg: string = ''
 ): string {
-	const { x = 0, y = 0, color = '#eab308', locale = 'fr' } = options;
+	const { x = 0, y = 0, color = '#08ea7dff', locale = 'fr' } = options;
 	// 2:3 aspect ratio horizontal rectangle: width: 120, height: 80
 	const width = 120;
 	const height = 80;
@@ -107,7 +107,7 @@ export function event_svg_shape(
 
 			<text
 				text-anchor="middle"
-				dy="${symbolSvg ? '16' : '4'}"
+				dy="4"
 				fill="#f8fafc"
 				font-size="12"
 				font-weight="600"

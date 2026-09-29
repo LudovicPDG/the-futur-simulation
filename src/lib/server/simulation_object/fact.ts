@@ -35,7 +35,6 @@ export class FactServer extends BaseSimulationObject<FactData> {
 		const result = await db.query(`
 			SELECT *
 			FROM facts
-			WHERE type = 'fact'
 		`);
 
 		return result.rows.map((row) => ({
