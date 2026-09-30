@@ -323,9 +323,9 @@
 	<svg class="world-svg" width="100%" height="100%">
 		<g transform={`translate(${cameraX}, ${cameraY}) scale(${zoom})`}>
 			<!-- Simulation Grid / Axes -->
-			<circle r="600" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
-			<circle r="400" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1" />
-			<circle r="200" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
+			<circle class="grid-ring outer" r="600" fill="none" stroke-width="1" />
+			<circle class="grid-ring middle" r="400" fill="none" stroke-width="1" />
+			<circle class="grid-ring inner" r="200" fill="none" stroke-width="1" />
 
 			<!-- Render each simulation element -->
 			{#each renderedElements as item}
@@ -403,6 +403,11 @@
 		touch-action: none;
 		cursor: grab;
 		background: radial-gradient(circle at center, #0b132b 0%, #050814 100%);
+		transition: background 0.25s ease;
+	}
+
+	:global(body.light) .canvas {
+		background: radial-gradient(circle at center, #ffffff 0%, #ffffff 90%, #b98fb7 100%);
 	}
 
 	.canvas.panning {
@@ -428,6 +433,13 @@
 		cursor: default;
 	}
 
+	:global(body.light) .element-details {
+		color: #243442;
+		background: rgb(255 255 255 / 96%);
+		border-color: rgb(71 85 105 / 24%);
+		box-shadow: 0 12px 36px rgb(15 23 42 / 14%);
+	}
+
 	@media (max-width: 600px) {
 		.element-details {
 			top: 112px;
@@ -446,12 +458,23 @@
 		border-bottom: 1px solid rgb(148 163 184 / 22%);
 	}
 
+	:global(body.light) .details-header,
+	:global(body.light) .other-details,
+	:global(body.light) .parameter-details {
+		border-color: rgb(71 85 105 / 18%);
+	}
+
 	.element-type {
 		margin: 0 0 5px;
 		color: #7dd3fc;
 		font-size: 11px;
 		font-weight: 700;
 		text-transform: uppercase;
+	}
+
+	:global(body.light) .element-type,
+	:global(body.light) .other-details h3 {
+		color: #087e8b;
 	}
 
 	.details-header h2 {
@@ -480,6 +503,16 @@
 		background: rgb(148 163 184 / 16%);
 	}
 
+	:global(body.light) .close-details {
+		color: #475569;
+		border-color: rgb(71 85 105 / 28%);
+	}
+
+	:global(body.light) .close-details:hover {
+		color: #0f172a;
+		background: rgb(71 85 105 / 10%);
+	}
+
 	.element-details dl {
 		margin: 4px 0 0;
 	}
@@ -487,6 +520,11 @@
 	.detail-row {
 		padding: 11px 0;
 		border-bottom: 1px solid rgb(148 163 184 / 14%);
+	}
+
+	:global(body.light) .detail-row,
+	:global(body.light) .other-row {
+		border-color: rgb(71 85 105 / 14%);
 	}
 
 	.detail-row:last-child {
@@ -500,6 +538,11 @@
 		font-weight: 600;
 	}
 
+	:global(body.light) .detail-row dt,
+	:global(body.light) .other-row dt {
+		color: #64748b;
+	}
+
 	.detail-row dd {
 		margin: 0;
 		color: #f1f5f9;
@@ -507,6 +550,11 @@
 		line-height: 1.5;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
+	}
+
+	:global(body.light) .detail-row dd,
+	:global(body.light) .other-row dd {
+		color: #243442;
 	}
 
 	.other-details {
@@ -535,6 +583,10 @@
 		font-size: 11px;
 		font-weight: 700;
 		text-transform: uppercase;
+	}
+
+	:global(body.light) .parameter-details h3 {
+		color: #a16207;
 	}
 
 	.parameter-details dl {
@@ -577,6 +629,30 @@
 		height: 100%;
 		display: block;
 		user-select: none;
+	}
+
+	.grid-ring.outer {
+		stroke: rgb(255 255 255 / 3%);
+	}
+
+	.grid-ring.middle {
+		stroke: rgb(255 255 255 / 4%);
+	}
+
+	.grid-ring.inner {
+		stroke: rgb(255 255 255 / 5%);
+	}
+
+	:global(body.light) .grid-ring.outer {
+		stroke: rgb(51 65 85 / 8%);
+	}
+
+	:global(body.light) .grid-ring.middle {
+		stroke: rgb(51 65 85 / 11%);
+	}
+
+	:global(body.light) .grid-ring.inner {
+		stroke: rgb(51 65 85 / 15%);
 	}
 
 	:global(.fact-node) {
