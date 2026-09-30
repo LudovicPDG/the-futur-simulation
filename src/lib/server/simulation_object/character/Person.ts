@@ -43,18 +43,11 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 					financial_resource,
 					power
 				) VALUES ($1, $2, $3)`,
-				[
-					id,
-					convertToPg(person.financial_resource),
-					convertToPg(person.power)
-				]
+				[id, convertToPg(person.financial_resource), convertToPg(person.power)]
 			);
 
 			// 3. Insert into persons
-			await client.query(
-				`INSERT INTO persons (id) VALUES ($1)`,
-				[id]
-			);
+			await client.query(`INSERT INTO persons (id) VALUES ($1)`, [id]);
 
 			await client.query('COMMIT');
 		} catch (e) {
@@ -68,7 +61,7 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 	async get_all(): Promise<PersonData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, f.other, f.impossibility, f.probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
 				c.financial_resource, c.power
 			FROM persons p
 			JOIN characters c ON p.id = c.id

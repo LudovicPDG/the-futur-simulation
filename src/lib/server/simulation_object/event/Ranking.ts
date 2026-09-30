@@ -37,10 +37,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 			const id = factRes.rows[0].id;
 
 			// 2. Insert into events
-			await client.query(
-				`INSERT INTO events (id) VALUES ($1)`,
-				[id]
-			);
+			await client.query(`INSERT INTO events (id) VALUES ($1)`, [id]);
 
 			// 3. Insert into rankings
 			await client.query(
@@ -48,10 +45,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 					id,
 					rankings
 				) VALUES ($1, $2)`,
-				[
-					id,
-					convertToPg(ranking.rankings)
-				]
+				[id, convertToPg(ranking.rankings)]
 			);
 
 			await client.query('COMMIT');
@@ -66,7 +60,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 	async get_all(): Promise<RankingData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, f.other, f.impossibility, f.probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
 				r.rankings
 			FROM rankings r
 			JOIN events e ON r.id = e.id

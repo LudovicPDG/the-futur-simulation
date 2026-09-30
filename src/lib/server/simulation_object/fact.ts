@@ -33,7 +33,7 @@ export class FactServer extends BaseSimulationObject<FactData> {
 
 	async get_all(): Promise<FactData[]> {
 		const result = await db.query(`
-			SELECT *
+			SELECT facts.*, to_jsonb(facts.other) AS other_json
 			FROM facts
 		`);
 
@@ -41,7 +41,7 @@ export class FactServer extends BaseSimulationObject<FactData> {
 			name: row.name,
 			type: row.type || 'fact',
 			description: row.description,
-			other: row.other,
+			other: row.other_json,
 			impossibility: Number(row.impossibility),
 			probability_distribution: row.probability_distribution,
 			originality: Number(row.originality)

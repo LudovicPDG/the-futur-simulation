@@ -218,8 +218,13 @@
 	const activeFields = $derived(
 		activeElement
 			? Object.entries(activeElement as Record<string, unknown>).filter(
-					([key]) => key !== 'name' && key !== 'type'
+					([key]) => key !== 'name' && key !== 'type' && key !== 'other'
 				)
+			: []
+	);
+	const activeOther = $derived(
+		activeElement && Array.isArray((activeElement as Record<string, unknown>).other)
+			? ((activeElement as Record<string, unknown>).other as Array<Record<string, unknown>>)
 			: []
 	);
 
@@ -287,6 +292,19 @@
 					</div>
 				{/each}
 			</dl>
+			{#if activeOther.length > 0}
+				<section class="other-details">
+					<h3>Other information</h3>
+					<dl>
+						{#each activeOther as item}
+							<div class="other-row">
+								<dt>{formatLabel(formatValue(item.name) || 'Other')}</dt>
+								<dd>{formatValue(item.value)}</dd>
+							</div>
+						{/each}
+					</dl>
+				</section>
+			{/if}
 		</aside>
 	{/if}
 </main>
@@ -397,6 +415,51 @@
 	}
 
 	.detail-row dd {
+		margin: 0;
+		color: #f1f5f9;
+		font-size: 13px;
+		line-height: 1.5;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+
+	.other-details {
+		margin-top: 12px;
+		padding-top: 12px;
+		border-top: 1px solid rgb(148 163 184 / 22%);
+	}
+
+	.other-details h3 {
+		margin: 0 0 4px;
+		color: #7dd3fc;
+		font-size: 11px;
+		font-weight: 700;
+		text-transform: uppercase;
+	}
+
+	.other-details dl {
+		margin: 0;
+	}
+
+	.other-row {
+		display: grid;
+		grid-template-columns: minmax(76px, 0.7fr) minmax(0, 1.5fr);
+		gap: 12px;
+		padding: 9px 0;
+		border-bottom: 1px solid rgb(148 163 184 / 14%);
+	}
+
+	.other-row:last-child {
+		border-bottom: 0;
+	}
+
+	.other-row dt {
+		color: #94a3b8;
+		font-size: 12px;
+		font-weight: 600;
+	}
+
+	.other-row dd {
 		margin: 0;
 		color: #f1f5f9;
 		font-size: 13px;

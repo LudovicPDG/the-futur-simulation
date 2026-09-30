@@ -37,10 +37,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 			const id = factRes.rows[0].id;
 
 			// 2. Insert into events
-			await client.query(
-				`INSERT INTO events (id) VALUES ($1)`,
-				[id]
-			);
+			await client.query(`INSERT INTO events (id) VALUES ($1)`, [id]);
 
 			// 3. Insert into evolutions
 			await client.query(
@@ -49,11 +46,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 					evolution,
 					unit
 				) VALUES ($1, $2, $3)`,
-				[
-					id,
-					evolution.evolution,
-					evolution.unit
-				]
+				[id, evolution.evolution, evolution.unit]
 			);
 
 			await client.query('COMMIT');
@@ -68,7 +61,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 	async get_all(): Promise<EvolutionData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, f.other, f.impossibility, f.probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
 				ev.evolution, ev.unit
 			FROM evolutions ev
 			JOIN events e ON ev.id = e.id

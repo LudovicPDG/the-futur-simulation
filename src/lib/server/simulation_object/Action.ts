@@ -64,7 +64,7 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 	async get_all(): Promise<ActionData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, f.other, f.impossibility, f.probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
 				a.material_resource_used, a.fund_used, a.human_mobilized
 			FROM actions a
 			JOIN facts f ON a.id = f.id

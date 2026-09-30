@@ -1,5 +1,8 @@
 import { BaseSimulationObject } from '../BaseSimulationObject';
-import { InterestGroupSchema, type InterestGroupData } from '$lib/simulation/character/Interest_group';
+import {
+	InterestGroupSchema,
+	type InterestGroupData
+} from '$lib/simulation/character/Interest_group';
 import { convertToPg } from '../Genie';
 import { db } from '../../utils/database';
 
@@ -43,11 +46,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 					financial_resource,
 					power
 				) VALUES ($1, $2, $3)`,
-				[
-					id,
-					convertToPg(group.financial_resource),
-					convertToPg(group.power)
-				]
+				[id, convertToPg(group.financial_resource), convertToPg(group.power)]
 			);
 
 			// 3. Insert into organizations
@@ -56,10 +55,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 					id,
 					human_resource
 				) VALUES ($1, $2)`,
-				[
-					id,
-					convertToPg(group.human_resource)
-				]
+				[id, convertToPg(group.human_resource)]
 			);
 
 			// 4. Insert into interest_groups
@@ -69,11 +65,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 					willing,
 					satisfaction
 				) VALUES ($1, $2, $3)`,
-				[
-					id,
-					convertToPg(group.willing),
-					convertToPg(group.satisfaction)
-				]
+				[id, convertToPg(group.willing), convertToPg(group.satisfaction)]
 			);
 
 			await client.query('COMMIT');
@@ -88,7 +80,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 	async get_all(): Promise<InterestGroupData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, f.other, f.impossibility, f.probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
 				c.financial_resource, c.power,
 				o.human_resource,
 				ig.willing, ig.satisfaction

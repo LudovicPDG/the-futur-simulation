@@ -1,5 +1,8 @@
 import { BaseSimulationObject } from './BaseSimulationObject';
-import { MaterialResourceSchema, type MaterialResourceData } from '$lib/simulation/Material_resouce';
+import {
+	MaterialResourceSchema,
+	type MaterialResourceData
+} from '$lib/simulation/Material_resouce';
 import { convertToPg } from './Genie';
 import { db } from '../utils/database';
 
@@ -64,7 +67,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 	async get_all(): Promise<MaterialResourceData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, f.other, f.impossibility, f.probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
 				m.number_of_units, m.financial_value, m.power
 			FROM material_resources m
 			JOIN facts f ON m.id = f.id

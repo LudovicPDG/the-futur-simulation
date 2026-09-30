@@ -37,10 +37,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 			const id = factRes.rows[0].id;
 
 			// 2. Insert into events
-			await client.query(
-				`INSERT INTO events (id) VALUES ($1)`,
-				[id]
-			);
+			await client.query(`INSERT INTO events (id) VALUES ($1)`, [id]);
 
 			await client.query('COMMIT');
 		} catch (e) {
@@ -54,7 +51,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 	async get_all(): Promise<EventData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, f.other, f.impossibility, f.probability_distribution, f.originality
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality
 			FROM events e
 			JOIN facts f ON e.id = f.id
 			WHERE f.type = 'event'

@@ -43,11 +43,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 					financial_resource,
 					power
 				) VALUES ($1, $2, $3)`,
-				[
-					id,
-					convertToPg(organization.financial_resource),
-					convertToPg(organization.power)
-				]
+				[id, convertToPg(organization.financial_resource), convertToPg(organization.power)]
 			);
 
 			// 3. Insert into organizations
@@ -56,10 +52,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 					id,
 					human_resource
 				) VALUES ($1, $2)`,
-				[
-					id,
-					convertToPg(organization.human_resource)
-				]
+				[id, convertToPg(organization.human_resource)]
 			);
 
 			await client.query('COMMIT');
@@ -74,7 +67,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 	async get_all(): Promise<OrganizationData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, f.other, f.impossibility, f.probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
 				c.financial_resource, c.power,
 				o.human_resource
 			FROM organizations o

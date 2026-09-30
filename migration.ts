@@ -95,7 +95,7 @@ export async function createDatabase() {
 		await client.query(`
 			DO $$ BEGIN
 				CREATE TYPE other_fact_t AS (
-					name TEXT,
+					name translation_t,
 					value JSONB
 				);
 			EXCEPTION
@@ -139,6 +139,40 @@ export async function createDatabase() {
 			);
 		`);
 
+		const otherNameType = await client.query(`
+			SELECT a.atttypid = 'text'::regtype AS needs_upgrade
+			FROM pg_attribute a
+			JOIN pg_type t ON t.typrelid = a.attrelid
+			WHERE t.typname = 'other_fact_t'
+				AND a.attname = 'name'
+				AND a.attnum > 0
+				AND NOT a.attisdropped
+		`);
+
+		if (otherNameType.rows[0]?.needs_upgrade) {
+			await client.query(`
+				CREATE TYPE other_fact_t_translation AS (
+					name translation_t,
+					value JSONB
+				);
+			`);
+			await client.query(`
+				ALTER TABLE facts
+				ALTER COLUMN other TYPE other_fact_t_translation[]
+				USING CASE
+					WHEN other IS NULL THEN NULL
+					ELSE ARRAY(
+						SELECT ROW(
+							ROW(entry.name, entry.name, entry.name, entry.name)::translation_t,
+							entry.value
+						)::other_fact_t_translation
+						FROM unnest(other) AS entry
+					)
+				END;
+			`);
+			await client.query('DROP TYPE other_fact_t;');
+			await client.query('ALTER TYPE other_fact_t_translation RENAME TO other_fact_t;');
+		}
 		await client.query(`
 			CREATE TABLE IF NOT EXISTS proof_relations (
 				id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
