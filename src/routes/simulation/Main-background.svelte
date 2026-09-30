@@ -4,6 +4,7 @@
 	import { parseTranslation } from '$lib/simulation/Translation';
 	import { clickOutside } from '$lib/actions/clickOutside';
 	import { getLocale } from '$lib/paraglide/runtime';
+	import * as m from '$lib/paraglide/messages';
 	import { onMount } from 'svelte';
 
 	let {
@@ -146,10 +147,70 @@
 	}
 
 	function formatLabel(value: string): string {
-		return value
-			.replace(/([a-z])([A-Z])/g, '$1 $2')
-			.replace(/[_-]+/g, ' ')
-			.replace(/^\w/, (character) => character.toUpperCase());
+		const key = value
+			.replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+			.replace(/[_\s-]+/g, '_')
+			.toLowerCase();
+		const labels: Record<string, () => string> = {
+			description: m.simulation_field_description,
+			impossibility: m.simulation_field_impossibility,
+			probability_distribution: m.simulation_field_probability_distribution,
+			originality: m.simulation_field_originality,
+			name: m.simulation_field_name,
+			type: m.simulation_field_type,
+			value: m.simulation_field_value,
+			quantity: m.simulation_field_quantity,
+			level_of_wear: m.simulation_field_level_of_wear,
+			evolution: m.simulation_field_evolution,
+			financial_resource: m.simulation_field_financial_resource,
+			power: m.simulation_field_power,
+			human_resource: m.simulation_field_human_resource,
+			unit: m.simulation_field_unit,
+			rankings: m.simulation_field_rankings,
+			material_resource_used: m.simulation_field_material_resource_used,
+			fund_used: m.simulation_field_fund_used,
+			human_mobilized: m.simulation_field_human_mobilized,
+			number_of_units: m.simulation_field_number_of_units,
+			financial_value: m.simulation_field_financial_value,
+			new_value: m.simulation_field_new_value,
+			verification_method: m.simulation_field_verification_method,
+			falsifiability_method: m.simulation_field_falsifiability_method,
+			source: m.simulation_field_source,
+			element1_id: m.simulation_field_element1_id,
+			element1_type: m.simulation_field_element1_type,
+			element2_id: m.simulation_field_element2_id,
+			element2_type: m.simulation_field_element2_type,
+			element1_element2_connexions: m.simulation_field_element1_element2_connexions,
+			element2_element1_connexions: m.simulation_field_element2_element1_connexions,
+			connexions: m.simulation_field_connexions,
+			source_property: m.simulation_field_source_property,
+			target_property: m.simulation_field_target_property,
+			impact: m.simulation_field_impact
+		};
+
+		return (
+			labels[key]?.() ||
+			value.replace(/[_-]+/g, ' ').replace(/^\w/, (character) => character.toUpperCase())
+		);
+	}
+
+	function formatType(value: string): string {
+		const types: Record<string, () => string> = {
+			fact: m.simulation_type_fact,
+			person: m.simulation_type_person,
+			organization: m.simulation_type_organization,
+			interest_group: m.simulation_type_interest_group,
+			character: m.simulation_type_character,
+			evolution: m.simulation_type_evolution,
+			ranking: m.simulation_type_ranking,
+			event: m.simulation_type_event,
+			action: m.simulation_type_action,
+			material_resource: m.simulation_type_material_resource,
+			proof: m.simulation_type_proof,
+			relation: m.simulation_type_relation
+		};
+
+		return types[value]?.() || formatLabel(value);
 	}
 
 	function closeDetails() {
@@ -218,7 +279,18 @@
 	const activeFields = $derived(
 		activeElement
 			? Object.entries(activeElement as Record<string, unknown>).filter(
-					([key]) => key !== 'name' && key !== 'type' && key !== 'other'
+					([key]) =>
+						key !== 'name' &&
+						key !== 'type' &&
+						key !== 'other' &&
+						!['impossibility', 'probability_distribution', 'originality'].includes(key)
+				)
+			: []
+	);
+	const activeParameters = $derived(
+		activeElement
+			? Object.entries(activeElement as Record<string, unknown>).filter(([key]) =>
+					['impossibility', 'probability_distribution', 'originality'].includes(key)
 				)
 			: []
 	);
@@ -272,7 +344,7 @@
 		>
 			<header class="details-header">
 				<div>
-					<p class="element-type">{formatLabel(activeElement.type || 'fact')}</p>
+					<p class="element-type">{formatType(activeElement.type || 'fact')}</p>
 					<h2>{formatValue(activeElement.name)}</h2>
 				</div>
 				<button
@@ -294,12 +366,25 @@
 			</dl>
 			{#if activeOther.length > 0}
 				<section class="other-details">
-					<h3>Other information</h3>
+					<h3>{m.simulation_section_other_information()}</h3>
 					<dl>
 						{#each activeOther as item}
 							<div class="other-row">
 								<dt>{formatLabel(formatValue(item.name) || 'Other')}</dt>
 								<dd>{formatValue(item.value)}</dd>
+							</div>
+						{/each}
+					</dl>
+				</section>
+			{/if}
+			{#if activeParameters.length > 0}
+				<section class="parameter-details">
+					<h3>{m.simulation_section_parameters()}</h3>
+					<dl>
+						{#each activeParameters as [key, value]}
+							<div class="detail-row">
+								<dt>{formatLabel(key)}</dt>
+								<dd>{formatValue(value)}</dd>
 							</div>
 						{/each}
 					</dl>
@@ -340,6 +425,7 @@
 		border-radius: 8px;
 		box-shadow: 0 12px 36px rgb(0 0 0 / 35%);
 		backdrop-filter: blur(12px);
+		cursor: default;
 	}
 
 	@media (max-width: 600px) {
@@ -435,6 +521,24 @@
 		font-size: 11px;
 		font-weight: 700;
 		text-transform: uppercase;
+	}
+
+	.parameter-details {
+		margin-top: 12px;
+		padding-top: 12px;
+		border-top: 1px solid rgb(148 163 184 / 22%);
+	}
+
+	.parameter-details h3 {
+		margin: 0 0 4px;
+		color: #fbbf24;
+		font-size: 11px;
+		font-weight: 700;
+		text-transform: uppercase;
+	}
+
+	.parameter-details dl {
+		margin: 0;
 	}
 
 	.other-details dl {
