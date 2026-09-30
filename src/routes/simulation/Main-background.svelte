@@ -92,9 +92,19 @@
 	function handlePointerOut(event: PointerEvent) {
 		const node = getNodeElement(event.target);
 		const nextTarget = event.relatedTarget;
-		if (node && !(nextTarget instanceof Node && node.contains(nextTarget))) {
+		const nextElement = nextTarget instanceof Element ? nextTarget : null;
+		if (
+			node &&
+			!(nextTarget instanceof Node && node.contains(nextTarget)) &&
+			!nextElement?.closest('.element-details') &&
+			!getNodeElement(nextTarget)
+		) {
 			hoveredElement = null;
 		}
+	}
+
+	function handleDetailsPointerLeave() {
+		if (!selectedElement) hoveredElement = null;
 	}
 
 	function localizedValue(value: unknown): string {
@@ -153,6 +163,8 @@
 	}
 
 	function handleWheel(event: WheelEvent) {
+		if ((event.target as Element | null)?.closest('.element-details')) return;
+
 		event.preventDefault();
 
 		const canvas = event.currentTarget as HTMLElement;
@@ -251,6 +263,7 @@
 			class="element-details"
 			aria-label="Simulation element details"
 			use:clickOutside={handleDetailsOutsideClick}
+			onpointerleave={handleDetailsPointerLeave}
 		>
 			<header class="details-header">
 				<div>
@@ -301,6 +314,7 @@
 		width: min(360px, calc(100% - 40px));
 		max-height: calc(100% - 40px);
 		overflow: auto;
+		overscroll-behavior: contain;
 		padding: 18px;
 		color: #e6edf3;
 		background: rgb(13 20 35 / 94%);
