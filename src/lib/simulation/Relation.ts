@@ -109,7 +109,7 @@ export type ProofRelationData = z.infer<typeof ProofRelationSchema>;
  * Relation SVG shape
  */
 export function svg_shape(relation: RelationData, options: RelationSvgShapeOptions = {}): string {
-	const { sourceX, sourceY, targetX, targetY, color = '#38bdf8', locale = 'fr' } = options;
+	const { sourceX, sourceY, targetX, targetY, color = '#4ef838', locale = 'fr' } = options;
 
 	if (
 		![sourceX, sourceY, targetX, targetY].every(
@@ -155,23 +155,7 @@ export function svg_shape(relation: RelationData, options: RelationSvgShapeOptio
 				stroke-width="3"
 				stroke-linecap="round"
 			/>
-			<text
-				x="${labelX}"
-				y="${labelY}"
-				text-anchor="middle"
-				dominant-baseline="central"
-				fill="#ffffff"
-				font-size="12"
-				font-weight="600"
-				font-family="system-ui, -apple-system, sans-serif"
-				stroke="#0f172a"
-				stroke-width="5"
-				stroke-linejoin="round"
-				paint-order="stroke"
-				pointer-events="none"
-			>
-				${shortLabel}
-			</text>
+			
 		</g>
 	`.trim();
 }
