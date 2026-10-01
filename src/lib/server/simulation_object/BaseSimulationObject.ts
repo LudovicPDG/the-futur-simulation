@@ -3,7 +3,17 @@ import { OPENROUTER_API_KEY } from '$env/static/private';
 import { Genie, convertToPg } from './Genie';
 import { db } from '../utils/database';
 
-export abstract class BaseSimulationObject<T extends { type?: string; name?: any; description?: any; other?: any; impossibility?: number; probability_distribution?: string; originality?: number }> {
+export abstract class BaseSimulationObject<
+	T extends {
+		type?: string;
+		name?: any;
+		description?: any;
+		other?: any;
+		impossibility?: number;
+		probability_distribution?: string;
+		originality?: number;
+	}
+> {
 	protected abstract schema: z.ZodType<T>;
 	protected abstract typeName: string;
 	protected abstract tableName: string;
@@ -23,6 +33,15 @@ export abstract class BaseSimulationObject<T extends { type?: string; name?: any
 		level_of_reasoning: string = 'low',
 		prompt: string
 	): Promise<T> {
+		return this.generateWithSchema(model_name, level_of_reasoning, prompt, this.schema);
+	}
+
+	protected async generateWithSchema<S extends z.ZodType>(
+		model_name: string,
+		level_of_reasoning: string,
+		prompt: string,
+		schema: S
+	): Promise<z.infer<S>> {
 		const task_prompt =
 			Genie.system_prompt +
 			`
@@ -57,7 +76,7 @@ export abstract class BaseSimulationObject<T extends { type?: string; name?: any
 					json_schema: {
 						name: `create_${this.typeName}`,
 						strict: true,
-						schema: z.toJSONSchema(this.schema)
+						schema: z.toJSONSchema(schema)
 					}
 				}
 			})
@@ -88,7 +107,7 @@ export abstract class BaseSimulationObject<T extends { type?: string; name?: any
 			throw new Error('OpenRouter returned invalid JSON');
 		}
 
-		const actionResult = this.schema.parse(json);
+		const actionResult = schema.parse(json);
 		console.log(`${this.typeName} parsed:`, actionResult);
 
 		return actionResult;

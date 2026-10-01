@@ -3,39 +3,33 @@ import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
 
 export const RelationConnexionSchema = z.object({
-	SourceProperty: z.string().describe('The property of the source that is the source of the link'),
-	TargetProperty: z.string().describe('The property of the target that is the target of the link'),
-	impact: z.number().describe('The level of relation between the source and the target')
+	Element1Property: z.string().describe('The property of element 1 in this relation'),
+	Element2Property: z.string().describe('The property of element 2 in this relation'),
+	impact: z.number().describe('The strength of the relation between these properties')
 });
+
+export type RelationConnexionData = z.infer<typeof RelationConnexionSchema>;
+
+export const RelationElementTypeSchema = z.enum([
+	'organization',
+	'fact',
+	'action',
+	'person',
+	'interest_group',
+	'event',
+	'evolution',
+	'ranking',
+	'material_resource'
+]);
 
 export const RelationSchema = z.object({
 	type: z.literal('relation').default('relation').describe('The type of relation'),
 	name: TranslationSchema.describe('The name of the relation'),
 	description: TranslationSchema.describe('The description of the relation'),
 	Element1ID: z.uuid().describe('The UUID of element 1 from the existing simulation elements'),
-	Element1Type: z.enum([
-		'organization',
-		'fact',
-		'action',
-		'person',
-		'interest_group',
-		'event',
-		'evolution',
-		'ranking',
-		'material_resource'
-	]),
+	Element1Type: RelationElementTypeSchema,
 	Element2ID: z.uuid().describe('The UUID of element 2 from the existing simulation elements'),
-	Element2Type: z.enum([
-		'organization',
-		'fact',
-		'action',
-		'person',
-		'interest_group',
-		'event',
-		'evolution',
-		'ranking',
-		'material_resource'
-	]),
+	Element2Type: RelationElementTypeSchema,
 	element1_element2_connexions: z
 		.array(RelationConnexionSchema)
 		.default([])
@@ -88,19 +82,12 @@ export const ProofRelationSchema = z.object({
 	name: TranslationSchema.describe('The name of the relation'),
 	description: TranslationSchema.describe('The description of the relation'),
 	SourceID: z.string().describe('The ID of element that are the source of the link'),
-	SourceType: z.enum([
-		'organization',
-		'fact',
-		'action',
-		'person',
-		'interest_group',
-		'event',
-		'evolution',
-		'ranking',
-		'material_resource'
-	]),
+	SourceType: z.enum([...RelationElementTypeSchema.options]),
 	TargetID: z.string().describe('The ID of element that are the target of the link'),
-	connexions: z.array(RelationConnexionSchema).default([]).describe('Connexions of the relation')
+	connexions: z
+		.array(ProofRelationConnexionSchema)
+		.default([])
+		.describe('Connexions of the relation')
 });
 
 export type ProofRelationData = z.infer<typeof ProofRelationSchema>;

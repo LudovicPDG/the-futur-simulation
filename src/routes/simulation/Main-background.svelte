@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { RelationData } from '$lib/simulation/Relation';
 	import type { SimulationElementWithId } from '$lib/stores/simulation';
 	import { renderSimulationElementSvg } from '$lib/simulation/renderSvg';
 	import { svg_shape as relation_svg_shape } from '$lib/simulation/Relation';
@@ -200,6 +201,24 @@
 		);
 	}
 
+	function isRelationElement(
+		element: SimulationElementWithId | null
+	): element is SimulationElementWithId & RelationData {
+		return element?.type === 'relation' && 'Element1ID' in element && 'Element2ID' in element;
+	}
+
+	function formatRelationProperty(property: string, element: SimulationElementWithId | undefined) {
+		if (element && 'other' in element && Array.isArray(element.other)) {
+			const matchingProperty = element.other.find((item) => {
+				if (typeof item.name === 'string') return item.name === property;
+				return Object.values(item.name).some((translation) => translation === property);
+			});
+			if (matchingProperty) return formatValue(matchingProperty.name);
+		}
+
+		return formatLabel(property);
+	}
+
 	function formatType(value: string): string {
 		const types: Record<string, () => string> = {
 			fact: m.simulation_type_fact,
@@ -311,6 +330,17 @@
 	});
 
 	const activeElement = $derived(hoveredElement ?? selectedElement);
+	const activeRelation = $derived(isRelationElement(activeElement) ? activeElement : null);
+	const relationElement1 = $derived(
+		activeRelation
+			? simulation_data.find((element) => element.id === activeRelation.Element1ID)
+			: undefined
+	);
+	const relationElement2 = $derived(
+		activeRelation
+			? simulation_data.find((element) => element.id === activeRelation.Element2ID)
+			: undefined
+	);
 	const activeFields = $derived(
 		activeElement
 			? Object.entries(activeElement as Record<string, unknown>).filter(
@@ -318,6 +348,17 @@
 						key !== 'name' &&
 						key !== 'type' &&
 						key !== 'other' &&
+						!(
+							activeRelation &&
+							[
+								'Element1ID',
+								'Element1Type',
+								'Element2ID',
+								'Element2Type',
+								'element1_element2_connexions',
+								'element2_element1_connexions'
+							].includes(key)
+						) &&
 						!['impossibility', 'probability_distribution', 'originality'].includes(key)
 				)
 			: []
@@ -406,6 +447,44 @@
 					</div>
 				{/each}
 			</dl>
+			{#if activeRelation}
+				<section class="relation-details">
+					{#if activeRelation.element1_element2_connexions.length > 0}
+						<h3>
+							{formatValue(relationElement1?.name) || m.simulation_field_element1_name()}
+							{m.simulation_relation_to()}
+							{formatValue(relationElement2?.name) || m.simulation_field_element2_name()}
+						</h3>
+						{#each activeRelation.element1_element2_connexions as connexion}
+							<div class="relation-connexion">
+								<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
+								<span class="relation-arrow" aria-hidden="true">→</span>
+								<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
+								<span class="relation-impact">
+									{m.simulation_field_impact()}: {formatValue(connexion.impact)}
+								</span>
+							</div>
+						{/each}
+					{/if}
+					{#if activeRelation.element2_element1_connexions.length > 0}
+						<h3>
+							{formatValue(relationElement2?.name) || m.simulation_field_element2_name()}
+							{m.simulation_relation_to()}
+							{formatValue(relationElement1?.name) || m.simulation_field_element1_name()}
+						</h3>
+						{#each activeRelation.element2_element1_connexions as connexion}
+							<div class="relation-connexion">
+								<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
+								<span class="relation-arrow" aria-hidden="true">→</span>
+								<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
+								<span class="relation-impact">
+									{m.simulation_field_impact()}: {formatValue(connexion.impact)}
+								</span>
+							</div>
+						{/each}
+					{/if}
+				</section>
+			{/if}
 			{#if activeOther.length > 0}
 				<section class="other-details">
 					<h3>{m.simulation_section_other_information()}</h3>
@@ -603,6 +682,63 @@
 		margin-top: 12px;
 		padding-top: 12px;
 		border-top: 1px solid rgb(148 163 184 / 22%);
+	}
+
+	.relation-details {
+		margin-top: 12px;
+		padding-top: 12px;
+		border-top: 1px solid rgb(148 163 184 / 22%);
+	}
+
+	.relation-details h3 {
+		margin: 0 0 6px;
+		color: #7dd3fc;
+		font-size: 12px;
+		font-weight: 700;
+	}
+
+	:global(body.light) .relation-details {
+		border-color: rgb(71 85 105 / 18%);
+	}
+
+	:global(body.light) .relation-details h3 {
+		color: #087e8b;
+	}
+
+	.relation-connexion {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+		align-items: center;
+		gap: 8px;
+		padding: 8px 0;
+		border-bottom: 1px solid rgb(148 163 184 / 14%);
+		font-size: 12px;
+		overflow-wrap: anywhere;
+	}
+
+	.relation-connexion > :last-child {
+		text-align: right;
+	}
+
+	.relation-impact {
+		grid-column: 1 / -1;
+		color: #94a3b8;
+		font-size: 11px;
+		white-space: nowrap;
+		text-align: center;
+	}
+
+	.relation-arrow {
+		color: #7dd3fc;
+		text-align: center;
+	}
+
+	:global(body.light) .relation-connexion {
+		border-color: rgb(71 85 105 / 14%);
+	}
+
+	:global(body.light) .relation-impact {
+		color: #64748b;
 	}
 
 	.other-details h3 {
