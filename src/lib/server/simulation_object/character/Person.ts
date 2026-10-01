@@ -69,6 +69,7 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 		`);
 
 		return result.rows.map((row) => ({
+			id: row.id,
 			type: 'person' as const,
 			name: row.name,
 			description: row.description,

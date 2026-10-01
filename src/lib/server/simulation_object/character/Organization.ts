@@ -77,6 +77,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 		`);
 
 		return result.rows.map((row) => ({
+			id: row.id,
 			type: 'organization' as const,
 			name: row.name,
 			description: row.description,

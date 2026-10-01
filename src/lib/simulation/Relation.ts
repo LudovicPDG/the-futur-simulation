@@ -12,10 +12,30 @@ export const RelationSchema = z.object({
 	type: z.literal('relation').default('relation').describe('The type of relation'),
 	name: TranslationSchema.describe('The name of the relation'),
 	description: TranslationSchema.describe('The description of the relation'),
-	Element1ID: z.string().describe('The ID of element 1'),
-	Element1Type: z.enum(['organization', 'fact', 'action', 'person', 'interest_group', 'event', 'evolution', 'ranking', 'material_resource']),
-	Element2ID: z.string().describe('The ID of element 2'),
-	Element2Type: z.enum(['organization', 'fact', 'action', 'person', 'interest_group', 'event', 'evolution', 'ranking', 'material_resource']),
+	Element1ID: z.uuid().describe('The UUID of element 1 from the existing simulation elements'),
+	Element1Type: z.enum([
+		'organization',
+		'fact',
+		'action',
+		'person',
+		'interest_group',
+		'event',
+		'evolution',
+		'ranking',
+		'material_resource'
+	]),
+	Element2ID: z.uuid().describe('The UUID of element 2 from the existing simulation elements'),
+	Element2Type: z.enum([
+		'organization',
+		'fact',
+		'action',
+		'person',
+		'interest_group',
+		'event',
+		'evolution',
+		'ranking',
+		'material_resource'
+	]),
 	element1_element2_connexions: z
 		.array(RelationConnexionSchema)
 		.default([])
@@ -48,17 +68,37 @@ export const RelationSchema = z.object({
 
 export type RelationData = z.infer<typeof RelationSchema>;
 
+export interface RelationSvgShapeOptions extends SvgShapeOptions {
+	sourceX?: number;
+	sourceY?: number;
+	targetX?: number;
+	targetY?: number;
+}
+
 export const ProofRelationConnexionSchema = z.object({
 	SourceProperty: z.string().describe('The property of the source that is the source of the link'),
 	impact: z.number().describe('The level of relation between the source and the target')
 });
 
 export const ProofRelationSchema = z.object({
-	type: z.literal('proof_relation').default('proof_relation').describe('The type of proof relation'),
+	type: z
+		.literal('proof_relation')
+		.default('proof_relation')
+		.describe('The type of proof relation'),
 	name: TranslationSchema.describe('The name of the relation'),
 	description: TranslationSchema.describe('The description of the relation'),
 	SourceID: z.string().describe('The ID of element that are the source of the link'),
-	SourceType: z.enum(['organization', 'fact', 'action', 'person', 'interest_group', 'event', 'evolution', 'ranking', 'material_resource']),
+	SourceType: z.enum([
+		'organization',
+		'fact',
+		'action',
+		'person',
+		'interest_group',
+		'event',
+		'evolution',
+		'ranking',
+		'material_resource'
+	]),
 	TargetID: z.string().describe('The ID of element that are the target of the link'),
 	connexions: z.array(RelationConnexionSchema).default([]).describe('Connexions of the relation')
 });
@@ -68,8 +108,16 @@ export type ProofRelationData = z.infer<typeof ProofRelationSchema>;
 /**
  * Relation SVG shape
  */
-export function svg_shape(relation: RelationData, options: SvgShapeOptions = {}): string {
-	const { x = 0, y = 0, color = '#64748b', locale = 'fr' } = options;
+export function svg_shape(relation: RelationData, options: RelationSvgShapeOptions = {}): string {
+	const { sourceX, sourceY, targetX, targetY, color = '#38bdf8', locale = 'fr' } = options;
+
+	if (
+		![sourceX, sourceY, targetX, targetY].every(
+			(coordinate) => typeof coordinate === 'number' && Number.isFinite(coordinate)
+		)
+	) {
+		return '';
+	}
 
 	let label = 'Relation';
 	if (relation.name && typeof relation.name === 'object') {
@@ -79,31 +127,47 @@ export function svg_shape(relation: RelationData, options: SvgShapeOptions = {})
 	}
 
 	const shortLabel = label.length > 18 ? label.slice(0, 16) + '…' : label;
+	const labelX = (sourceX! + targetX!) / 2;
+	const labelY = (sourceY! + targetY!) / 2;
 
 	return `
 		<g
 			class="fact-node relation-node"
-			transform="translate(${x}, ${y})"
 			data-type="relation"
 		>
-			<ellipse
-				cx="0"
-				cy="0"
-				rx="50"
-				ry="25"
-				fill="${color}"
-				fill-opacity="0.3"
+			<line
+				x1="${sourceX}"
+				y1="${sourceY}"
+				x2="${targetX}"
+				y2="${targetY}"
 				stroke="${color}"
-				stroke-width="2"
-				stroke-dasharray="3 3"
+				stroke-opacity="0.24"
+				stroke-width="9"
+				stroke-linecap="round"
+				pointer-events="none"
+			/>
+			<line
+				x1="${sourceX}"
+				y1="${sourceY}"
+				x2="${targetX}"
+				y2="${targetY}"
+				stroke="${color}"
+				stroke-width="3"
+				stroke-linecap="round"
 			/>
 			<text
+				x="${labelX}"
+				y="${labelY}"
 				text-anchor="middle"
-				dy="0.35em"
+				dominant-baseline="central"
 				fill="#ffffff"
 				font-size="12"
 				font-weight="600"
 				font-family="system-ui, -apple-system, sans-serif"
+				stroke="#0f172a"
+				stroke-width="5"
+				stroke-linejoin="round"
+				paint-order="stroke"
 				pointer-events="none"
 			>
 				${shortLabel}

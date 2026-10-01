@@ -24,6 +24,8 @@ export type SimulationElement =
 	| ProofData
 	| RelationData;
 
+export type SimulationElementWithId = SimulationElement & { id?: string };
+
 export interface SimulationStoreState {
 	facts: FactData[];
 	persons: PersonData[];
@@ -36,7 +38,7 @@ export interface SimulationStoreState {
 	material_resources: MaterialResourceData[];
 	proofs: ProofData[];
 	relations: RelationData[];
-	all_elements: SimulationElement[];
+	all_elements: SimulationElementWithId[];
 }
 
 const initialState: SimulationStoreState = {
@@ -54,14 +56,16 @@ const initialState: SimulationStoreState = {
 	all_elements: []
 };
 
-function deduplicateElements<T extends { name?: any; type?: string }>(list: T[]): T[] {
+function deduplicateElements<T extends { name?: any; type?: string; id?: string }>(list: T[]): T[] {
 	const seen = new Set<string>();
 	return list.filter((item) => {
 		const label =
 			typeof item.name === 'object' && item.name !== null
 				? item.name.fr || item.name.en || JSON.stringify(item.name)
 				: String(item.name || '');
-		const key = `${item.type || 'element'}:${label}`;
+		const key = item.id
+			? `${item.type || 'element'}:${item.id}`
+			: `${item.type || 'element'}:${label}`;
 		if (seen.has(key)) return false;
 		seen.add(key);
 		return true;
@@ -75,9 +79,13 @@ function createSimulationStore() {
 		subscribe,
 		set,
 		update,
-		init(initialData?: Partial<SimulationStoreState> & { all_elements?: SimulationElement[] }) {
+		init(
+			initialData?: Partial<SimulationStoreState> & {
+				all_elements?: SimulationElementWithId[];
+			}
+		) {
 			if (initialData) {
-				const all_elements: SimulationElement[] = initialData.all_elements || [
+				const all_elements: SimulationElementWithId[] = initialData.all_elements || [
 					...(initialData.facts || []),
 					...(initialData.persons || []),
 					...(initialData.organizations || []),

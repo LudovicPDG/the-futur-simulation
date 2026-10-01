@@ -1,6 +1,7 @@
 <script lang="ts">
-	import type { SimulationElement } from '$lib/stores/simulation';
+	import type { SimulationElementWithId } from '$lib/stores/simulation';
 	import { renderSimulationElementSvg } from '$lib/simulation/renderSvg';
+	import { svg_shape as relation_svg_shape } from '$lib/simulation/Relation';
 	import { parseTranslation } from '$lib/simulation/Translation';
 	import { clickOutside } from '$lib/actions/clickOutside';
 	import { getLocale } from '$lib/paraglide/runtime';
@@ -10,13 +11,13 @@
 	let {
 		new_element,
 		simulation_data = []
-	}: { new_element?: any; simulation_data?: SimulationElement[] } = $props();
+	}: { new_element?: any; simulation_data?: SimulationElementWithId[] } = $props();
 
 	let cameraX = $state(400);
 	let cameraY = $state(300);
 	let zoom = $state(1);
-	let hoveredElement = $state<SimulationElement | null>(null);
-	let selectedElement = $state<SimulationElement | null>(null);
+	let hoveredElement = $state<SimulationElementWithId | null>(null);
+	let selectedElement = $state<SimulationElementWithId | null>(null);
 
 	onMount(() => {
 		cameraX = window.innerWidth / 2;
@@ -79,10 +80,15 @@
 		return target instanceof Element ? target.closest('.fact-node') : null;
 	}
 
-	function getSimulationElement(target: EventTarget | null): SimulationElement | null {
+	function getSimulationElement(target: EventTarget | null): SimulationElementWithId | null {
 		const node = getNodeElement(target);
 		const index = Number(node?.closest('[data-element-index]')?.getAttribute('data-element-index'));
-		return Number.isInteger(index) ? (renderedElements[index]?.element ?? null) : null;
+		if (!Number.isInteger(index)) return null;
+		return (
+			renderedElements.relations.find((item) => item.index === index)?.element ??
+			renderedElements.nodes.find((item) => item.index === index)?.element ??
+			null
+		);
 	}
 
 	function handlePointerOver(event: PointerEvent) {
@@ -256,10 +262,14 @@
 
 	const renderedElements = $derived.by(() => {
 		const list = (simulation_data || []).filter(
-			(item): item is SimulationElement => typeof item === 'object' && item !== null
+			(item): item is SimulationElementWithId => typeof item === 'object' && item !== null
 		);
-		return list.map((element, index) => {
-			const pos = getNodePosition(index, list.length);
+		const nodes = list.filter((element) => element.type !== 'relation');
+		const nodePositions = new Map<string, { x: number; y: number }>();
+		const renderedNodes = nodes.map((element, index) => {
+			const pos = getNodePosition(index, nodes.length);
+			const id = element.id;
+			if (id) nodePositions.set(id, pos);
 			const svgContent = renderSimulationElementSvg(element, {
 				x: pos.x,
 				y: pos.y,
@@ -268,11 +278,36 @@
 			});
 			return {
 				element,
-				pos,
 				svgContent,
-				index
+				index: list.indexOf(element)
 			};
 		});
+
+		const renderedRelations: {
+			element: SimulationElementWithId;
+			svgContent: string;
+			index: number;
+		}[] = [];
+		list.forEach((element, index) => {
+			if (!('Element1ID' in element) || !('Element2ID' in element)) return;
+			const source = nodePositions.get(element.Element1ID);
+			const target = nodePositions.get(element.Element2ID);
+			if (!source || !target) return;
+
+			renderedRelations.push({
+				element,
+				svgContent: relation_svg_shape(element, {
+					sourceX: source.x,
+					sourceY: source.y,
+					targetX: target.x,
+					targetY: target.y,
+					locale: currentLocale
+				}),
+				index
+			});
+		});
+
+		return { relations: renderedRelations, nodes: renderedNodes };
 	});
 
 	const activeElement = $derived(hoveredElement ?? selectedElement);
@@ -301,7 +336,10 @@
 	);
 
 	$effect(() => {
-		console.log('Rendered simulation elements count:', renderedElements.length);
+		console.log(
+			'Rendered simulation elements count:',
+			renderedElements.relations.length + renderedElements.nodes.length
+		);
 	});
 
 	$effect(() => {
@@ -327,8 +365,12 @@
 			<circle class="grid-ring middle" r="400" fill="none" stroke-width="1" />
 			<circle class="grid-ring inner" r="200" fill="none" stroke-width="1" />
 
-			<!-- Render each simulation element -->
-			{#each renderedElements as item}
+			<!-- Render relations first so their lines sit behind the connected nodes. -->
+			{#each renderedElements.relations as item}
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+				{@html `<g data-element-index="${item.index}">${item.svgContent}</g>`}
+			{/each}
+			{#each renderedElements.nodes as item}
 				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 				{@html `<g data-element-index="${item.index}">${item.svgContent}</g>`}
 			{/each}

@@ -91,6 +91,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 		`);
 
 		return result.rows.map((row) => ({
+			id: row.id,
 			type: 'interest_group' as const,
 			name: row.name,
 			description: row.description,

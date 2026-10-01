@@ -68,6 +68,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 		`);
 
 		return result.rows.map((row) => ({
+			id: row.id,
 			type: 'ranking' as const,
 			name: row.name,
 			description: row.description,

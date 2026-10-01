@@ -58,6 +58,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 		`);
 
 		return result.rows.map((row) => ({
+			id: row.id,
 			type: 'event' as const,
 			name: row.name,
 			description: row.description,

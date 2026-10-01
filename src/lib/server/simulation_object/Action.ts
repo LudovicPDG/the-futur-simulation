@@ -71,6 +71,7 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 		`);
 
 		return result.rows.map((row) => ({
+			id: row.id,
 			type: 'action' as const,
 			name: row.name,
 			description: row.description,

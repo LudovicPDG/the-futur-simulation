@@ -38,6 +38,7 @@ export class FactServer extends BaseSimulationObject<FactData> {
 		`);
 
 		return result.rows.map((row) => ({
+			id: row.id,
 			name: row.name,
 			type: row.type || 'fact',
 			description: row.description,

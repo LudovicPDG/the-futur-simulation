@@ -69,6 +69,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 		`);
 
 		return result.rows.map((row) => ({
+			id: row.id,
 			type: 'evolution' as const,
 			name: row.name,
 			description: row.description,

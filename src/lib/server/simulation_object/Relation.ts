@@ -8,6 +8,28 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 	protected typeName = 'relation';
 	protected tableName = 'relations';
 
+	protected override async generate(
+		model_name: string,
+		level_of_reasoning: string,
+		prompt: string
+	): Promise<RelationData> {
+		const result = await db.query(`
+			SELECT id, type, (name).fr AS name_fr, (name).en AS name_en
+			FROM facts
+		`);
+		const elements = result.rows.map((row) => ({
+			id: row.id,
+			type: row.type,
+			name: { fr: row.name_fr, en: row.name_en }
+		}));
+
+		return super.generate(
+			model_name,
+			level_of_reasoning,
+			`${prompt}\n\nExisting simulation elements (use the exact UUID and type shown for both relation endpoints; never invent IDs):\n${JSON.stringify(elements)}`
+		);
+	}
+
 	async insert_in_db(relation: RelationData): Promise<void> {
 		await db.query(
 			`INSERT INTO relations (

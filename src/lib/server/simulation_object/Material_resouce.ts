@@ -74,6 +74,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 		`);
 
 		return result.rows.map((row) => ({
+			id: row.id,
 			type: 'material_resource' as const,
 			name: row.name,
 			description: row.description,
