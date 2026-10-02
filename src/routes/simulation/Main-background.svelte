@@ -7,6 +7,7 @@
 	import { clickOutside } from '$lib/actions/clickOutside';
 	import { getLocale } from '$lib/paraglide/runtime';
 	import * as m from '$lib/paraglide/messages';
+	import ProbabilityDistributionChart from '$lib/components/ProbabilityDistributionChart.svelte';
 	import { onMount } from 'svelte';
 
 	let {
@@ -505,7 +506,18 @@
 						{#each activeParameters as [key, value]}
 							<div class="detail-row">
 								<dt>{formatLabel(key)}</dt>
-								<dd>{formatValue(value)}</dd>
+								{#if key === 'probability_distribution' && typeof value === 'string'}
+									<dd>
+										<ProbabilityDistributionChart
+											expression={value}
+											impossibility={typeof (activeElement as any)?.impossibility === 'number'
+												? (activeElement as any).impossibility
+												: 0}
+										/>
+									</dd>
+								{:else}
+									<dd>{formatValue(value)}</dd>
+								{/if}
 							</div>
 						{/each}
 					</dl>

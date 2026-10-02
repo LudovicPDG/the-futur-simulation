@@ -46,7 +46,7 @@ export const FactSchema = z.object({
 	probability_distribution: z
 		.string()
 		.describe(
-			'The probability distribution of the fact happening depending of time variable t. Don t take in account that after the function will be normalized by a value that describe the impossibility that the fact happen. Give the expression of the function that describe the probability distribution.'
+			'The probability distribution of the fact happening depending of time variable t. Don t take in account that after the function will be normalized by a value that describe the impossibility that the fact happen. Give the expression of the function that describe the probability distribution. Give only the expression of the function, without the "function(t) { return ... }" and no other text, if you dont make this the app will not have the possibility to display correctly the function.'
 		),
 
 	originality: z
