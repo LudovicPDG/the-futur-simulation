@@ -7,7 +7,7 @@
 	import { clickOutside } from '$lib/actions/clickOutside';
 	import { getLocale } from '$lib/paraglide/runtime';
 	import * as m from '$lib/paraglide/messages';
-	import ProbabilityDistributionChart from '$lib/components/ProbabilityDistributionChart.svelte';
+	import ProbabilityDistributionChart from './ProbabilityDistributionChart.svelte';
 	import { onMount } from 'svelte';
 
 	let {
