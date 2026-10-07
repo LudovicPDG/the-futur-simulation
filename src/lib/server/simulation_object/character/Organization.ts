@@ -30,7 +30,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 					convertToPg(organization.description),
 					convertToPg(organization.other),
 					organization.impossibility,
-					organization.probability_distribution,
+					convertToPg(organization.probability_distribution),
 					organization.originality
 				]
 			);

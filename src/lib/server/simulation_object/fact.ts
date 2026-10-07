@@ -25,7 +25,7 @@ export class FactServer extends BaseSimulationObject<FactData> {
 				convertToPg(fact.description),
 				convertToPg(fact.other),
 				fact.impossibility,
-				fact.probability_distribution,
+				convertToPg(fact.probability_distribution),
 				fact.originality
 			]
 		);

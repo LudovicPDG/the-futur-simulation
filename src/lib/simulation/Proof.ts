@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
+import { ProbabilityDistributionSchema } from './ProbabilityDistribution';
 
 export const ProofSchema = z.object({
 	type: z.literal('proof').default('proof').describe('The type of proof'),
@@ -17,11 +18,7 @@ export const ProofSchema = z.object({
 		.describe(
 			'describe the impossibility that the proof happen. This number will after normalize the probability distribution.'
 		),
-	probability_distribution: z
-		.string()
-		.describe(
-			'The probability distribution of the proof happening depending of time variable t. Don t take in account that after the function will be normalized by a value that describe the impossibility that the proof happen. Give the expression of the function that describe the probability distribution.'
-		),
+	probability_distribution: ProbabilityDistributionSchema,
 	originality: z.number().min(0).max(100).describe('Originality of the proof')
 });
 

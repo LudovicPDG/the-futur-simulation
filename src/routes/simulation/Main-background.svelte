@@ -367,9 +367,17 @@
 	const activeParameters = $derived(
 		activeElement
 			? Object.entries(activeElement as Record<string, unknown>).filter(([key]) =>
-					['impossibility', 'probability_distribution', 'originality'].includes(key)
+					['originality'].includes(key)
 				)
 			: []
+	);
+	const activeDistribution = $derived(
+		activeElement ? (activeElement as Record<string, unknown>).probability_distribution : undefined
+	);
+	const activeImpossibility = $derived(
+		activeElement && typeof (activeElement as any).impossibility === 'number'
+			? ((activeElement as any).impossibility as number)
+			: undefined
 	);
 	const activeOther = $derived(
 		activeElement && Array.isArray((activeElement as Record<string, unknown>).other)
@@ -499,25 +507,29 @@
 					</dl>
 				</section>
 			{/if}
-			{#if activeParameters.length > 0}
+			{#if activeParameters.length > 0 || activeDistribution !== undefined}
 				<section class="parameter-details">
 					<h3>{m.simulation_section_parameters()}</h3>
+					{#if activeDistribution !== undefined}
+						<div class="distribution-block">
+							<h4>{m.simulation_field_probability_distribution()}</h4>
+							<ProbabilityDistributionChart
+								distribution={activeDistribution}
+								impossibility={activeImpossibility ?? 0}
+							/>
+							{#if activeImpossibility !== undefined}
+								<div class="detail-row impossibility-row">
+									<dt>{m.simulation_field_impossibility()}</dt>
+									<dd>{formatValue(activeImpossibility)}</dd>
+								</div>
+							{/if}
+						</div>
+					{/if}
 					<dl>
 						{#each activeParameters as [key, value]}
 							<div class="detail-row">
 								<dt>{formatLabel(key)}</dt>
-								{#if key === 'probability_distribution' && typeof value === 'string'}
-									<dd>
-										<ProbabilityDistributionChart
-											expression={value}
-											impossibility={typeof (activeElement as any)?.impossibility === 'number'
-												? (activeElement as any).impossibility
-												: 0}
-										/>
-									</dd>
-								{:else}
-									<dd>{formatValue(value)}</dd>
-								{/if}
+								<dd>{formatValue(value)}</dd>
 							</div>
 						{/each}
 					</dl>
@@ -781,6 +793,49 @@
 
 	.parameter-details dl {
 		margin: 0;
+	}
+
+	/* Probability distribution: highlighted sub-component of the parameters */
+	.distribution-block {
+		margin: 8px 0 6px;
+		padding: 10px 10px 4px;
+		background: rgb(251 191 36 / 6%);
+		border: 1px solid rgb(251 191 36 / 28%);
+		border-left: 3px solid #fbbf24;
+		border-radius: 6px;
+	}
+
+	.distribution-block h4 {
+		margin: 0 0 8px;
+		color: #fcd34d;
+		font-size: 13px;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+	}
+
+	:global(body.light) .distribution-block {
+		background: rgb(202 138 4 / 6%);
+		border-color: rgb(161 98 7 / 30%);
+		border-left-color: #ca8a04;
+	}
+
+	:global(body.light) .distribution-block h4 {
+		color: #a16207;
+	}
+
+	.impossibility-row {
+		margin-top: 6px;
+		border-bottom: 0;
+	}
+
+	.impossibility-row dt,
+	.impossibility-row dd {
+		color: #f87171;
+	}
+
+	:global(body.light) .impossibility-row dt,
+	:global(body.light) .impossibility-row dd {
+		color: #dc2626;
 	}
 
 	.other-details dl {

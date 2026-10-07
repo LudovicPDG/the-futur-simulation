@@ -29,7 +29,7 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 				convertToPg(proof.falsifiability_method),
 				convertToPg(proof.source || []),
 				proof.impossibility,
-				proof.probability_distribution,
+				convertToPg(proof.probability_distribution),
 				proof.originality
 			]
 		);

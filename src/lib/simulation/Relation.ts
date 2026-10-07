@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
+import { ProbabilityDistributionSchema } from './ProbabilityDistribution';
 
 export const RelationConnexionSchema = z.object({
 	Element1Property: z.string().describe('The property of element 1 in this relation'),
@@ -46,11 +47,7 @@ export const RelationSchema = z.object({
 			'describe the impossibility that the relation happen. This number will after normalize the probability distribution.'
 		),
 
-	probability_distribution: z
-		.string()
-		.describe(
-			'The probability distribution of the relation happening depending of time variable t. Don t take in account that after the function will be normalized by a value that describe the impossibility that the relation happen. Give the expression of the function that describe the probability distribution.'
-		),
+	probability_distribution: ProbabilityDistributionSchema,
 	originality: z
 		.number()
 		.min(0)

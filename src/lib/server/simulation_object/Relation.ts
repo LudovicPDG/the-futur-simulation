@@ -199,7 +199,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 					}))
 				),
 				relation.impossibility,
-				relation.probability_distribution,
+				convertToPg(relation.probability_distribution),
 				relation.originality
 			]
 		);

@@ -102,5 +102,18 @@
 	"simulation_field_connexions": "Connections",
 	"simulation_field_source_property": "Source property",
 	"simulation_field_target_property": "Target property",
-	"simulation_field_impact": "Impact"
+	"simulation_field_impact": "Impact",
+	"simulation_distribution_date": "Date",
+	"simulation_distribution_certainty": "Certainty",
+	"simulation_distribution_asymmetry": "Asymmetry",
+	"simulation_distribution_weight": "Weight",
+	"simulation_distribution_cumulative": "Probability by this date",
+	"simulation_distribution_impossible": "Impossible zone",
+	"simulation_distribution_later": "tail towards later",
+	"simulation_distribution_earlier": "tail towards earlier",
+	"simulation_distribution_certainty_hint": "Margin of uncertainty around the date (years)",
+	"simulation_distribution_density": "Density (most likely dates)",
+	"simulation_distribution_intro": "Most likely dates (components of the skew-normal mixture)",
+	"simulation_distribution_legend_cumulative": "Evolution of the probability (cumulative distribution function)",
+	"simulation_distribution_legend_density": "Probability at this date (density)"
 }

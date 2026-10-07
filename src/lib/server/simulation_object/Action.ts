@@ -30,7 +30,7 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 					convertToPg(action.description),
 					convertToPg(action.other),
 					action.impossibility,
-					action.probability_distribution,
+					convertToPg(action.probability_distribution),
 					action.originality
 				]
 			);

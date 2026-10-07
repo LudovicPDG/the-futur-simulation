@@ -30,7 +30,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 					convertToPg(ranking.description),
 					convertToPg(ranking.other),
 					ranking.impossibility,
-					ranking.probability_distribution,
+					convertToPg(ranking.probability_distribution),
 					ranking.originality
 				]
 			);

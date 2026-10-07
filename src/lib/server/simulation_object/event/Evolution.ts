@@ -30,7 +30,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 					convertToPg(evolution.description),
 					convertToPg(evolution.other),
 					evolution.impossibility,
-					evolution.probability_distribution,
+					convertToPg(evolution.probability_distribution),
 					evolution.originality
 				]
 			);

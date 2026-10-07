@@ -33,7 +33,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 					convertToPg(group.description),
 					convertToPg(group.other),
 					group.impossibility,
-					group.probability_distribution,
+					convertToPg(group.probability_distribution),
 					group.originality
 				]
 			);

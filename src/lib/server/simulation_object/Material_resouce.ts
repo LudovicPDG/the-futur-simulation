@@ -33,7 +33,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 					convertToPg(resource.description),
 					convertToPg(resource.other),
 					resource.impossibility,
-					resource.probability_distribution,
+					convertToPg(resource.probability_distribution),
 					resource.originality
 				]
 			);

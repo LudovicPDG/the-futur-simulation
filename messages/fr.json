@@ -102,5 +102,18 @@
 	"simulation_field_connexions": "Connexions",
 	"simulation_field_source_property": "Propriété source",
 	"simulation_field_target_property": "Propriété cible",
-	"simulation_field_impact": "Impact"
+	"simulation_field_impact": "Impact",
+	"simulation_distribution_date": "Date",
+	"simulation_distribution_certainty": "Certitude",
+	"simulation_distribution_asymmetry": "Asymétrie",
+	"simulation_distribution_weight": "Poids",
+	"simulation_distribution_cumulative": "Probabilité à cette date",
+	"simulation_distribution_impossible": "Zone impossible",
+	"simulation_distribution_later": "queue vers plus tard",
+	"simulation_distribution_earlier": "queue vers plus tôt",
+	"simulation_distribution_certainty_hint": "Marge d'incertitude autour de la date (années)",
+	"simulation_distribution_density": "Densité (dates les plus probables)",
+	"simulation_distribution_intro": "Dates les plus probables (composantes de la mixture skew-normal)",
+	"simulation_distribution_legend_cumulative": "Évolution de la probabilité (fonction de répartition)",
+	"simulation_distribution_legend_density": "Probabilité à cette date (densité)"
 }

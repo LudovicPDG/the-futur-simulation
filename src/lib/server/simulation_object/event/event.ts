@@ -30,7 +30,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 					convertToPg(event.description),
 					convertToPg(event.other),
 					event.impossibility,
-					event.probability_distribution,
+					convertToPg(event.probability_distribution),
 					event.originality
 				]
 			);

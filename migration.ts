@@ -103,6 +103,20 @@ export async function createDatabase() {
 			END $$;
 		`);
 
+		// Type composite pour les paramètres de distribution Skew Normal (Asymétrique Normale)
+		await client.query(`
+			DO $$ BEGIN
+				CREATE TYPE skew_normal_parameter_t AS (
+					xi NUMERIC,
+					omega NUMERIC,
+					alpha NUMERIC,
+					weight NUMERIC
+				);
+			EXCEPTION
+				WHEN duplicate_object THEN null;
+			END $$;
+		`);
+
 		// ==========================================
 		// 2. TABLE RACINE : FACTS
 		// ==========================================
@@ -114,7 +128,7 @@ export async function createDatabase() {
 				description translation_t NOT NULL,
 				other other_fact_t[],
 				impossibility NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (impossibility >= 0 AND impossibility <= 1),
-				probability_distribution TEXT NOT NULL,
+				probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100)
 			);
 		`);
@@ -134,7 +148,7 @@ export async function createDatabase() {
 				element1_element2_connexions relation_connexion_t[] NOT NULL DEFAULT '{}',
 				element2_element1_connexions relation_connexion_t[] NOT NULL DEFAULT '{}',
 				impossibility NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (impossibility >= 0 AND impossibility <= 1),
-				probability_distribution TEXT NOT NULL,
+				probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100)
 			);
 		`);
@@ -198,7 +212,7 @@ export async function createDatabase() {
 				falsifiability_method translation_t NOT NULL,
 				source TEXT[] NOT NULL DEFAULT '{}',
 				impossibility NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (impossibility >= 0 AND impossibility <= 1),
-				probability_distribution TEXT NOT NULL,
+				probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100)
 			);
 		`);

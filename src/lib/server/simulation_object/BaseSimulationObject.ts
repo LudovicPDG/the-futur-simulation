@@ -10,7 +10,7 @@ export abstract class BaseSimulationObject<
 		description?: any;
 		other?: any;
 		impossibility?: number;
-		probability_distribution?: string;
+		probability_distribution?: any;
 		originality?: number;
 	}
 > {

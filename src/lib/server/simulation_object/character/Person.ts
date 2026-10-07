@@ -30,7 +30,7 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 					convertToPg(person.description),
 					convertToPg(person.other),
 					person.impossibility,
-					person.probability_distribution,
+					convertToPg(person.probability_distribution),
 					person.originality
 				]
 			);
