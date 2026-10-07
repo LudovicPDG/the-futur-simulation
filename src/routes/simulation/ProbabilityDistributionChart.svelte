@@ -6,7 +6,14 @@
 		skewNormalMixtureQuantile,
 		type SkewNormalParameter
 	} from '$lib/simulation/ProbabilityDistribution';
+	import {
+		buildSegmentedAxis,
+		formatDuration,
+		formatPreciseDate,
+		type SegmentedAxis
+	} from '$lib/simulation/TimeAxis';
 	import * as m from '$lib/paraglide/messages';
+	import { getLocale } from '$lib/paraglide/runtime';
 
 	interface Point {
 		t: number;
@@ -18,7 +25,7 @@
 		distribution,
 		impossibility = 0,
 		width = 320,
-		height = 170
+		height = 190
 	}: {
 		distribution?: SkewNormalParameter[] | string | unknown;
 		impossibility?: number;
@@ -44,7 +51,10 @@
 		// Handle potential stringified JSON (from legacy or DB payload)
 		if (typeof rawList === 'string') {
 			const trimmed = rawList.trim();
-			if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+			if (trimmed.startsWith('{"(') || trimmed.startsWith('{(')) {
+				// Raw postgres array literal: {"(2027,1,0,1)","(...)"}
+				rawList = [...trimmed.matchAll(/\([^)]*\)/g)].map((match) => match[0]);
+			} else if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
 				try {
 					rawList = JSON.parse(trimmed);
 				} catch {
@@ -58,7 +68,14 @@
 		const array = Array.isArray(rawList) ? rawList : [rawList];
 		const parsed: SkewNormalParameter[] = [];
 
-		for (const item of array) {
+		for (let item of array) {
+			// Composite literal "(xi,omega,alpha,weight)" left unparsed by pg
+			if (typeof item === 'string') {
+				const match = item.match(/^\s*\(([^)]*)\)\s*$/);
+				if (!match) continue;
+				const [xi, omega, alpha, weight] = match[1].split(',').map(Number);
+				item = { xi, omega, alpha, weight };
+			}
 			if (typeof item === 'object' && item !== null) {
 				const xi = Number((item as any).xi);
 				const omega = Number((item as any).omega);
@@ -82,47 +99,64 @@
 		};
 	});
 
-	// Cumulative curve sampled over the central 90% of the mixture mass (5% to 95% quantiles).
-	// A mixture of skew normals is unbounded, so the CDF accumulates from -infinity.
+	const locale = $derived(getLocale());
+
+	const ROW_HEIGHT = 12;
+	const BASE_BOTTOM = 20;
+	const innerWidth = $derived(Math.max(10, width - 38 - 16));
+
+	const SAMPLES_PER_SEGMENT = 100;
+
+	// The time axis is made of one zoomed segment per group of scenarios (the quiet periods between
+	// them are condensed), so a very precise date and far apart peaks both stay readable.
 	const evaluatedData = $derived.by(() => {
 		const mixture = parsedMixture.parameters;
 		const possibilityFactor = 1 - Math.min(1, Math.max(0, impossibility));
 		const empty = {
-			points: [] as Point[],
+			axis: null as SegmentedAxis | null,
+			samples: [] as Point[],
+			segmentSamples: [] as Point[][],
+			peaks: [] as number[],
 			mixture: [] as SkewNormalParameter[],
 			error: parsedMixture.error,
-			tMin: 0,
-			tMax: 1,
 			possibilityFactor,
 			totalWeight: 1
 		};
 		if (mixture.length === 0) return empty;
 
 		try {
-			let tMin = skewNormalMixtureQuantile(0.05, mixture);
-			let tMax = skewNormalMixtureQuantile(0.95, mixture);
-			if (tMax - tMin < 1e-3) {
-				tMin -= 0.5;
-				tMax += 0.5;
-			}
+			const axis = buildSegmentedAxis(mixture, innerWidth, locale);
 
-			const steps = 160;
-			const points: Point[] = [];
-			for (let i = 0; i <= steps; i++) {
-				const t = tMin + (i / steps) * (tMax - tMin);
-				points.push({
-					t,
-					prob: evaluateSkewNormalMixtureCdf(t, mixture) * possibilityFactor,
-					density: evaluateSkewNormalMixture(t, mixture)
-				});
+			const segmentSamples: Point[][] = [];
+			const peaks: number[] = [];
+			for (const segment of axis.segments) {
+				const pts: Point[] = [];
+				let peak = segment.lo;
+				let peakDensity = -1;
+				for (let i = 0; i <= SAMPLES_PER_SEGMENT; i++) {
+					const t = segment.lo + (i / SAMPLES_PER_SEGMENT) * (segment.hi - segment.lo);
+					const density = evaluateSkewNormalMixture(t, mixture);
+					if (density > peakDensity) {
+						peakDensity = density;
+						peak = t;
+					}
+					pts.push({
+						t,
+						prob: evaluateSkewNormalMixtureCdf(t, mixture) * possibilityFactor,
+						density
+					});
+				}
+				segmentSamples.push(pts);
+				peaks.push(peak);
 			}
 
 			return {
-				points,
+				axis,
+				samples: segmentSamples.flat(),
+				segmentSamples,
+				peaks,
 				mixture,
 				error: null,
-				tMin,
-				tMax,
 				possibilityFactor,
 				totalWeight: mixture.reduce((sum, comp) => sum + comp.weight, 0)
 			};
@@ -131,125 +165,121 @@
 		}
 	});
 
-	function formatDate(value: number, decimals = 0): string {
-		return value.toFixed(decimals);
-	}
+	// Number of context rows under the ticks (month, year...): the chart grows to make room for them
+	const contextRows = $derived(
+		Math.max(0, ...(evaluatedData.axis?.segments.map((seg) => seg.levels.length) ?? [0]))
+	);
+	const margin = $derived({
+		top: 12,
+		right: 16,
+		bottom: BASE_BOTTOM + ROW_HEIGHT * Math.max(1, contextRows),
+		left: 38
+	});
+	// The plot area keeps the same height whatever the number of rows
+	const innerHeight = $derived(Math.max(10, height - 12 - (BASE_BOTTOM + ROW_HEIGHT * 2)));
+	const totalHeight = $derived(innerHeight + margin.top + margin.bottom);
 
 	// D3 scales and paths. The y axis is always the full probability range [0, 1].
 	const chartGeometry = $derived.by(() => {
-		const margin = { top: 14, right: 16, bottom: 26, left: 38 };
-		const innerWidth = Math.max(10, width - margin.left - margin.right);
-		const innerHeight = Math.max(10, height - margin.top - margin.bottom);
-
-		const pts = evaluatedData.points;
-		if (pts.length === 0) {
-			return {
-				margin,
-				innerWidth,
-				innerHeight,
-				xScale: null,
-				yScale: null,
-				pathD: '',
-				areaD: '',
-				densityD: '',
-				impossibleY: 0,
-				xTicks: [] as { value: number; x: number; label: string }[],
-				yTicks: [] as { value: number; y: number; formatted: string }[]
-			};
-		}
-
-		const xScale = d3
-			.scaleLinear()
-			.domain([evaluatedData.tMin, evaluatedData.tMax])
-			.range([0, innerWidth]);
-
+		const axis = evaluatedData.axis;
 		const yScale = d3.scaleLinear().domain([0, 1]).range([innerHeight, 0]);
-
-		const lineGen = d3
-			.line<Point>()
-			.x((d: Point) => xScale(d.t))
-			.y((d: Point) => yScale(d.prob))
-			.curve(d3.curveMonotoneX);
-
-		const areaGen = d3
-			.area<Point>()
-			.x((d: Point) => xScale(d.t))
-			.y0(innerHeight)
-			.y1((d: Point) => yScale(d.prob))
-			.curve(d3.curveMonotoneX);
-
-		// The density (bell shape) has its own scale: its peak is drawn at 85% of the reachable
-		// probability so the shape stays readable next to the 0-1 cumulative axis.
-		const maxDensity = d3.max(pts, (d: Point) => d.density) || 1;
-		const densityHeight = 0.85 * evaluatedData.possibilityFactor;
-		const densityGen = d3
-			.area<Point>()
-			.x((d: Point) => xScale(d.t))
-			.y0(innerHeight)
-			.y1((d: Point) => yScale((d.density / maxDensity) * densityHeight))
-			.curve(d3.curveMonotoneX);
-
-		const xTickValues = xScale.ticks(5);
-		const integerTicks = xTickValues.every((v: number) => Number.isInteger(v));
-
-		const xTicks = xTickValues.map((val: number) => ({
-			value: val,
-			x: xScale(val),
-			label: formatDate(val, integerTicks ? 0 : 1)
-		}));
-
 		const yTicks = [0, 0.25, 0.5, 0.75, 1].map((val) => ({
 			value: val,
 			y: yScale(val),
 			formatted: String(val)
 		}));
 
+		if (!axis || evaluatedData.samples.length === 0) {
+			return {
+				innerWidth,
+				innerHeight,
+				yScale,
+				pathD: '',
+				areaD: '',
+				densityPaths: [] as string[],
+				peakXs: [] as number[],
+				impossibleY: 0,
+				yTicks
+			};
+		}
+
+		const xOf = (d: Point) => axis.toX(d.t);
+
+		const lineGen = d3
+			.line<Point>()
+			.x(xOf)
+			.y((d: Point) => yScale(d.prob))
+			.curve(d3.curveMonotoneX);
+
+		const areaGen = d3
+			.area<Point>()
+			.x(xOf)
+			.y0(innerHeight)
+			.y1((d: Point) => yScale(d.prob))
+			.curve(d3.curveMonotoneX);
+
+		// Each segment has its own density scale: its peak is drawn at 85% of the reachable
+		// probability, so it never goes over the impossibility threshold (or 1). The weight of the
+		// segment is written below it and the height of the cumulative step shows it too.
+		const densityHeight = 0.85 * evaluatedData.possibilityFactor;
+		const densityPaths = evaluatedData.segmentSamples.map((pts) => {
+			const maxDensity = d3.max(pts, (d: Point) => d.density) || 1;
+			const gen = d3
+				.area<Point>()
+				.x(xOf)
+				.y0(innerHeight)
+				.y1((d: Point) => yScale((d.density / maxDensity) * densityHeight))
+				.curve(d3.curveMonotoneX);
+			return gen(pts) || '';
+		});
+
 		return {
-			margin,
 			innerWidth,
 			innerHeight,
-			xScale,
 			yScale,
-			pathD: lineGen(pts) || '',
-			areaD: areaGen(pts) || '',
-			densityD: densityGen(pts) || '',
+			pathD: lineGen(evaluatedData.samples) || '',
+			areaD: areaGen(evaluatedData.samples) || '',
+			densityPaths,
+			peakXs: evaluatedData.peaks.map((t) => axis.toX(t)),
 			impossibleY: yScale(evaluatedData.possibilityFactor),
-			xTicks,
 			yTicks
 		};
 	});
 
 	// Cumulative probability P(date <= t) at the hovered / clicked date
 	const activeData = $derived.by(() => {
-		if (
-			activeT === null ||
-			!chartGeometry.xScale ||
-			!chartGeometry.yScale ||
-			evaluatedData.points.length === 0
-		) {
+		const axis = evaluatedData.axis;
+		if (activeT === null || !axis || !chartGeometry.yScale || evaluatedData.samples.length === 0) {
 			return null;
 		}
 
-		const t = Math.max(evaluatedData.tMin, Math.min(evaluatedData.tMax, activeT));
+		const first = axis.segments[0];
+		const last = axis.segments[axis.segments.length - 1];
+		const t = Math.max(first.lo, Math.min(last.hi, activeT));
 		const prob =
 			evaluateSkewNormalMixtureCdf(t, evaluatedData.mixture) * evaluatedData.possibilityFactor;
+		const segmentIndex = axis.segmentIndexAt(t);
+		// Inside a condensed period only the year makes sense
+		const unit = segmentIndex >= 0 ? axis.segments[segmentIndex].unit : 'year';
 
 		return {
 			t,
 			prob,
 			pct: prob * 100,
-			markerX: chartGeometry.xScale(t) + chartGeometry.margin.left,
-			markerY: chartGeometry.yScale(prob) + chartGeometry.margin.top
+			label: formatPreciseDate(t, unit, locale),
+			markerX: axis.toX(t) + margin.left,
+			markerY: chartGeometry.yScale(prob) + margin.top
 		};
 	});
 
 	function pointerToT(event: PointerEvent | MouseEvent): number | null {
-		if (!svgRef || !chartGeometry.xScale) return null;
+		const axis = evaluatedData.axis;
+		if (!svgRef || !axis) return null;
 		const rect = svgRef.getBoundingClientRect();
 		// The svg is scaled by CSS, so convert the pointer into viewBox units first
-		const mouseX = ((event.clientX - rect.left) / rect.width) * width - chartGeometry.margin.left;
-		if (mouseX < 0 || mouseX > chartGeometry.innerWidth) return null;
-		return chartGeometry.xScale.invert(mouseX);
+		const mouseX = ((event.clientX - rect.left) / rect.width) * width - margin.left;
+		if (mouseX < 0 || mouseX > innerWidth) return null;
+		return axis.toT(mouseX);
 	}
 
 	function handlePointerMove(event: PointerEvent) {
@@ -261,14 +291,18 @@
 	}
 
 	function handleClick(event: MouseEvent) {
+		const axis = evaluatedData.axis;
 		const clicked = pointerToT(event);
-		if (clicked === null) {
+		if (clicked === null || !axis) {
 			clickedT = null;
 			return;
 		}
-		// Toggle if clicking the same date
-		const tolerance = (evaluatedData.tMax - evaluatedData.tMin) * 0.02;
-		clickedT = clickedT !== null && Math.abs(clickedT - clicked) < tolerance ? null : clicked;
+		// Toggle if clicking the same spot (compared in pixels, the axis is not linear)
+		const tolerance = innerWidth * 0.02;
+		clickedT =
+			clickedT !== null && Math.abs(axis.toX(clickedT) - axis.toX(clicked)) < tolerance
+				? null
+				: clicked;
 	}
 
 	function formatNumber(value: number): string {
@@ -294,7 +328,7 @@
 			<span class="error-icon">⚠️</span>
 			<span class="error-text">{evaluatedData.error}</span>
 		</div>
-	{:else if evaluatedData.points.length > 0}
+	{:else if evaluatedData.axis && evaluatedData.samples.length > 0}
 		<!-- One card per scenario of the mixture -->
 		<p class="mixture-intro">{m.simulation_distribution_intro()}</p>
 		<div class="mixture-summary">
@@ -327,7 +361,7 @@
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<svg
 				bind:this={svgRef}
-				viewBox="0 0 {width} {height}"
+				viewBox="0 0 {width} {totalHeight}"
 				class="distribution-chart"
 				onpointermove={handlePointerMove}
 				onpointerleave={handlePointerLeave}
@@ -343,27 +377,106 @@
 						<stop offset="0%" stop-color="#38bdf8" />
 						<stop offset="100%" stop-color="#818cf8" />
 					</linearGradient>
+					<pattern
+						id="gapHatch"
+						width="6"
+						height="6"
+						patternUnits="userSpaceOnUse"
+						patternTransform="rotate(45)"
+					>
+						<line x1="0" y1="0" x2="0" y2="6" stroke="rgb(148 163 184 / 28%)" stroke-width="1.5" />
+					</pattern>
 				</defs>
 
-				<g transform="translate({chartGeometry.margin.left}, {chartGeometry.margin.top})">
+				<g transform="translate({margin.left}, {margin.top})">
 					<!-- Horizontal grid lines -->
 					{#each chartGeometry.yTicks as tick}
 						<line x1="0" y1={tick.y} x2={chartGeometry.innerWidth} y2={tick.y} class="grid-line" />
 						<text x="-6" y={tick.y + 3} class="axis-label y-axis">{tick.formatted}</text>
 					{/each}
 
-					<!-- Vertical grid & X-axis labels (dates) -->
-					{#each chartGeometry.xTicks as tick}
-						<line
-							x1={tick.x}
-							y1="0"
-							x2={tick.x}
-							y2={chartGeometry.innerHeight}
-							class="grid-line x-grid"
+					<!-- Condensed periods between two segments -->
+					{#each evaluatedData.axis.gaps as gap}
+						{@const mid = (gap.x0 + gap.x1) / 2}
+						<rect
+							x={gap.x0}
+							y="0"
+							width={gap.x1 - gap.x0}
+							height={chartGeometry.innerHeight}
+							fill="url(#gapHatch)"
 						/>
-						<text x={tick.x} y={chartGeometry.innerHeight + 16} class="axis-label x-axis"
-							>{tick.label}</text
+						<text
+							x={mid}
+							y={chartGeometry.innerHeight / 2}
+							class="gap-label"
+							transform="rotate(-90 {mid} {chartGeometry.innerHeight / 2})"
+							>{formatDuration(gap.years, locale)}</text
 						>
+						<path
+							d="M {gap.x0 + 2} {chartGeometry.innerHeight + 5} l 5 -10 M {gap.x0 + 6} {chartGeometry.innerHeight + 5} l 5 -10 M {gap.x1 - 10} {chartGeometry.innerHeight + 5} l 5 -10 M {gap.x1 - 6} {chartGeometry.innerHeight + 5} l 5 -10"
+							class="break-mark"
+						/>
+					{/each}
+
+					<!-- Per segment: grid, dates (fine unit), context (bigger units) and weight -->
+					{#each evaluatedData.axis.segments as segment, i}
+						{#each segment.ticks as tick}
+							{@const tx = evaluatedData.axis.toX(tick.t)}
+							<line
+								x1={tx}
+								y1="0"
+								x2={tx}
+								y2={chartGeometry.innerHeight}
+								class="grid-line x-grid"
+							/>
+							<line
+								x1={tx}
+								y1={chartGeometry.innerHeight}
+								x2={tx}
+								y2={chartGeometry.innerHeight + 3}
+								class="axis-line"
+							/>
+							<text x={tx} y={chartGeometry.innerHeight + 14} class="axis-label x-axis"
+								>{tick.label}</text
+							>
+						{/each}
+						<!-- Context rows under the ticks: month, then year... -->
+						{#each segment.levels as row, r}
+							{#each row as group, g}
+								{@const gx0 = evaluatedData.axis.toX(group.lo)}
+								{@const gx1 = evaluatedData.axis.toX(group.hi)}
+								{@const gw = gx1 - gx0}
+								{@const text = group.label.length * 4.8 <= gw ? group.label : group.short}
+								{@const rowY = chartGeometry.innerHeight + 17 + r * ROW_HEIGHT}
+								{#if g > 0}
+									<line x1={gx0} y1={rowY - 7} x2={gx0} y2={rowY + 4} class="level-separator" />
+								{/if}
+								{#if text.length * 4.8 <= gw + 4}
+									<text x={(gx0 + gx1) / 2} y={rowY + 8} class="axis-label context-label"
+										>{text}</text
+									>
+								{/if}
+							{/each}
+						{/each}
+						{#if evaluatedData.axis.segments.length > 1}
+							<text
+								x={(segment.x0 + segment.x1) / 2}
+								y={chartGeometry.innerHeight - 5}
+								class="weight-label">{Math.round(segment.mass * 100)}%</text
+							>
+						{/if}
+						<!-- Most probable date of the segment -->
+						<line
+							x1={chartGeometry.peakXs[i]}
+							y1="0"
+							x2={chartGeometry.peakXs[i]}
+							y2={chartGeometry.innerHeight}
+							class="peak-line"
+						/>
+						<path
+							d="M {chartGeometry.peakXs[i] - 3.5} {chartGeometry.innerHeight + 6} l 3.5 -6 l 3.5 6 z"
+							class="peak-marker"
+						/>
 					{/each}
 
 					<!-- Impossible zone: above the maximum reachable probability (1 - impossibility) -->
@@ -387,9 +500,9 @@
 					{/if}
 
 					<!-- Density bell shape (own scale) -->
-					{#if chartGeometry.densityD}
-						<path d={chartGeometry.densityD} class="density-area" />
-					{/if}
+					{#each chartGeometry.densityPaths as densityD}
+						<path d={densityD} class="density-area" />
+					{/each}
 
 					<!-- Area under the cumulative curve -->
 					{#if chartGeometry.areaD}
@@ -411,16 +524,16 @@
 					<!-- Active vertical and horizontal guides -->
 					{#if activeData}
 						<line
-							x1={chartGeometry.xScale?.(activeData.t)}
+							x1={evaluatedData.axis?.toX(activeData.t)}
 							y1="0"
-							x2={chartGeometry.xScale?.(activeData.t)}
+							x2={evaluatedData.axis?.toX(activeData.t)}
 							y2={chartGeometry.innerHeight}
 							class="active-t-line"
 						/>
 						<line
 							x1="0"
 							y1={chartGeometry.yScale?.(activeData.prob)}
-							x2={chartGeometry.xScale?.(activeData.t)}
+							x2={evaluatedData.axis?.toX(activeData.t)}
 							y2={chartGeometry.yScale?.(activeData.prob)}
 							class="active-t-line"
 						/>
@@ -447,15 +560,17 @@
 			</svg>
 
 			{#if activeData}
+				{@const below = activeData.markerY < 52}
 				<div class="tooltip-layer">
 				<div
 					class="chart-tooltip"
 					class:align-left={activeData.markerX / width < 0.25}
 					class:align-right={activeData.markerX / width > 0.75}
-					style="left: {(activeData.markerX / width) * 100}%; top: {(Math.max(4, activeData.markerY - 12) / height) * 100}%;"
+					class:below
+					style="left: {(activeData.markerX / width) * 100}%; top: {((below ? activeData.markerY + 12 : activeData.markerY - 12) / totalHeight) * 100}%;"
 				>
 					<span class="tooltip-time">
-						{m.simulation_distribution_date()}: {formatDate(activeData.t, 1)}
+						{activeData.label}
 					</span>
 					<span class="tooltip-integral">
 						<span class="integral-symbol">{m.simulation_distribution_cumulative()}</span>
@@ -581,6 +696,52 @@
 	:global(body.light) .chart-wrapper {
 		background: rgb(248 250 252 / 90%);
 		border-color: rgb(226 232 240 / 90%);
+	}
+
+	.axis-label.context-label {
+		font-weight: 600;
+		fill: #cbd5e1;
+	}
+
+	:global(body.light) .axis-label.context-label {
+		fill: #334155;
+	}
+
+	.level-separator {
+		stroke: rgb(148 163 184 / 45%);
+		stroke-width: 1;
+	}
+
+	.gap-label {
+		font-size: 8px;
+		fill: #94a3b8;
+		text-anchor: middle;
+		pointer-events: none;
+	}
+
+	.break-mark {
+		stroke: #94a3b8;
+		stroke-width: 1.4;
+		fill: none;
+	}
+
+	.weight-label {
+		font-size: 9px;
+		font-weight: 600;
+		fill: #94a3b8;
+		text-anchor: middle;
+		pointer-events: none;
+	}
+
+	.peak-line {
+		stroke: #fbbf24;
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
+		opacity: 0.7;
+	}
+
+	.peak-marker {
+		fill: #fbbf24;
 	}
 
 	.distribution-chart {
@@ -757,6 +918,19 @@
 
 	.chart-tooltip.align-right {
 		transform: translate(-90%, -100%);
+	}
+
+	/* Near the top of the plot the bubble would be clipped: show it under the marker instead */
+	.chart-tooltip.below {
+		transform: translate(-50%, 0);
+	}
+
+	.chart-tooltip.below.align-left {
+		transform: translate(-10%, 0);
+	}
+
+	.chart-tooltip.below.align-right {
+		transform: translate(-90%, 0);
 	}
 
 	:global(body.light) .chart-tooltip {
