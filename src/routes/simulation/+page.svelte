@@ -274,6 +274,13 @@
 		cursor: pointer;
 	}
 
+	.prompt-container:focus-within {
+		border-color: #2563eb;
+		box-shadow:
+			0 0 0 3px rgb(37 99 235 / 15%),
+			0 8px 30px rgb(37 99 235 / 15%);
+	}
+
 	#submit:hover {
 		background: #1d4ed8;
 	}

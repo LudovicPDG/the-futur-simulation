@@ -552,7 +552,23 @@
 	}
 
 	:global(body.light) .canvas {
-		background: radial-gradient(circle at center, #ffffff 0%, #ffffff 90%, #b98fb7 100%);
+		background:
+			radial-gradient(circle, rgb(100 116 139 / 22%) 1px, transparent 1.5px) 0 0 / 28px 28px,
+			radial-gradient(circle at 50% 45%, #ffffff 0%, #f1f5f9 55%, #e0e7f5 100%);
+	}
+
+	/* Node labels are white by default: unreadable on the pale light-mode nodes */
+	:global(body.light) :global(.fact-node text) {
+		fill: #0f172a;
+		font-weight: 600;
+	}
+
+	:global(body.light) :global(.fact-node) {
+		filter: drop-shadow(0 4px 8px rgb(15 23 42 / 18%));
+	}
+
+	:global(body.light) :global(.fact-node:hover) {
+		filter: drop-shadow(0 0 12px rgba(37, 99, 235, 0.55));
 	}
 
 	.canvas.panning {
@@ -579,10 +595,13 @@
 	}
 
 	:global(body.light) .element-details {
-		color: #243442;
-		background: rgb(255 255 255 / 96%);
-		border-color: rgb(71 85 105 / 24%);
-		box-shadow: 0 12px 36px rgb(15 23 42 / 14%);
+		color: #1e293b;
+		background: rgb(255 255 255 / 92%);
+		border-color: rgb(148 163 184 / 35%);
+		border-radius: 14px;
+		box-shadow:
+			0 1px 2px rgb(15 23 42 / 6%),
+			0 16px 40px rgb(37 99 235 / 12%);
 	}
 
 	@media (max-width: 600px) {
@@ -888,16 +907,20 @@
 		stroke: rgb(255 255 255 / 5%);
 	}
 
+	:global(body.light) .grid-ring {
+		stroke-dasharray: 4 8;
+	}
+
 	:global(body.light) .grid-ring.outer {
-		stroke: rgb(51 65 85 / 8%);
+		stroke: rgb(37 99 235 / 16%);
 	}
 
 	:global(body.light) .grid-ring.middle {
-		stroke: rgb(51 65 85 / 11%);
+		stroke: rgb(37 99 235 / 22%);
 	}
 
 	:global(body.light) .grid-ring.inner {
-		stroke: rgb(51 65 85 / 15%);
+		stroke: rgb(37 99 235 / 30%);
 	}
 
 	:global(.fact-node) {
