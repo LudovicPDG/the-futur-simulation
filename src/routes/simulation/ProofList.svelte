@@ -34,6 +34,21 @@
 		return proofs.filter((proof) => proof.parent_proof_id === proofId).length;
 	}
 
+	const URL_PATTERN = /(https?:\/\/[^\s<>"')\]]+|www\.[^\s<>"')\]]+)/gi;
+
+	/** Splits a source string into plain text and clickable link parts. */
+	function splitLinks(source: string): { text: string; href?: string }[] {
+		return source
+			.split(URL_PATTERN)
+			.filter(Boolean)
+			.map((text) => {
+				if (!/^(https?:\/\/|www\.)/i.test(text)) return { text };
+				const clean = text.replace(/[.,;:!?]+$/, '');
+				const href = /^www\./i.test(clean) ? `https://${clean}` : clean;
+				return { text: clean, href };
+			});
+	}
+
 	function debate(proof: StoredProof) {
 		debateTarget.set({ id: proof.id, name: format(proof.name) });
 	}
@@ -77,11 +92,11 @@
 						<dt>{m.simulation_field_new_value()}</dt>
 						<dd>{format(proof.new_value)}</dd>
 					</div>
-					<div class="param-row">
+					<div class="param-row verification">
 						<dt>{m.simulation_field_verification_method()}</dt>
 						<dd>{format(proof.verification_method)}</dd>
 					</div>
-					<div class="param-row">
+					<div class="param-row falsification">
 						<dt>{m.simulation_field_falsifiability_method()}</dt>
 						<dd>{format(proof.falsifiability_method)}</dd>
 					</div>
@@ -91,7 +106,15 @@
 							{#if proof.source?.length}
 								<ul class="sources">
 									{#each proof.source as source}
-										<li>{source}</li>
+										<li>
+											{#each splitLinks(source) as part}
+												{#if part.href}
+													<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>
+												{:else}
+													{part.text}
+												{/if}
+											{/each}
+										</li>
 									{/each}
 								</ul>
 							{:else}
@@ -208,10 +231,60 @@
 		color: #f87171;
 	}
 
+	.param-row.verification,
+	.param-row.falsification {
+		margin: 4px 0;
+		padding: 6px 10px;
+		border-left: 3px solid var(--accent);
+		border-bottom: 0;
+		border-radius: 4px;
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
+	}
+
+	.param-row.verification {
+		--accent: #22c55e;
+	}
+
+	.param-row.falsification {
+		--accent: #ef4444;
+	}
+
+	.param-row.verification dt,
+	.param-row.falsification dt {
+		color: var(--accent);
+	}
+
 	.sources {
 		margin: 0;
 		padding-left: 16px;
 		white-space: normal;
+	}
+
+	.sources a {
+		color: #7dd3fc;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.sources a:hover {
+		color: #bae6fd;
+	}
+
+	:global(body.light) .param-row.verification {
+		--accent: #16a34a;
+	}
+
+	:global(body.light) .param-row.falsification {
+		--accent: #dc2626;
+	}
+
+	:global(body.light) .param-row.verification dt,
+	:global(body.light) .param-row.falsification dt {
+		color: var(--accent);
+	}
+
+	:global(body.light) .sources a {
+		color: #087e8b;
 	}
 
 	:global(body.light) .param-row dt {
