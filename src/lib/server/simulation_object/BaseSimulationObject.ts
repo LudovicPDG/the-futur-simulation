@@ -17,6 +17,8 @@ export abstract class BaseSimulationObject<
 	protected abstract schema: z.ZodType<T>;
 	protected abstract typeName: string;
 	protected abstract tableName: string;
+	/** Whether the id returned by insert_in_db identifies a fact or a relation (for the founding proof). */
+	protected proofOwner: 'fact' | 'relation' = 'fact';
 
 	async create(
 		model_name: string = 'openai/gpt-5.6-luna',
@@ -25,11 +27,11 @@ export abstract class BaseSimulationObject<
 	): Promise<T> {
 		const data = await this.generate(model_name, level_of_reasoning, prompt);
 		const id = await this.insert_in_db(data);
-		// A newly created fact (or fact subtype) also gets a founding proof: the source it is based on.
+		// A newly created fact (or fact subtype) or relation also gets a founding proof: the source it is based on.
 		if (typeof id === 'string') {
 			try {
 				const { ProofServer } = await import('./Proof');
-				await ProofServer.instance.createInitialProof(model_name, level_of_reasoning, prompt, id, {
+				await ProofServer.instance.createInitialProof(model_name, level_of_reasoning, prompt, this.proofOwner === 'relation' ? { relationId: id } : { factId: id }, {
 						impossibility: data.impossibility,
 						probability_distribution: data.probability_distribution,
 						originality: data.originality

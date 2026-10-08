@@ -221,6 +221,7 @@ export async function createDatabase() {
 		await client.query(`
 			ALTER TABLE proofs
 				ADD COLUMN IF NOT EXISTS fact_id UUID REFERENCES facts(id) ON DELETE CASCADE,
+				ADD COLUMN IF NOT EXISTS relation_id UUID REFERENCES relations(id) ON DELETE CASCADE,
 				ADD COLUMN IF NOT EXISTS parent_proof_id UUID REFERENCES proofs(id) ON DELETE CASCADE,
 				ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 		`);
@@ -335,6 +336,9 @@ export async function createDatabase() {
 
 			CREATE INDEX IF NOT EXISTS idx_proofs_fact_id
 			ON proofs(fact_id);
+
+			CREATE INDEX IF NOT EXISTS idx_proofs_relation_id
+			ON proofs(relation_id);
 
 			CREATE INDEX IF NOT EXISTS idx_proofs_parent_proof_id
 			ON proofs(parent_proof_id);

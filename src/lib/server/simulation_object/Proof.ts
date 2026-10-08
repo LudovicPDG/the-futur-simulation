@@ -5,6 +5,9 @@ import { ProofSchema, type ProofData } from '$lib/simulation/Proof';
 import { convertToPg } from './Genie';
 import { db } from '../utils/database';
 
+/** The element a proof is about: a fact (or subtype) or a relation. */
+type ProofTarget = { factId: string } | { relationId: string };
+
 export class ProofServer extends BaseSimulationObject<ProofData> {
 	protected schema = ProofSchema;
 	protected typeName = 'proof';
@@ -40,7 +43,7 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			throw new Error('The proof generator selected an unknown element');
 		}
 
-		return this.generateForTarget(model_name, level_of_reasoning, prompt, FactID);
+		return this.generateForTarget(model_name, level_of_reasoning, prompt, { factId: FactID });
 	}
 
 	/** Debate: creates a sub-proof of an existing proof (the fact is the one of the parent). */
@@ -50,27 +53,35 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		prompt: string,
 		parentProofId: string
 	): Promise<ProofData> {
-		const parent = await db.query(`SELECT fact_id FROM proofs WHERE id = $1`, [parentProofId]);
-		const factId = parent.rows[0]?.fact_id;
-		if (!factId) throw new Error('The debated proof does not exist or is not linked to a fact');
+		const parent = await db.query(`SELECT fact_id, relation_id FROM proofs WHERE id = $1`, [
+			parentProofId
+		]);
+		const target: ProofTarget | undefined = parent.rows[0]?.fact_id
+			? { factId: parent.rows[0].fact_id }
+			: parent.rows[0]?.relation_id
+				? { relationId: parent.rows[0].relation_id }
+				: undefined;
+		if (!target) {
+			throw new Error('The debated proof does not exist or is not linked to an element');
+		}
 
 		const data = await this.generateForTarget(
 			model_name,
 			level_of_reasoning,
 			prompt,
-			factId,
+			target,
 			parentProofId
 		);
 		await this.insert_in_db(data);
 		return data;
 	}
 
-	/** Founding proof of a freshly created fact: the source and information it is based on. */
+	/** Founding proof of a freshly created fact or relation: the source and information it is based on. */
 	async createInitialProof(
 		model_name: string,
 		level_of_reasoning: string,
 		prompt: string,
-		factId: string,
+		target: ProofTarget,
 		factValues: Partial<
 			Pick<ProofData, 'impossibility' | 'probability_distribution' | 'originality'>
 		> = {}
@@ -79,7 +90,7 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			model_name,
 			level_of_reasoning,
 			prompt,
-			factId,
+			target,
 			undefined,
 			'Create the founding proof of this element: the source and the information it is based on (documents, data, statements, observations). The sources must be real and verifiable. This proof will be the starting point of the debate about this element.'
 		);
@@ -96,19 +107,41 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		model_name: string,
 		level_of_reasoning: string,
 		prompt: string,
-		factId: string,
+		target: ProofTarget,
 		parentProofId?: string,
 		instruction?: string
 	): Promise<ProofData> {
-		const fact = await db.query(
-			`SELECT type, (name).fr AS name_fr, (name).en AS name_en,
-				(description).fr AS description_fr, (description).en AS description_en
-			FROM facts WHERE id = $1`,
-			[factId]
-		);
-		if (fact.rows.length === 0) throw new Error('The debated element does not exist');
+		let context: string;
+		if ('factId' in target) {
+			const fact = await db.query(
+				`SELECT type, (name).fr AS name_fr, (name).en AS name_en,
+					(description).fr AS description_fr, (description).en AS description_en
+				FROM facts WHERE id = $1`,
+				[target.factId]
+			);
+			if (fact.rows.length === 0) throw new Error('The debated element does not exist');
+			context = `
 
-		let context = `\n\nThis proof is about the following simulation element:\n${JSON.stringify(fact.rows[0])}`;
+This proof is about the following simulation element:
+${JSON.stringify(fact.rows[0])}`;
+		} else {
+			const relation = await db.query(
+				`SELECT (r.name).fr AS name_fr, (r.name).en AS name_en,
+					(r.description).fr AS description_fr, (r.description).en AS description_en,
+					r.element1_type, (e1.name).fr AS element1_name_fr, (e1.name).en AS element1_name_en,
+					r.element2_type, (e2.name).fr AS element2_name_fr, (e2.name).en AS element2_name_en
+				FROM relations r
+				JOIN facts e1 ON e1.id = r.element1_id
+				JOIN facts e2 ON e2.id = r.element2_id
+				WHERE r.id = $1`,
+				[target.relationId]
+			);
+			if (relation.rows.length === 0) throw new Error('The debated relation does not exist');
+			context = `
+
+This proof is about the following relation between two simulation elements:
+${JSON.stringify(relation.rows[0])}`;
+		}
 
 		if (parentProofId) {
 			const parent = await db.query(
@@ -136,7 +169,8 @@ ${instruction}` : ''),
 		return {
 			...proof,
 			id: randomUUID(),
-			fact_id: factId,
+			fact_id: 'factId' in target ? target.factId : null,
+			relation_id: 'relationId' in target ? target.relationId : null,
 			parent_proof_id: parentProofId ?? null
 		};
 	}
@@ -155,8 +189,9 @@ ${instruction}` : ''),
 				probability_distribution,
 				originality,
 				fact_id,
+				relation_id,
 				parent_proof_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 			[
 				proof.id ?? randomUUID(),
 				convertToPg(proof.name),
@@ -169,6 +204,7 @@ ${instruction}` : ''),
 				convertToPg(proof.probability_distribution),
 				proof.originality,
 				proof.fact_id ?? null,
+				proof.relation_id ?? null,
 				proof.parent_proof_id ?? null
 			]
 		);
@@ -194,6 +230,7 @@ ${instruction}` : ''),
 			probability_distribution: row.probability_distribution,
 			originality: Number(row.originality),
 			fact_id: row.fact_id,
+			relation_id: row.relation_id,
 			parent_proof_id: row.parent_proof_id
 		}));
 	}

@@ -57,7 +57,7 @@ export const RelationSchema = z.object({
 		)
 });
 
-export type RelationData = z.infer<typeof RelationSchema>;
+export type RelationData = z.infer<typeof RelationSchema> & { id?: string };
 
 export interface RelationSvgShapeOptions extends SvgShapeOptions {
 	sourceX?: number;

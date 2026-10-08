@@ -399,6 +399,7 @@
 			? activeElement.id
 			: undefined
 	);
+	const proofRelationId = $derived(activeRelation?.id);
 
 	$effect(() => {
 		console.log(
@@ -550,11 +551,16 @@
 					</dl>
 				</section>
 			{/if}
-			{#if proofFactId}
+			{#if proofFactId || proofRelationId}
 				<section class="proof-details">
 					<h3>{m.proof_section_title()}</h3>
-					{#if allProofs.some((proof) => proof.fact_id === proofFactId)}
-						<ProofList proofs={allProofs} factId={proofFactId} format={formatValue} />
+					{#if allProofs.some((proof) => (proofRelationId ? proof.relation_id === proofRelationId : proof.fact_id === proofFactId))}
+						<ProofList
+							proofs={allProofs}
+							factId={proofFactId}
+							relationId={proofRelationId}
+							format={formatValue}
+						/>
 					{:else}
 						<p class="proof-empty">{m.proof_empty()}</p>
 					{/if}

@@ -35,6 +35,7 @@ export const ProofSchema = z.object({
 export type ProofData = z.infer<typeof ProofSchema> & {
 	id?: string;
 	fact_id?: string | null;
+	relation_id?: string | null;
 	parent_proof_id?: string | null;
 };
 

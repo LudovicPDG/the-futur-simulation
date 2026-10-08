@@ -80,6 +80,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 	protected schema = RelationSchema;
 	protected typeName = 'relation';
 	protected tableName = 'relations';
+	protected override proofOwner = 'relation' as const;
 
 	protected override async generate(
 		model_name: string,
@@ -88,9 +89,9 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 	): Promise<RelationData> {
 		const result = await db.query(
 			`
-			SELECT id, type, (name).fr AS name_fr, (name).en AS name_en, to_jsonb(other) AS other
+			SELECT id, lower(type) AS type, (name).fr AS name_fr, (name).en AS name_en, to_jsonb(other) AS other
 			FROM facts
-			WHERE type = ANY($1::text[])
+			WHERE lower(type) = ANY($1::text[])
 		`,
 			[RelationElementTypeSchema.options]
 		);
@@ -162,8 +163,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		return RelationSchema.parse(generated);
 	}
 
-	async insert_in_db(relation: RelationData): Promise<void> {
-		await db.query(
+	async insert_in_db(relation: RelationData): Promise<string> {
+		const result = await db.query(
 			`INSERT INTO relations (
 				name,
 				description,
@@ -176,7 +177,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				impossibility,
 				probability_distribution,
 				originality
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
 			[
 				convertToPg(relation.name),
 				convertToPg(relation.description),
@@ -203,6 +204,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				relation.originality
 			]
 		);
+		return result.rows[0].id;
 	}
 
 	async get_all(): Promise<RelationData[]> {
@@ -214,6 +216,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		`);
 
 		return result.rows.map((row) => ({
+			id: row.id,
 			type: 'relation' as const,
 			name: row.name,
 			description: row.description,

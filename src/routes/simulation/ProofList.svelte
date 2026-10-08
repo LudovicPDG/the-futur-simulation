@@ -11,12 +11,14 @@
 
 	let {
 		proofs,
-		factId,
+		factId = null,
+		relationId = null,
 		parentId = null,
 		format
 	}: {
 		proofs: StoredProof[];
-		factId: string;
+		factId?: string | null;
+		relationId?: string | null;
 		parentId?: string | null;
 		format: (value: unknown) => string;
 	} = $props();
@@ -26,7 +28,11 @@
 	let paramsShown = $state<Record<string, boolean>>({});
 
 	const siblings = $derived(
-		proofs.filter((proof) => proof.fact_id === factId && (proof.parent_proof_id ?? null) === parentId)
+		proofs.filter(
+			(proof) =>
+				(relationId ? proof.relation_id === relationId : proof.fact_id === factId) &&
+				(proof.parent_proof_id ?? null) === parentId
+		)
 	);
 	const visible = $derived(siblings.slice(0, visibleCount));
 
@@ -143,7 +149,7 @@
 			{/if}
 			{#if expanded[proof.id]}
 				{#if count > 0}
-					<ProofList {proofs} {factId} parentId={proof.id} {format} />
+					<ProofList {proofs} {factId} {relationId} parentId={proof.id} {format} />
 				{:else}
 					<p class="proof-empty">{m.proof_no_sub()}</p>
 				{/if}
