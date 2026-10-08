@@ -124,5 +124,7 @@
 	"proof_debate": "Debatir esta prueba",
 	"proof_debate_chip": "Debatir la prueba",
 	"proof_debate_remove": "Cancelar el debate",
-	"proof_no_sub": "Ninguna subprueba."
+	"proof_no_sub": "Ninguna subprueba.",
+	"proof_show_params": "Mostrar parámetros",
+	"proof_hide_params": "Ocultar parámetros"
 }

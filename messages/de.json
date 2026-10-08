@@ -124,5 +124,7 @@
 	"proof_debate": "Diesen Beleg debattieren",
 	"proof_debate_chip": "Beleg debattieren",
 	"proof_debate_remove": "Debatte abbrechen",
-	"proof_no_sub": "Kein Unterbeleg."
+	"proof_no_sub": "Kein Unterbeleg.",
+	"proof_show_params": "Parameter anzeigen",
+	"proof_hide_params": "Parameter ausblenden"
 }

@@ -124,5 +124,7 @@
 	"proof_debate": "Débattre cette preuve",
 	"proof_debate_chip": "Débattre la preuve",
 	"proof_debate_remove": "Annuler le débat",
-	"proof_no_sub": "Aucune sous-preuve."
+	"proof_no_sub": "Aucune sous-preuve.",
+	"proof_show_params": "Afficher les paramètres",
+	"proof_hide_params": "Masquer les paramètres"
 }

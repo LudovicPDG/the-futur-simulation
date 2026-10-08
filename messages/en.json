@@ -124,5 +124,7 @@
 	"proof_debate": "Debate this proof",
 	"proof_debate_chip": "Debate the proof",
 	"proof_debate_remove": "Cancel debate",
-	"proof_no_sub": "No sub-proof."
+	"proof_no_sub": "No sub-proof.",
+	"proof_show_params": "Show parameters",
+	"proof_hide_params": "Hide parameters"
 }
