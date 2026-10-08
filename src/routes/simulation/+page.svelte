@@ -17,6 +17,23 @@
 	});
 
 	let prompt = $state('');
+	let promptEl: HTMLTextAreaElement | undefined = $state();
+
+	// Adapte la hauteur du textarea au contenu (le CSS max-height gère le scroll)
+	$effect(() => {
+		prompt;
+		if (!promptEl) return;
+		promptEl.style.height = 'auto';
+		promptEl.style.height = `${promptEl.scrollHeight}px`;
+	});
+
+	// Entrée envoie, Maj+Entrée saute une ligne
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+			e.preventDefault();
+			(e.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
+		}
+	}
 
 	let agitation_level = $state(4);
 	let ballSize = $state(100);
@@ -199,12 +216,15 @@
 				</button>
 			</div>
 		{/if}
-		<input
+		<textarea
 			name="prompt"
+			rows="1"
+			bind:this={promptEl}
 			bind:value={prompt}
+			onkeydown={handleKeydown}
 			placeholder={displayedPlaceholder}
 			aria-label="Prompt"
-		/>
+		></textarea>
 		<button id="submit" type="submit" aria-label="Envoyer"> ➤ </button>
 	</form>
 </div>
@@ -250,7 +270,7 @@
 		transform: translateX(-50%);
 
 		display: flex;
-		align-items: center;
+		align-items: flex-end;
 		gap: 8px;
 
 		width: min(700px, calc(100% - 32px));
@@ -298,16 +318,22 @@
 		cursor: pointer;
 	}
 
-	input[name='prompt'] {
+	textarea[name='prompt'] {
 		flex: 1;
 		min-width: 0;
+		box-sizing: border-box;
 
-		padding: 14px 16px;
+		padding: 12px 16px;
+		line-height: 20px;
+		max-height: 164px; /* ~7 lignes, puis scroll */
 
 		border: none;
 		outline: none;
 		background: transparent;
+		resize: none;
+		overflow-y: auto;
 
+		font-family: inherit;
 		font-size: 16px;
 	}
 
