@@ -10,6 +10,7 @@
 		buildSegmentedAxis,
 		formatDuration,
 		formatPreciseDate,
+		periodBounds,
 		type SegmentedAxis
 	} from '$lib/simulation/TimeAxis';
 	import * as m from '$lib/paraglide/messages';
@@ -197,6 +198,8 @@
 				pathD: '',
 				areaD: '',
 				densityPaths: [] as string[],
+				densityHeight: 0,
+				segmentMaxDensity: [] as number[],
 				peakXs: [] as number[],
 				impossibleY: 0,
 				yTicks
@@ -222,8 +225,11 @@
 		// probability, so it never goes over the impossibility threshold (or 1). The weight of the
 		// segment is written below it and the height of the cumulative step shows it too.
 		const densityHeight = 0.85 * evaluatedData.possibilityFactor;
-		const densityPaths = evaluatedData.segmentSamples.map((pts) => {
-			const maxDensity = d3.max(pts, (d: Point) => d.density) || 1;
+		const segmentMaxDensity = evaluatedData.segmentSamples.map(
+			(pts) => d3.max(pts, (d: Point) => d.density) || 1
+		);
+		const densityPaths = evaluatedData.segmentSamples.map((pts, i) => {
+			const maxDensity = segmentMaxDensity[i];
 			const gen = d3
 				.area<Point>()
 				.x(xOf)
@@ -240,6 +246,8 @@
 			pathD: lineGen(evaluatedData.samples) || '',
 			areaD: areaGen(evaluatedData.samples) || '',
 			densityPaths,
+			densityHeight,
+			segmentMaxDensity,
 			peakXs: evaluatedData.peaks.map((t) => axis.toX(t)),
 			impossibleY: yScale(evaluatedData.possibilityFactor),
 			yTicks
@@ -262,10 +270,29 @@
 		// Inside a condensed period only the year makes sense
 		const unit = segmentIndex >= 0 ? axis.segments[segmentIndex].unit : 'year';
 
+		// Height of the density curve at t, on the scale of its segment (0 inside a condensed period)
+		const density = evaluateSkewNormalMixture(t, evaluatedData.mixture);
+		const densityY =
+			segmentIndex >= 0
+				? chartGeometry.yScale(
+						(density / chartGeometry.segmentMaxDensity[segmentIndex]) * chartGeometry.densityHeight
+					)
+				: chartGeometry.innerHeight;
+		// Integral of the density over the calendar period of the axis unit (the year, month, day...
+		// containing t), i.e. F(end) - F(start). The CDF works in real years, so the broken axis does
+		// not change the result.
+		const period = periodBounds(t, unit);
+		const windowProb =
+			(evaluateSkewNormalMixtureCdf(period.hi, evaluatedData.mixture) -
+				evaluateSkewNormalMixtureCdf(period.lo, evaluatedData.mixture)) *
+			evaluatedData.possibilityFactor;
+
 		return {
 			t,
 			prob,
 			pct: prob * 100,
+			densityY,
+			windowPct: windowProb * 100,
 			label: formatPreciseDate(t, unit, locale),
 			markerX: axis.toX(t) + margin.left,
 			markerY: chartGeometry.yScale(prob) + margin.top
@@ -539,6 +566,13 @@
 						/>
 					{/if}
 
+					<!-- Active point on the density curve, with guides to the x axis and to the left edge -->
+					{#if activeData && evaluatedData.axis}
+						{@const dx = evaluatedData.axis.toX(activeData.t)}
+						<line x1="0" y1={activeData.densityY} x2={dx} y2={activeData.densityY} class="active-t-line" />
+						<circle cx={dx} cy={activeData.densityY} r="3.5" class="density-dot" />
+					{/if}
+
 					<!-- Bottom & Left axis lines -->
 					<line
 						x1="0"
@@ -559,31 +593,27 @@
 				{/if}
 			</svg>
 
+		</div>
+		<div class="readout">
 			{#if activeData}
-				{@const below = activeData.markerY < 52}
-				<div class="tooltip-layer">
-				<div
-					class="chart-tooltip"
-					class:align-left={activeData.markerX / width < 0.25}
-					class:align-right={activeData.markerX / width > 0.75}
-					class:below
-					style="left: {(activeData.markerX / width) * 100}%; top: {((below ? activeData.markerY + 12 : activeData.markerY - 12) / totalHeight) * 100}%;"
-				>
-					<span class="tooltip-time">
-						{activeData.label}
-					</span>
-					<span class="tooltip-integral">
-						<span class="integral-symbol">{m.simulation_distribution_cumulative()}</span>
-						<span class="tooltip-val">{activeData.pct.toFixed(1)}%</span>
-					</span>
-				</div>
-				</div>
+				<span class="readout-time">{m.simulation_distribution_date()} : {activeData.label}</span>
+			{:else}
+				<span class="readout-empty">—</span>
 			{/if}
 		</div>
 
 		<div class="legend">
-			<span class="legend-item"><span class="swatch line"></span>{m.simulation_distribution_legend_cumulative()}</span>
-			<span class="legend-item"><span class="swatch bell"></span>{m.simulation_distribution_legend_density()}</span>
+			<span class="legend-item">
+				<span class="swatch line"></span>{m.simulation_distribution_legend_cumulative()}
+				{#if activeData}<span class="legend-value">{activeData.pct.toFixed(1)}%</span>{/if}
+			</span>
+			<span class="legend-item">
+				<span class="swatch bell"></span>{m.simulation_distribution_legend_density()}
+				{#if activeData}
+					{m.simulation_distribution_over_period()} {activeData.label} :
+					<span class="legend-value">{activeData.windowPct.toLocaleString(locale, { maximumSignificantDigits: 2 })}%</span>
+				{/if}
+			</span>
 		</div>
 	{:else}
 		<div class="empty-state">—</div>
@@ -674,13 +704,6 @@
 
 	:global(body.light) .symbol {
 		color: #0f172a;
-	}
-
-	.tooltip-layer {
-		position: absolute;
-		inset: 6px 2px 4px;
-		pointer-events: none;
-		overflow: hidden;
 	}
 
 	.chart-wrapper {
@@ -809,6 +832,16 @@
 		color: #64748b;
 	}
 
+	.legend-value {
+		color: #38bdf8;
+		font-weight: 700;
+		margin-left: 2px;
+	}
+
+	:global(body.light) .legend-value {
+		color: #0284c7;
+	}
+
 	.legend-item {
 		display: inline-flex;
 		align-items: center;
@@ -855,6 +888,13 @@
 		stroke: #0284c7;
 	}
 
+	.density-dot {
+		fill: #a78bfa;
+		stroke: #ffffff;
+		stroke-width: 1.5;
+		pointer-events: none;
+	}
+
 	.ping-circle {
 		animation: pulse 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
 	}
@@ -892,85 +932,36 @@
 		font-size: 13px;
 	}
 
-	.chart-tooltip {
-		position: absolute;
-		transform: translate(-50%, -100%);
-		pointer-events: none;
-		max-width: 100%;
-		background: rgb(15 23 42 / 95%);
-		border: 1px solid rgb(56 189 248 / 60%);
-		border-radius: 6px;
-		padding: 4px 8px;
-		font-size: 11px;
-		color: #f8fafc;
+
+	.readout {
 		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		box-shadow: 0 6px 16px rgb(0 0 0 / 40%);
-		white-space: nowrap;
-		z-index: 10;
-		backdrop-filter: blur(8px);
-	}
-
-	.chart-tooltip.align-left {
-		transform: translate(-10%, -100%);
-	}
-
-	.chart-tooltip.align-right {
-		transform: translate(-90%, -100%);
-	}
-
-	/* Near the top of the plot the bubble would be clipped: show it under the marker instead */
-	.chart-tooltip.below {
-		transform: translate(-50%, 0);
-	}
-
-	.chart-tooltip.below.align-left {
-		transform: translate(-10%, 0);
-	}
-
-	.chart-tooltip.below.align-right {
-		transform: translate(-90%, 0);
-	}
-
-	:global(body.light) .chart-tooltip {
-		background: rgb(255 255 255 / 96%);
-		border-color: rgb(2 132 199 / 60%);
-		color: #0f172a;
-		box-shadow: 0 6px 16px rgb(15 23 42 / 15%);
-	}
-
-	.tooltip-time {
-		color: #cbd5e1;
-		font-weight: 500;
-	}
-
-	:global(body.light) .tooltip-time {
-		color: #475569;
-	}
-
-	.tooltip-integral {
-		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 5px;
+		gap: 4px 14px;
+		min-height: 34px;
+		padding: 6px 10px;
+		border-radius: 6px;
+		background: rgb(8 14 29 / 60%);
+		border: 1px solid rgb(148 163 184 / 18%);
+		font-size: 11px;
 	}
 
-	.integral-symbol {
-		font-size: 10px;
-		color: #94a3b8;
+	:global(body.light) .readout {
+		background: rgb(248 250 252 / 90%);
+		border-color: rgb(226 232 240 / 90%);
 	}
 
-	:global(body.light) .integral-symbol {
+	.readout-time {
+		color: #cbd5e1;
+		font-weight: 600;
+	}
+
+	.readout-empty {
 		color: #64748b;
 	}
 
-	.tooltip-val {
-		color: #38bdf8;
-		font-weight: 700;
-		font-size: 12px;
+	:global(body.light) .readout-time {
+		color: #334155;
 	}
 
-	:global(body.light) .tooltip-val {
-		color: #0284c7;
-	}
 </style>

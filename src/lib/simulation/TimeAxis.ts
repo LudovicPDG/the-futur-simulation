@@ -208,7 +208,7 @@ function tickLabel(t: number, unit: TimeUnit, locale: string): string {
 	}
 }
 
-type PeriodLevel = 'year' | 'month' | 'day' | 'hour';
+type PeriodLevel = 'year' | 'month' | 'day' | 'hour' | 'minute';
 
 function periodStart(ms: number, level: PeriodLevel): number {
 	const d = new Date(ms);
@@ -225,6 +225,8 @@ function periodStart(ms: number, level: PeriodLevel): number {
 			return Math.floor(ms / 86400000) * 86400000;
 		case 'hour':
 			return Math.floor(ms / 3600000) * 3600000;
+		case 'minute':
+			return Math.floor(ms / 60000) * 60000;
 	}
 }
 
@@ -243,6 +245,8 @@ function nextPeriodStart(start: number, level: PeriodLevel): number {
 			return start + 86400000;
 		case 'hour':
 			return start + 3600000;
+		case 'minute':
+			return start + 60000;
 	}
 }
 
@@ -316,6 +320,17 @@ export function formatPreciseDate(t: number, unit: TimeUnit, locale: string): st
 		case 'minute':
 			return `${fmt(date, locale, { day: 'numeric', month: 'long', year: 'numeric' })}, ${date.getUTCHours()}:${pad2(date.getUTCMinutes())}`;
 	}
+}
+
+/**
+ * Calendar period of the given unit that contains t (the whole year, month, day... of t), in
+ * decimal years. Used to integrate the density over the period the axis is graduated in.
+ */
+export function periodBounds(t: number, unit: TimeUnit): { lo: number; hi: number } {
+	const date = yearToDate(t);
+	if (!date) return { lo: t - 0.5, hi: t + 0.5 };
+	const start = periodStart(date.getTime(), unit);
+	return { lo: dateToYear(start), hi: dateToYear(nextPeriodStart(start, unit)) };
 }
 
 /** "99 years", "3 months", "12 hours"... for the condensed periods */
