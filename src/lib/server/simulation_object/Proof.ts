@@ -70,9 +70,12 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		model_name: string,
 		level_of_reasoning: string,
 		prompt: string,
-		factId: string
+		factId: string,
+		factValues: Partial<
+			Pick<ProofData, 'impossibility' | 'probability_distribution' | 'originality'>
+		> = {}
 	): Promise<ProofData> {
-		const data = await this.generateForTarget(
+		const generated = await this.generateForTarget(
 			model_name,
 			level_of_reasoning,
 			prompt,
@@ -80,6 +83,11 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			undefined,
 			'Create the founding proof of this element: the source and the information it is based on (documents, data, statements, observations). The sources must be real and verifiable. This proof will be the starting point of the debate about this element.'
 		);
+		// The founding proof shares impossibility, probability distribution and originality with its element.
+		const data: ProofData = {
+			...generated,
+			...Object.fromEntries(Object.entries(factValues).filter(([, value]) => value !== undefined))
+		};
 		await this.insert_in_db(data);
 		return data;
 	}
