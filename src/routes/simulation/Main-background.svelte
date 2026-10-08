@@ -596,8 +596,23 @@
 		filter: drop-shadow(0 0 12px rgba(37, 99, 235, 0.55));
 	}
 
+	/* Default grab cursors can vanish on the pale background: use dark, outlined ones */
+	:global(body.light) .canvas {
+		cursor:
+			url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'><path d='M9 11V5a1.5 1.5 0 0 1 3 0v5m0-1V4a1.5 1.5 0 0 1 3 0v6m0-3a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-3l-3-5a1.5 1.5 0 0 1 2.4-1.8L9 15' fill='%23ffffff' stroke='%230f172a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+				16 16,
+			grab;
+	}
+
 	.canvas.panning {
 		cursor: grabbing;
+	}
+
+	:global(body.light) .canvas.panning {
+		cursor:
+			url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'><path d='M9 11V8a1.5 1.5 0 0 1 3 0m0 2V7a1.5 1.5 0 0 1 3 0v3m0-1a1.5 1.5 0 0 1 3 0v6a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-3l-3-5a1.5 1.5 0 0 1 2.4-1.8L9 15' fill='%23ffffff' stroke='%230f172a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+				16 16,
+			grabbing;
 	}
 
 	.element-details {
