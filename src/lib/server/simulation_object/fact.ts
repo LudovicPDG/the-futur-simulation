@@ -8,8 +8,8 @@ export class FactServer extends BaseSimulationObject<FactData> {
 	protected typeName = 'fact';
 	protected tableName = 'facts';
 
-	async insert_in_db(fact: FactData): Promise<void> {
-		await db.query(
+	async insert_in_db(fact: FactData): Promise<string> {
+		const result = await db.query(
 			`INSERT INTO facts (
 				name,
 				type,
@@ -18,7 +18,8 @@ export class FactServer extends BaseSimulationObject<FactData> {
 				impossibility,
 				probability_distribution,
 				originality
-			) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			RETURNING id`,
 			[
 				convertToPg(fact.name),
 				fact.type || 'fact',
@@ -29,6 +30,7 @@ export class FactServer extends BaseSimulationObject<FactData> {
 				fact.originality
 			]
 		);
+		return result.rows[0].id;
 	}
 
 	async get_all(): Promise<FactData[]> {

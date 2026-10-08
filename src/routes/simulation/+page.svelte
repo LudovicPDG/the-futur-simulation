@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { navbarVisible } from '$lib/stores/navbar';
 	import { simulationStore } from '$lib/stores/simulation';
+	import { debateTarget } from '$lib/stores/debate';
+	import * as m from '$lib/paraglide/messages';
 	import CrystalBall from '../Crystal-ball.svelte';
 	import MainBackground from './Main-background.svelte';
 	import { enhance } from '$app/forms';
@@ -175,12 +177,28 @@
 		use:enhance={() => {
 			const submittedPrompt = prompt;
 			prompt = '';
+			debateTarget.set(null);
 			return async ({ update }) => {
 				await update({ reset: false });
 			};
 		}}
 		class="prompt-container"
 	>
+		{#if $debateTarget}
+			<input type="hidden" name="debate_proof_id" value={$debateTarget.id} />
+			<div class="debate-chip" title={$debateTarget.name}>
+				<span aria-hidden="true">⚖️</span>
+				<span class="debate-label">{m.proof_debate_chip()} « {$debateTarget.name} »</span>
+				<button
+					type="button"
+					class="debate-remove"
+					aria-label={m.proof_debate_remove()}
+					onclick={() => debateTarget.set(null)}
+				>
+					×
+				</button>
+			</div>
+		{/if}
 		<input
 			name="prompt"
 			bind:value={prompt}
@@ -247,7 +265,40 @@
 		z-index: 20;
 	}
 
-	input {
+	.debate-chip {
+		flex: 0 1 auto;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+		max-width: 45%;
+		padding: 6px 8px 6px 10px;
+		color: #92400e;
+		background: #fef3c7;
+		border: 1px solid #fcd34d;
+		border-radius: 12px;
+		font-size: 13px;
+		font-weight: 600;
+	}
+
+	.debate-label {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.debate-remove {
+		flex: 0 0 auto;
+		padding: 0 4px;
+		color: inherit;
+		background: transparent;
+		border: none;
+		font-size: 18px;
+		line-height: 1;
+		cursor: pointer;
+	}
+
+	input[name='prompt'] {
 		flex: 1;
 		min-width: 0;
 

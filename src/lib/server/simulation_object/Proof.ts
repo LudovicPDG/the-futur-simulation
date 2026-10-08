@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
 import { ProofSchema, type ProofData } from '$lib/simulation/Proof';
 import { convertToPg } from './Genie';
@@ -8,9 +10,133 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 	protected typeName = 'proof';
 	protected tableName = 'proofs';
 
+	/** Free prompt: the generator first picks the fact the proof is about, like a relation picks its endpoints. */
+	protected override async generate(
+		model_name: string,
+		level_of_reasoning: string,
+		prompt: string
+	): Promise<ProofData> {
+		const result = await db.query(`
+			SELECT id, type, (name).fr AS name_fr, (name).en AS name_en
+			FROM facts
+		`);
+		if (result.rows.length === 0) {
+			throw new Error('At least one simulation element is required to create a proof');
+		}
+
+		const { FactID } = await this.generateWithSchema(
+			model_name,
+			level_of_reasoning,
+			`${prompt}\n\nSelect the existing simulation element that this proof is about. Use its exact ID:\n${JSON.stringify(
+				result.rows.map((row) => ({
+					id: row.id,
+					type: row.type,
+					name: { fr: row.name_fr, en: row.name_en }
+				}))
+			)}`,
+			z.object({ FactID: z.uuid() })
+		);
+		if (!result.rows.some((row) => row.id === FactID)) {
+			throw new Error('The proof generator selected an unknown element');
+		}
+
+		return this.generateForTarget(model_name, level_of_reasoning, prompt, FactID);
+	}
+
+	/** Debate: creates a sub-proof of an existing proof (the fact is the one of the parent). */
+	async createSubProof(
+		model_name: string,
+		level_of_reasoning: string,
+		prompt: string,
+		parentProofId: string
+	): Promise<ProofData> {
+		const parent = await db.query(`SELECT fact_id FROM proofs WHERE id = $1`, [parentProofId]);
+		const factId = parent.rows[0]?.fact_id;
+		if (!factId) throw new Error('The debated proof does not exist or is not linked to a fact');
+
+		const data = await this.generateForTarget(
+			model_name,
+			level_of_reasoning,
+			prompt,
+			factId,
+			parentProofId
+		);
+		await this.insert_in_db(data);
+		return data;
+	}
+
+	/** Founding proof of a freshly created fact: the source and information it is based on. */
+	async createInitialProof(
+		model_name: string,
+		level_of_reasoning: string,
+		prompt: string,
+		factId: string
+	): Promise<ProofData> {
+		const data = await this.generateForTarget(
+			model_name,
+			level_of_reasoning,
+			prompt,
+			factId,
+			undefined,
+			'Create the founding proof of this element: the source and the information it is based on (documents, data, statements, observations). The sources must be real and verifiable. This proof will be the starting point of the debate about this element.'
+		);
+		await this.insert_in_db(data);
+		return data;
+	}
+
+	private async generateForTarget(
+		model_name: string,
+		level_of_reasoning: string,
+		prompt: string,
+		factId: string,
+		parentProofId?: string,
+		instruction?: string
+	): Promise<ProofData> {
+		const fact = await db.query(
+			`SELECT type, (name).fr AS name_fr, (name).en AS name_en,
+				(description).fr AS description_fr, (description).en AS description_en
+			FROM facts WHERE id = $1`,
+			[factId]
+		);
+		if (fact.rows.length === 0) throw new Error('The debated element does not exist');
+
+		let context = `\n\nThis proof is about the following simulation element:\n${JSON.stringify(fact.rows[0])}`;
+
+		if (parentProofId) {
+			const parent = await db.query(
+				`SELECT (name).fr AS name_fr, (name).en AS name_en,
+					(description).fr AS description_fr, (description).en AS description_en,
+					(verification_method).fr AS verification_method_fr,
+					(falsifiability_method).fr AS falsifiability_method_fr,
+					source
+				FROM proofs WHERE id = $1`,
+				[parentProofId]
+			);
+			if (parent.rows.length === 0) throw new Error('The debated proof does not exist');
+			context += `\n\nThis proof is a sub-proof: it debates (supports, questions or refutes) the following existing proof:\n${JSON.stringify(parent.rows[0])}`;
+		}
+
+		const proof = await this.generateWithSchema(
+			model_name,
+			level_of_reasoning,
+			prompt + context + (instruction ? `
+
+${instruction}` : ''),
+			ProofSchema
+		);
+
+		return {
+			...proof,
+			id: randomUUID(),
+			fact_id: factId,
+			parent_proof_id: parentProofId ?? null
+		};
+	}
+
 	async insert_in_db(proof: ProofData): Promise<void> {
 		await db.query(
 			`INSERT INTO proofs (
+				id,
 				name,
 				description,
 				new_value,
@@ -19,9 +145,12 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 				source,
 				impossibility,
 				probability_distribution,
-				originality
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+				originality,
+				fact_id,
+				parent_proof_id
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 			[
+				proof.id ?? randomUUID(),
 				convertToPg(proof.name),
 				convertToPg(proof.description),
 				proof.new_value !== undefined ? JSON.stringify(proof.new_value) : null,
@@ -30,7 +159,9 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 				convertToPg(proof.source || []),
 				proof.impossibility,
 				convertToPg(proof.probability_distribution),
-				proof.originality
+				proof.originality,
+				proof.fact_id ?? null,
+				proof.parent_proof_id ?? null
 			]
 		);
 	}
@@ -39,9 +170,11 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		const result = await db.query(`
 			SELECT *
 			FROM proofs
+			ORDER BY created_at DESC
 		`);
 
 		return result.rows.map((row) => ({
+			id: row.id,
 			type: 'proof' as const,
 			name: row.name,
 			description: row.description,
@@ -51,7 +184,9 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			source: row.source || [],
 			impossibility: Number(row.impossibility),
 			probability_distribution: row.probability_distribution,
-			originality: Number(row.originality)
+			originality: Number(row.originality),
+			fact_id: row.fact_id,
+			parent_proof_id: row.parent_proof_id
 		}));
 	}
 
@@ -63,6 +198,20 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		prompt: string
 	): Promise<ProofData> {
 		return ProofServer.instance.create(model_name, level_of_reasoning, prompt);
+	}
+
+	static async createSubProof(
+		model_name: string = 'openai/gpt-5.6-luna',
+		level_of_reasoning: string = 'low',
+		prompt: string,
+		parentProofId: string
+	): Promise<ProofData> {
+		return ProofServer.instance.createSubProof(
+			model_name,
+			level_of_reasoning,
+			prompt,
+			parentProofId
+		);
 	}
 
 	static async get_all(): Promise<ProofData[]> {

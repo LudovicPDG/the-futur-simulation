@@ -11,7 +11,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 	protected typeName = 'material_resource';
 	protected tableName = 'material_resources';
 
-	async insert_in_db(resource: MaterialResourceData): Promise<void> {
+	async insert_in_db(resource: MaterialResourceData): Promise<string> {
 		const client = await db.connect();
 		try {
 			await client.query('BEGIN');
@@ -56,6 +56,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 			);
 
 			await client.query('COMMIT');
+			return id;
 		} catch (e) {
 			await client.query('ROLLBACK');
 			throw e;

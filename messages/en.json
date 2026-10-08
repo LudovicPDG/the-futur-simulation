@@ -115,5 +115,14 @@
 	"simulation_distribution_density": "Density (most likely dates)",
 	"simulation_distribution_intro": "Most likely dates (components of the skew-normal mixture)",
 	"simulation_distribution_legend_cumulative": "Evolution of the probability (cumulative distribution function)",
-	"simulation_distribution_legend_density": "Probability at this date (density)"
+	"simulation_distribution_legend_density": "Probability at this date (density)",
+	"proof_section_title": "Proofs",
+	"proof_empty": "No proof yet.",
+	"proof_show_more": "Show more",
+	"proof_show_sub": "Sub-proofs",
+	"proof_hide_sub": "Hide sub-proofs",
+	"proof_debate": "Debate this proof",
+	"proof_debate_chip": "Debate the proof",
+	"proof_debate_remove": "Cancel debate",
+	"proof_no_sub": "No sub-proof."
 }

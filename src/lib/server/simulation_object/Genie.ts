@@ -202,8 +202,22 @@ export class Genie {
 		private level_of_reasoning: string = 'low'
 	) {}
 
-	async ask(prompt: string): Promise<WorldData | string> {
+	async ask(
+		prompt: string,
+		options: { debateProofId?: string } = {}
+	): Promise<WorldData | string> {
 		console.log('demande au genie :', prompt);
+
+		// The user chose to debate a proof: the request is a sub-proof of that proof.
+		if (options.debateProofId) {
+			return Proof.createSubProof(
+				this.model_name,
+				this.level_of_reasoning,
+				prompt,
+				options.debateProofId
+			);
+		}
+
 		const task_prompt =
 			Genie.system_prompt +
 			`

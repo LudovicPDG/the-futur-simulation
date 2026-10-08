@@ -8,7 +8,7 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 	protected typeName = 'action';
 	protected tableName = 'actions';
 
-	async insert_in_db(action: ActionData): Promise<void> {
+	async insert_in_db(action: ActionData): Promise<string> {
 		const client = await db.connect();
 		try {
 			await client.query('BEGIN');
@@ -53,6 +53,7 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 			);
 
 			await client.query('COMMIT');
+			return id;
 		} catch (e) {
 			await client.query('ROLLBACK');
 			throw e;

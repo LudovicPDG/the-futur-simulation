@@ -24,7 +24,16 @@ export abstract class BaseSimulationObject<
 		prompt: string
 	): Promise<T> {
 		const data = await this.generate(model_name, level_of_reasoning, prompt);
-		await this.insert_in_db(data);
+		const id = await this.insert_in_db(data);
+		// A newly created fact (or fact subtype) also gets a founding proof: the source it is based on.
+		if (typeof id === 'string') {
+			try {
+				const { ProofServer } = await import('./Proof');
+				await ProofServer.instance.createInitialProof(model_name, level_of_reasoning, prompt, id);
+			} catch (error) {
+				console.error(`Could not create the initial proof of the new ${this.typeName}:`, error);
+			}
+		}
 		return data;
 	}
 
@@ -113,6 +122,7 @@ export abstract class BaseSimulationObject<
 		return actionResult;
 	}
 
-	protected abstract insert_in_db(data: T): Promise<void>;
+	/** Returns the id of the created fact when the object is a fact (or one of its subtypes). */
+	protected abstract insert_in_db(data: T): Promise<string | void>;
 	abstract get_all(): Promise<T[]>;
 }

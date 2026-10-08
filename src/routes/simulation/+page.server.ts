@@ -11,8 +11,10 @@ export const actions: Actions = {
 			return fail(400, { missing: true, message: 'Prompt is required' });
 		}
 
+		const debateProofId = data.get('debate_proof_id')?.toString() || undefined;
+
 		const genie = new Genie();
-		const result = await genie.ask(prompt);
+		const result = await genie.ask(prompt, { debateProofId });
 		return { success: true, result };
 	}
 };

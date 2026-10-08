@@ -115,5 +115,14 @@
 	"simulation_distribution_density": "Dichte (wahrscheinlichste Daten)",
 	"simulation_distribution_intro": "Wahrscheinlichste Daten (Komponenten der Skew-Normal-Mischung)",
 	"simulation_distribution_legend_cumulative": "Entwicklung der Wahrscheinlichkeit (Verteilungsfunktion)",
-	"simulation_distribution_legend_density": "Wahrscheinlichkeit zu diesem Datum (Dichte)"
+	"simulation_distribution_legend_density": "Wahrscheinlichkeit zu diesem Datum (Dichte)",
+	"proof_section_title": "Belege",
+	"proof_empty": "Noch kein Beleg.",
+	"proof_show_more": "Mehr anzeigen",
+	"proof_show_sub": "Unterbelege",
+	"proof_hide_sub": "Unterbelege ausblenden",
+	"proof_debate": "Diesen Beleg debattieren",
+	"proof_debate_chip": "Beleg debattieren",
+	"proof_debate_remove": "Debatte abbrechen",
+	"proof_no_sub": "Kein Unterbeleg."
 }

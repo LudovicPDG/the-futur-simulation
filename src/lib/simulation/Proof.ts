@@ -7,7 +7,13 @@ export const ProofSchema = z.object({
 	type: z.literal('proof').default('proof').describe('The type of proof'),
 	name: TranslationSchema.describe('The name of the proof'),
 	description: TranslationSchema.describe('The description of the proof'),
-	new_value: z.any().describe('The new value of the element'),
+	// Not z.any(): its JSON schema has no "type", which strict structured outputs reject.
+	new_value: z
+		.union([z.string(), z.number(), z.boolean()])
+		.nullable()
+		.describe(
+			'The new value of the element property this proof leads to, or null if the proof does not change any value'
+		),
 	verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
 	falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),
 	source: z.array(z.string()).default([]).describe('Sources for the proof'),
@@ -22,7 +28,15 @@ export const ProofSchema = z.object({
 	originality: z.number().min(0).max(100).describe('Originality of the proof')
 });
 
-export type ProofData = z.infer<typeof ProofSchema>;
+/**
+ * A proof as stored: the generated content plus the links set by the server
+ * (the debated fact and, for a sub-proof, the proof it debates).
+ */
+export type ProofData = z.infer<typeof ProofSchema> & {
+	id?: string;
+	fact_id?: string | null;
+	parent_proof_id?: string | null;
+};
 
 /**
  * Proof SVG shape

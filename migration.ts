@@ -217,6 +217,14 @@ export async function createDatabase() {
 			);
 		`);
 
+		// Lien d'une preuve vers le fait débattu et vers sa preuve parente (sous-preuves / débat)
+		await client.query(`
+			ALTER TABLE proofs
+				ADD COLUMN IF NOT EXISTS fact_id UUID REFERENCES facts(id) ON DELETE CASCADE,
+				ADD COLUMN IF NOT EXISTS parent_proof_id UUID REFERENCES proofs(id) ON DELETE CASCADE,
+				ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+		`);
+
 		// ==========================================
 		// 5. ACTEURS (CHARACTERS, PERSONS, ORGANIZATIONS, INTEREST GROUPS)
 		// ==========================================
@@ -324,6 +332,12 @@ export async function createDatabase() {
 
 			CREATE INDEX IF NOT EXISTS idx_proof_relations_target_id
 			ON proof_relations(target_id);
+
+			CREATE INDEX IF NOT EXISTS idx_proofs_fact_id
+			ON proofs(fact_id);
+
+			CREATE INDEX IF NOT EXISTS idx_proofs_parent_proof_id
+			ON proofs(parent_proof_id);
 		`);
 
 		await client.query('COMMIT');

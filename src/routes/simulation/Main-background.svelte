@@ -8,6 +8,8 @@
 	import { getLocale } from '$lib/paraglide/runtime';
 	import * as m from '$lib/paraglide/messages';
 	import ProbabilityDistributionChart from './ProbabilityDistributionChart.svelte';
+	import ProofList from './ProofList.svelte';
+	import type { ProofData } from '$lib/simulation/Proof';
 	import { onMount } from 'svelte';
 
 	let {
@@ -284,7 +286,8 @@
 		const list = (simulation_data || []).filter(
 			(item): item is SimulationElementWithId => typeof item === 'object' && item !== null
 		);
-		const nodes = list.filter((element) => element.type !== 'relation');
+		// Proofs are listed in the details panel of the fact they debate, not drawn as nodes.
+		const nodes = list.filter((element) => element.type !== 'relation' && element.type !== 'proof');
 		const nodePositions = new Map<string, { x: number; y: number }>();
 		const renderedNodes = nodes.map((element, index) => {
 			const pos = getNodePosition(index, nodes.length);
@@ -383,6 +386,18 @@
 		activeElement && Array.isArray((activeElement as Record<string, unknown>).other)
 			? ((activeElement as Record<string, unknown>).other as Array<Record<string, unknown>>)
 			: []
+	);
+
+	const allProofs = $derived(
+		simulation_data.filter(
+			(element): element is ProofData & { id: string } =>
+				element.type === 'proof' && typeof element.id === 'string'
+		)
+	);
+	const proofFactId = $derived(
+		activeElement && activeElement.type !== 'relation' && activeElement.type !== 'proof'
+			? activeElement.id
+			: undefined
 	);
 
 	$effect(() => {
@@ -533,6 +548,16 @@
 							</div>
 						{/each}
 					</dl>
+				</section>
+			{/if}
+			{#if proofFactId}
+				<section class="proof-details">
+					<h3>{m.proof_section_title()}</h3>
+					{#if allProofs.some((proof) => proof.fact_id === proofFactId)}
+						<ProofList proofs={allProofs} factId={proofFactId} format={formatValue} />
+					{:else}
+						<p class="proof-empty">{m.proof_empty()}</p>
+					{/if}
 				</section>
 			{/if}
 		</aside>
@@ -790,6 +815,38 @@
 		font-size: 11px;
 		font-weight: 700;
 		text-transform: uppercase;
+	}
+
+	.proof-details {
+		margin-top: 12px;
+		padding-top: 12px;
+		border-top: 1px solid rgb(148 163 184 / 22%);
+	}
+
+	.proof-details h3 {
+		margin: 0 0 4px;
+		color: #34d399;
+		font-size: 11px;
+		font-weight: 700;
+		text-transform: uppercase;
+	}
+
+	.proof-empty {
+		margin: 4px 0 0;
+		color: #94a3b8;
+		font-size: 12px;
+	}
+
+	:global(body.light) .proof-details {
+		border-color: rgb(71 85 105 / 18%);
+	}
+
+	:global(body.light) .proof-details h3 {
+		color: #047857;
+	}
+
+	:global(body.light) .proof-empty {
+		color: #64748b;
 	}
 
 	.parameter-details {

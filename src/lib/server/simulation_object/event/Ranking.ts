@@ -8,7 +8,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 	protected typeName = 'ranking';
 	protected tableName = 'rankings';
 
-	async insert_in_db(ranking: RankingData): Promise<void> {
+	async insert_in_db(ranking: RankingData): Promise<string> {
 		const client = await db.connect();
 		try {
 			await client.query('BEGIN');
@@ -49,6 +49,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 			);
 
 			await client.query('COMMIT');
+			return id;
 		} catch (e) {
 			await client.query('ROLLBACK');
 			throw e;

@@ -8,7 +8,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 	protected typeName = 'organization';
 	protected tableName = 'organizations';
 
-	async insert_in_db(organization: OrganizationData): Promise<void> {
+	async insert_in_db(organization: OrganizationData): Promise<string> {
 		const client = await db.connect();
 		try {
 			await client.query('BEGIN');
@@ -56,6 +56,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 			);
 
 			await client.query('COMMIT');
+			return id;
 		} catch (e) {
 			await client.query('ROLLBACK');
 			throw e;

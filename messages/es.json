@@ -115,5 +115,14 @@
 	"simulation_distribution_density": "Densidad (fechas más probables)",
 	"simulation_distribution_intro": "Fechas más probables (componentes de la mixtura skew-normal)",
 	"simulation_distribution_legend_cumulative": "Evolución de la probabilidad (función de distribución)",
-	"simulation_distribution_legend_density": "Probabilidad en esta fecha (densidad)"
+	"simulation_distribution_legend_density": "Probabilidad en esta fecha (densidad)",
+	"proof_section_title": "Pruebas",
+	"proof_empty": "Aún no hay pruebas.",
+	"proof_show_more": "Mostrar más",
+	"proof_show_sub": "Subpruebas",
+	"proof_hide_sub": "Ocultar subpruebas",
+	"proof_debate": "Debatir esta prueba",
+	"proof_debate_chip": "Debatir la prueba",
+	"proof_debate_remove": "Cancelar el debate",
+	"proof_no_sub": "Ninguna subprueba."
 }

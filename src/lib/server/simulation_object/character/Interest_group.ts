@@ -11,7 +11,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 	protected typeName = 'interest_group';
 	protected tableName = 'interest_groups';
 
-	async insert_in_db(group: InterestGroupData): Promise<void> {
+	async insert_in_db(group: InterestGroupData): Promise<string> {
 		const client = await db.connect();
 		try {
 			await client.query('BEGIN');
@@ -69,6 +69,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 			);
 
 			await client.query('COMMIT');
+			return id;
 		} catch (e) {
 			await client.query('ROLLBACK');
 			throw e;

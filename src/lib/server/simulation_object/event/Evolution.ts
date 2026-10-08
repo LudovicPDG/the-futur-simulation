@@ -8,7 +8,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 	protected typeName = 'evolution';
 	protected tableName = 'evolutions';
 
-	async insert_in_db(evolution: EvolutionData): Promise<void> {
+	async insert_in_db(evolution: EvolutionData): Promise<string> {
 		const client = await db.connect();
 		try {
 			await client.query('BEGIN');
@@ -50,6 +50,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 			);
 
 			await client.query('COMMIT');
+			return id;
 		} catch (e) {
 			await client.query('ROLLBACK');
 			throw e;

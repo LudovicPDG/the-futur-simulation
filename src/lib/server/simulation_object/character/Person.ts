@@ -8,7 +8,7 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 	protected typeName = 'person';
 	protected tableName = 'persons';
 
-	async insert_in_db(person: PersonData): Promise<void> {
+	async insert_in_db(person: PersonData): Promise<string> {
 		const client = await db.connect();
 		try {
 			await client.query('BEGIN');
@@ -50,6 +50,7 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 			await client.query(`INSERT INTO persons (id) VALUES ($1)`, [id]);
 
 			await client.query('COMMIT');
+			return id;
 		} catch (e) {
 			await client.query('ROLLBACK');
 			throw e;

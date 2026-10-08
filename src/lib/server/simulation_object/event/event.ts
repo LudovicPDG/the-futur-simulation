@@ -8,7 +8,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 	protected typeName = 'event';
 	protected tableName = 'events';
 
-	async insert_in_db(event: EventData): Promise<void> {
+	async insert_in_db(event: EventData): Promise<string> {
 		const client = await db.connect();
 		try {
 			await client.query('BEGIN');
@@ -40,6 +40,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 			await client.query(`INSERT INTO events (id) VALUES ($1)`, [id]);
 
 			await client.query('COMMIT');
+			return id;
 		} catch (e) {
 			await client.query('ROLLBACK');
 			throw e;
