@@ -96,6 +96,10 @@ export function convertToPg(value: unknown): string {
 	throw new Error(`Unsupported value: ${typeof value}`);
 }
 
+export function convertToPgNullable(value: unknown): string | null {
+	return value === null || value === undefined ? null : convertToPg(value);
+}
+
 const ActionSchema = z.object({
 	action: z.enum([
 		'create_organisation',

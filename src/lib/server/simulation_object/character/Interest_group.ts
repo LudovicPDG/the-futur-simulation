@@ -3,7 +3,7 @@ import {
 	InterestGroupSchema,
 	type InterestGroupData
 } from '$lib/simulation/character/Interest_group';
-import { convertToPg } from '../Genie';
+import { convertToPg, convertToPgNullable } from '../Genie';
 import { db } from '../../utils/database';
 
 export class InterestGroupServer extends BaseSimulationObject<InterestGroupData> {
@@ -31,7 +31,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 					convertToPg(group.name),
 					group.type || 'interest_group',
 					convertToPg(group.description),
-					convertToPg(group.other),
+					convertToPgNullable(group.other),
 					group.impossibility,
 					convertToPg(group.probability_distribution),
 					group.originality

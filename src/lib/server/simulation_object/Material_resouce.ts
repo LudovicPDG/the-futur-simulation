@@ -3,7 +3,7 @@ import {
 	MaterialResourceSchema,
 	type MaterialResourceData
 } from '$lib/simulation/Material_resouce';
-import { convertToPg } from './Genie';
+import { convertToPg, convertToPgNullable } from './Genie';
 import { db } from '../utils/database';
 
 export class MaterialResourceServer extends BaseSimulationObject<MaterialResourceData> {
@@ -31,7 +31,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 					convertToPg(resource.name),
 					resource.type || 'material_resource',
 					convertToPg(resource.description),
-					convertToPg(resource.other),
+					convertToPgNullable(resource.other),
 					resource.impossibility,
 					convertToPg(resource.probability_distribution),
 					resource.originality

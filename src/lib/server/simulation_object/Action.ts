@@ -1,6 +1,6 @@
 import { BaseSimulationObject } from './BaseSimulationObject';
 import { ActionSchema, type ActionData } from '$lib/simulation/Action';
-import { convertToPg } from './Genie';
+import { convertToPg, convertToPgNullable } from './Genie';
 import { db } from '../utils/database';
 
 export class ActionServer extends BaseSimulationObject<ActionData> {
@@ -28,7 +28,7 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 					convertToPg(action.name),
 					action.type || 'action',
 					convertToPg(action.description),
-					convertToPg(action.other),
+					convertToPgNullable(action.other),
 					action.impossibility,
 					convertToPg(action.probability_distribution),
 					action.originality

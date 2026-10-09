@@ -1,6 +1,6 @@
 import { BaseSimulationObject } from '../BaseSimulationObject';
 import { EvolutionSchema, type EvolutionData } from '$lib/simulation/event/Evolution';
-import { convertToPg } from '../Genie';
+import { convertToPg, convertToPgNullable } from '../Genie';
 import { db } from '../../utils/database';
 
 export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
@@ -28,7 +28,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 					convertToPg(evolution.name),
 					evolution.type || 'evolution',
 					convertToPg(evolution.description),
-					convertToPg(evolution.other),
+					convertToPgNullable(evolution.other),
 					evolution.impossibility,
 					convertToPg(evolution.probability_distribution),
 					evolution.originality

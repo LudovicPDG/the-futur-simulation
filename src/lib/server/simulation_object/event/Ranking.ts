@@ -1,6 +1,6 @@
 import { BaseSimulationObject } from '../BaseSimulationObject';
 import { RankingSchema, type RankingData } from '$lib/simulation/event/Ranking';
-import { convertToPg } from '../Genie';
+import { convertToPg, convertToPgNullable } from '../Genie';
 import { db } from '../../utils/database';
 
 export class RankingServer extends BaseSimulationObject<RankingData> {
@@ -28,7 +28,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 					convertToPg(ranking.name),
 					ranking.type || 'ranking',
 					convertToPg(ranking.description),
-					convertToPg(ranking.other),
+					convertToPgNullable(ranking.other),
 					ranking.impossibility,
 					convertToPg(ranking.probability_distribution),
 					ranking.originality

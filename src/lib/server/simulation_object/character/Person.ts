@@ -1,6 +1,6 @@
 import { BaseSimulationObject } from '../BaseSimulationObject';
 import { PersonSchema, type PersonData } from '$lib/simulation/character/Person';
-import { convertToPg } from '../Genie';
+import { convertToPg, convertToPgNullable } from '../Genie';
 import { db } from '../../utils/database';
 
 export class PersonServer extends BaseSimulationObject<PersonData> {
@@ -28,7 +28,7 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 					convertToPg(person.name),
 					person.type || 'person',
 					convertToPg(person.description),
-					convertToPg(person.other),
+					convertToPgNullable(person.other),
 					person.impossibility,
 					convertToPg(person.probability_distribution),
 					person.originality
