@@ -186,6 +186,11 @@ export class Genie {
 
 	Users may provide proofs in order to support, question, or modify an element of the simulation.
 
+	Every proof must change the element it targets, through its two lists of values:
+	- **value_to_modify**: what the proof must **change** in the element, i.e. a value that **already exists** (name = the existing value, value = its new value). This is the most frequent case, so check first whether the value already exists and prefer this list.
+	- **new_value**: what the proof must **add** to the element, i.e. a value that **does not exist yet** (name = the new value's name, value = its content).
+	A proof has no reason to exist without at least one value to modify or one value to add. There is no deletion: to remove something, modify its value instead.
+
 	When a proof leads to a change in one of a fact's properties, this change may propagate to other elements that depend on or are connected to that property.
 
 	You must therefore treat the simulation as a dynamic system in which a local modification can produce a chain of direct and indirect consequences throughout the simulation.

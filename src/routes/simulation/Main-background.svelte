@@ -184,7 +184,6 @@
 			financial_value: m.simulation_field_financial_value,
 			new_value: m.simulation_field_new_value,
 			value_to_modify: m.simulation_field_value_to_modify,
-			value_to_delete: m.simulation_field_value_to_delete,
 			modification: m.simulation_field_modification,
 			verification_method: m.simulation_field_verification_method,
 			falsifiability_method: m.simulation_field_falsifiability_method,

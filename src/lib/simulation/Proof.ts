@@ -9,7 +9,7 @@ export const ProofSchema = z.object({
 	name: TranslationSchema.describe('The name of the proof'),
 	description: TranslationSchema.describe('The description of the proof'),
 	modification: ModificationSchema.describe(
-		'The values this proof adds, modifies or deletes in the element (leave the lists empty if it changes nothing)'
+		'The values this proof modifies or adds in the element. A proof has no reason to exist without a value to modify or a value to add, so at least one of the two lists must not be empty.'
 	),
 	verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
 	falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),

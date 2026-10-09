@@ -88,7 +88,6 @@
 	"simulation_field_financial_value": "Financial value",
 	"simulation_field_new_value": "Value to add",
 	"simulation_field_value_to_modify": "Value to modify",
-	"simulation_field_value_to_delete": "Value to delete",
 	"simulation_field_modification": "Modification",
 	"simulation_field_verification_method": "Verification method",
 	"simulation_field_falsifiability_method": "Falsification method",

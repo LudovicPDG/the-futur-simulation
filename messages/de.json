@@ -88,7 +88,6 @@
 	"simulation_field_financial_value": "Finanzwert",
 	"simulation_field_new_value": "Hinzuzufügender Wert",
 	"simulation_field_value_to_modify": "Zu ändernder Wert",
-	"simulation_field_value_to_delete": "Zu löschender Wert",
 	"simulation_field_modification": "Änderung",
 	"simulation_field_verification_method": "Überprüfungsmethode",
 	"simulation_field_falsifiability_method": "Widerlegungsmethode",

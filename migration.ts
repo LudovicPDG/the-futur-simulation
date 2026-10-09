@@ -228,7 +228,7 @@ export async function createDatabase() {
 		// Modification: valeurs ajoutées / modifiées / supprimées (remplace l'ancienne colonne new_value)
 		await client.query(`
 			ALTER TABLE proofs
-				ADD COLUMN IF NOT EXISTS modification JSONB NOT NULL DEFAULT '{"new_value":[],"value_to_modify":[],"value_to_delete":[]}',
+				ADD COLUMN IF NOT EXISTS modification JSONB NOT NULL DEFAULT '{"value_to_modify":[],"new_value":[]}',
 				DROP COLUMN IF EXISTS new_value;
 			ALTER TABLE relations
 				DROP COLUMN IF EXISTS modification,
