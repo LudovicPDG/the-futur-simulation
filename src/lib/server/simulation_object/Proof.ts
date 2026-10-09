@@ -2,12 +2,71 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
 import { ProofSchema, type ProofData } from '$lib/simulation/Proof';
-import { ModificationSchema } from '$lib/simulation/Modification';
+import { ModificationSchema, valueKind } from '$lib/simulation/Modification';
 import { convertToPg } from './Genie';
 import { db } from '../utils/database';
 
 /** The element a proof is about: a fact (or subtype) or a relation. */
 type ProofTarget = { factId: string } | { relationId: string };
+
+/**
+ * Proofs saved before texts had to be translated hold plain-string values (and a "value_to_delete" list):
+ * a string is repeated in every language so that the stored modification still parses.
+ */
+function upgradeLegacyModification(modification: unknown): unknown {
+	if (typeof modification !== 'object' || modification === null) return {};
+
+	const upgradeEntries = (entries: unknown) =>
+		Array.isArray(entries)
+			? entries.map((entry) =>
+					typeof entry?.value === 'string'
+						? { ...entry, value: { fr: entry.value, en: entry.value, de: entry.value, es: entry.value } }
+						: entry
+				)
+			: [];
+	const { value_to_modify, new_value } = modification as Record<string, unknown>;
+	return { value_to_modify: upgradeEntries(value_to_modify), new_value: upgradeEntries(new_value) };
+}
+
+/** Every language-keyed name of a modification entry ("description" or {fr, en, de, es}). */
+function entryNames(name: unknown): string[] {
+	if (typeof name === 'string') return [name];
+	if (typeof name === 'object' && name !== null) {
+		return Object.values(name).filter((value): value is string => typeof value === 'string');
+	}
+	return [];
+}
+
+/** The current value an entry modifies: a primary property of the element or one of its "other" values. */
+function findOriginalValue(name: unknown, element: Record<string, unknown>): unknown {
+	const names = entryNames(name);
+	const key = names.find((candidate) => candidate in element);
+	if (key) return element[key];
+
+	const other = Array.isArray(element.other) ? element.other : [];
+	const match = other.find(
+		(item) =>
+			typeof item === 'object' &&
+			item !== null &&
+			entryNames((item as { name?: unknown }).name).some((candidate) => names.includes(candidate))
+	);
+	return match ? (match as { value?: unknown }).value : undefined;
+}
+
+/** Describes the first value to modify whose type differs from the value it replaces. */
+function findModificationTypeError(
+	proof: ProofData,
+	element: Record<string, unknown>
+): string | undefined {
+	for (const entry of proof.modification.value_to_modify) {
+		const originalKind = valueKind(findOriginalValue(entry.name, element));
+		const newKind = valueKind(entry.value);
+		if (originalKind && originalKind !== newKind) {
+			return `the value to modify "${entryNames(entry.name)[0]}" is a ${originalKind}, but you gave a ${newKind ?? 'value of another type'}. A modified value must keep the type of the original value (a text stays a text translated in every language).`;
+		}
+	}
+	return undefined;
+}
 
 export class ProofServer extends BaseSimulationObject<ProofData> {
 	protected schema = ProofSchema;
@@ -113,18 +172,18 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		instruction?: string
 	): Promise<ProofData> {
 		let context: string;
+		let originalElement: Record<string, unknown> | undefined;
 		if ('factId' in target) {
 			const fact = await db.query(
-				`SELECT type, (name).fr AS name_fr, (name).en AS name_en,
-					(description).fr AS description_fr, (description).en AS description_en
-				FROM facts WHERE id = $1`,
+				`SELECT to_jsonb(facts) - 'probability_distribution' AS element FROM facts WHERE id = $1`,
 				[target.factId]
 			);
 			if (fact.rows.length === 0) throw new Error('The debated element does not exist');
+			originalElement = fact.rows[0].element;
 			context = `
 
-This proof is about the following simulation element:
-${JSON.stringify(fact.rows[0])}`;
+This proof is about the following simulation element (its "name", "description" and "other" values are translated in every language):
+${JSON.stringify(originalElement)}`;
 		} else {
 			const relation = await db.query(
 				`SELECT (r.name).fr AS name_fr, (r.name).en AS name_en,
@@ -158,14 +217,28 @@ ${JSON.stringify(relation.rows[0])}`;
 			context += `\n\nThis proof is a sub-proof: it debates (supports, questions or refutes) the following existing proof:\n${JSON.stringify(parent.rows[0])}`;
 		}
 
-		const proof = await this.generateWithSchema(
-			model_name,
-			level_of_reasoning,
-			prompt + context + (instruction ? `
+		const basePrompt =
+			prompt +
+			context +
+			(instruction
+				? `
 
-${instruction}` : ''),
-			ProofSchema
-		);
+${instruction}`
+				: '');
+
+		// A value that modifies an existing one must keep its type: retry once with the error.
+		let proof = await this.generateWithSchema(model_name, level_of_reasoning, basePrompt, ProofSchema);
+		const typeError = originalElement && findModificationTypeError(proof, originalElement);
+		if (typeError) {
+			proof = await this.generateWithSchema(
+				model_name,
+				level_of_reasoning,
+				`${basePrompt}\n\nYour previous answer was rejected: ${typeError}`,
+				ProofSchema
+			);
+			const secondError = findModificationTypeError(proof, originalElement!);
+			if (secondError) throw new Error(secondError);
+		}
 
 		return {
 			...proof,
@@ -223,7 +296,7 @@ ${instruction}` : ''),
 			type: 'proof' as const,
 			name: row.name,
 			description: row.description,
-			modification: ModificationSchema.parse(row.modification ?? {}),
+			modification: ModificationSchema.parse(upgradeLegacyModification(row.modification)),
 			verification_method: row.verification_method,
 			falsifiability_method: row.falsifiability_method,
 			source: row.source || [],
