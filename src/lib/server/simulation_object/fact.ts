@@ -37,6 +37,7 @@ export class FactServer extends BaseSimulationObject<FactData> {
 		const result = await db.query(`
 			SELECT facts.*, to_jsonb(facts.other) AS other_json
 			FROM facts
+			WHERE type = 'fact'
 		`);
 
 		return result.rows.map((row) => ({
