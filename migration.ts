@@ -207,7 +207,6 @@ export async function createDatabase() {
 				id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 				name translation_t NOT NULL,
 				description translation_t NOT NULL,
-				new_value JSONB,
 				verification_method translation_t NOT NULL,
 				falsifiability_method translation_t NOT NULL,
 				source TEXT[] NOT NULL DEFAULT '{}',
@@ -224,6 +223,21 @@ export async function createDatabase() {
 				ADD COLUMN IF NOT EXISTS relation_id UUID REFERENCES relations(id) ON DELETE CASCADE,
 				ADD COLUMN IF NOT EXISTS parent_proof_id UUID REFERENCES proofs(id) ON DELETE CASCADE,
 				ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+		`);
+
+		// Modification: valeurs ajoutées / modifiées / supprimées (remplace l'ancienne colonne new_value)
+		await client.query(`
+			ALTER TABLE proofs
+				ADD COLUMN IF NOT EXISTS modification JSONB NOT NULL DEFAULT '{"new_value":[],"value_to_modify":[],"value_to_delete":[]}',
+				DROP COLUMN IF EXISTS new_value;
+			ALTER TABLE relations
+				DROP COLUMN IF EXISTS modification,
+				DROP COLUMN IF EXISTS element1_element2_value_to_modify,
+				DROP COLUMN IF EXISTS element1_element2_value_to_delete,
+				DROP COLUMN IF EXISTS element2_element1_value_to_modify,
+				DROP COLUMN IF EXISTS element2_element1_value_to_delete,
+				ADD COLUMN IF NOT EXISTS element1_element2_new_value JSONB NOT NULL DEFAULT '[]',
+				ADD COLUMN IF NOT EXISTS element2_element1_new_value JSONB NOT NULL DEFAULT '[]';
 		`);
 
 		// ==========================================

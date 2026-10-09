@@ -3,6 +3,7 @@
 	import { debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
 	import ProofList from './ProofList.svelte';
+	import ModificationView from './ModificationView.svelte';
 	import ProbabilityDistributionChart from './ProbabilityDistributionChart.svelte';
 
 	const PAGE_SIZE = 5;
@@ -95,8 +96,8 @@
 			{#if paramsShown[proof.id]}
 				<dl class="proof-params">
 					<div class="param-row">
-						<dt>{m.simulation_field_new_value()}</dt>
-						<dd>{format(proof.new_value)}</dd>
+						<dt>{m.simulation_field_modification()}</dt>
+						<dd><ModificationView modification={proof.modification} {format} /></dd>
 					</div>
 					<div class="param-row verification">
 						<dt>{m.simulation_field_verification_method()}</dt>

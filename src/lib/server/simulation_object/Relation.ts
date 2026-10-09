@@ -54,7 +54,7 @@ function propertyEnum(propertyNames: string[]) {
 function mapDatabaseConnexions(
 	connexions: unknown,
 	reverseDirection = false
-): RelationData['element1_element2_connexions'] {
+): RelationData['element1_element2_value_to_modify'] {
 	if (!Array.isArray(connexions)) {
 		throw new Error('Database returned invalid relation connexion data');
 	}
@@ -132,31 +132,27 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 
 		const element1Property = propertyEnum(element1.properties);
 		const element2Property = propertyEnum(element2.properties);
+		const connexionSchema = z.object({
+			Element1Property: element1Property,
+			Element2Property: element2Property,
+			impact: z.number()
+		});
+		const valueSchema = z.union([z.string(), z.number(), z.boolean()]);
 		const generatedSchema = RelationSchema.extend({
 			Element1ID: z.literal(element1.id),
 			Element1Type: z.literal(element1.type),
 			Element2ID: z.literal(element2.id),
 			Element2Type: z.literal(element2.type),
-			element1_element2_connexions: z.array(
-				z.object({
-					Element1Property: element1Property,
-					Element2Property: element2Property,
-					impact: z.number()
-				})
-			),
-			element2_element1_connexions: z.array(
-				z.object({
-					Element1Property: element1Property,
-					Element2Property: element2Property,
-					impact: z.number()
-				})
-			)
+			element1_element2_value_to_modify: z.array(connexionSchema),
+			element2_element1_value_to_modify: z.array(connexionSchema),
+			element1_element2_new_value: z.array(connexionSchema.extend({ value: valueSchema })),
+			element2_element1_new_value: z.array(connexionSchema.extend({ value: valueSchema }))
 		});
 
 		const generated = await this.generateWithSchema(
 			model_name,
 			level_of_reasoning,
-			`${prompt}\n\nCreate the relation between these already-selected elements. Do not change their IDs or types.\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nFor element1_element2_connexions, Element1Property must be selected from element 1 properties and Element2Property from element 2 properties. For element2_element1_connexions, reverse those choices. Each connexion describes how these two properties relate; impact is the strength of that property-to-property relation.`,
+			`${prompt}\n\nCreate the relation between these already-selected elements. Do not change their IDs or types.\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nelement1_element2_value_to_modify lists the existing values of element 2 that element 1 modifies: Element1Property is selected from element 1 properties and Element2Property from element 2 properties; impact is the strength of that property-to-property relation. element1_element2_new_value lists values element 1 adds to element 2: Element1Property is an existing element 1 property, Element2Property is the name of the new value (it may be a new name), value is the created value and impact its strength. For the element2_element1_* fields, reverse those choices.`,
 			generatedSchema
 		);
 
@@ -174,10 +170,12 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				element2_type,
 				element1_element2_connexions,
 				element2_element1_connexions,
+				element1_element2_new_value,
+				element2_element1_new_value,
 				impossibility,
 				probability_distribution,
 				originality
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
 			[
 				convertToPg(relation.name),
 				convertToPg(relation.description),
@@ -186,19 +184,21 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				relation.Element2ID,
 				relation.Element2Type,
 				convertToPg(
-					(relation.element1_element2_connexions || []).map((connexion) => ({
+					(relation.element1_element2_value_to_modify || []).map((connexion) => ({
 						SourceProperty: connexion.Element1Property,
 						TargetProperty: connexion.Element2Property,
 						impact: connexion.impact
 					}))
 				),
 				convertToPg(
-					(relation.element2_element1_connexions || []).map((connexion) => ({
+					(relation.element2_element1_value_to_modify || []).map((connexion) => ({
 						Element2Property: connexion.Element2Property,
 						Element1Property: connexion.Element1Property,
 						impact: connexion.impact
 					}))
 				),
+				JSON.stringify(relation.element1_element2_new_value ?? []),
+				JSON.stringify(relation.element2_element1_new_value ?? []),
 				relation.impossibility,
 				convertToPg(relation.probability_distribution),
 				relation.originality
@@ -224,8 +224,10 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			Element1Type: row.element1_type,
 			Element2ID: row.element2_id,
 			Element2Type: row.element2_type,
-			element1_element2_connexions: mapDatabaseConnexions(row.element1_connexions_json),
-			element2_element1_connexions: mapDatabaseConnexions(row.element2_connexions_json, true),
+			element1_element2_value_to_modify: mapDatabaseConnexions(row.element1_connexions_json),
+			element2_element1_value_to_modify: mapDatabaseConnexions(row.element2_connexions_json, true),
+			element1_element2_new_value: row.element1_element2_new_value ?? [],
+			element2_element1_new_value: row.element2_element1_new_value ?? [],
 			impossibility: Number(row.impossibility),
 			probability_distribution: row.probability_distribution,
 			originality: Number(row.originality)

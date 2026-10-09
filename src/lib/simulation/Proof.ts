@@ -2,18 +2,15 @@ import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
 import { ProbabilityDistributionSchema } from './ProbabilityDistribution';
+import { ModificationSchema } from './Modification';
 
 export const ProofSchema = z.object({
 	type: z.literal('proof').default('proof').describe('The type of proof'),
 	name: TranslationSchema.describe('The name of the proof'),
 	description: TranslationSchema.describe('The description of the proof'),
-	// Not z.any(): its JSON schema has no "type", which strict structured outputs reject.
-	new_value: z
-		.union([z.string(), z.number(), z.boolean()])
-		.nullable()
-		.describe(
-			'The new value of the element property this proof leads to, or null if the proof does not change any value'
-		),
+	modification: ModificationSchema.describe(
+		'The values this proof adds, modifies or deletes in the element (leave the lists empty if it changes nothing)'
+	),
 	verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
 	falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),
 	source: z.array(z.string()).default([]).describe('Sources for the proof'),

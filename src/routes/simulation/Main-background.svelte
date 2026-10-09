@@ -183,6 +183,9 @@
 			number_of_units: m.simulation_field_number_of_units,
 			financial_value: m.simulation_field_financial_value,
 			new_value: m.simulation_field_new_value,
+			value_to_modify: m.simulation_field_value_to_modify,
+			value_to_delete: m.simulation_field_value_to_delete,
+			modification: m.simulation_field_modification,
 			verification_method: m.simulation_field_verification_method,
 			falsifiability_method: m.simulation_field_falsifiability_method,
 			source: m.simulation_field_source,
@@ -352,6 +355,8 @@
 						key !== 'name' &&
 						key !== 'type' &&
 						key !== 'other' &&
+						key !== 'modification' &&
+						!/^element[12]_element[12]_(new_value|value_to_modify)$/.test(key) &&
 						!(
 							activeRelation &&
 							[
@@ -474,39 +479,77 @@
 			</dl>
 			{#if activeRelation}
 				<section class="relation-details">
-					{#if activeRelation.element1_element2_connexions.length > 0}
+					{#if activeRelation.element1_element2_value_to_modify.length > 0 || activeRelation.element1_element2_new_value.length > 0}
 						<h3>
 							{formatValue(relationElement1?.name) || m.simulation_field_element1_name()}
 							{m.simulation_relation_to()}
 							{formatValue(relationElement2?.name) || m.simulation_field_element2_name()}
 						</h3>
-						{#each activeRelation.element1_element2_connexions as connexion}
-							<div class="relation-connexion">
-								<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
-								<span class="relation-arrow" aria-hidden="true">→</span>
-								<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
-								<span class="relation-impact">
-									{m.simulation_field_impact()}: {formatValue(connexion.impact)}
-								</span>
-							</div>
-						{/each}
+						{#if activeRelation.element1_element2_value_to_modify.length > 0}
+							<h4>{m.simulation_field_value_to_modify()}</h4>
+							{#each activeRelation.element1_element2_value_to_modify as connexion}
+								<div class="relation-connexion">
+									<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
+									<span class="relation-arrow" aria-hidden="true">→</span>
+									<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
+									<span class="relation-impact">
+										{m.simulation_field_impact()}: {formatValue(connexion.impact)}
+									</span>
+								</div>
+							{/each}
+						{/if}
+						{#if activeRelation.element1_element2_new_value.length > 0}
+							<h4>{m.simulation_field_new_value()}</h4>
+							{#each activeRelation.element1_element2_new_value as added}
+								<div class="relation-connexion">
+									<span>{formatRelationProperty(added.Element1Property, relationElement1)}</span>
+									<span class="relation-arrow" aria-hidden="true">→</span>
+									<span class="relation-new-value">
+										<span class="relation-new-name">{added.Element2Property}</span>
+										<span class="relation-new-content">{formatValue(added.value)}</span>
+									</span>
+									<span class="relation-impact">
+										{m.simulation_field_impact()}: {formatValue(added.impact)}
+									</span>
+								</div>
+							{/each}
+						{/if}
 					{/if}
-					{#if activeRelation.element2_element1_connexions.length > 0}
+					{#if activeRelation.element2_element1_value_to_modify.length > 0 || activeRelation.element2_element1_new_value.length > 0}
 						<h3>
 							{formatValue(relationElement2?.name) || m.simulation_field_element2_name()}
 							{m.simulation_relation_to()}
 							{formatValue(relationElement1?.name) || m.simulation_field_element1_name()}
 						</h3>
-						{#each activeRelation.element2_element1_connexions as connexion}
-							<div class="relation-connexion">
-								<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
-								<span class="relation-arrow" aria-hidden="true">→</span>
-								<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
-								<span class="relation-impact">
-									{m.simulation_field_impact()}: {formatValue(connexion.impact)}
-								</span>
-							</div>
-						{/each}
+						{#if activeRelation.element2_element1_value_to_modify.length > 0}
+							<h4>{m.simulation_field_value_to_modify()}</h4>
+							{#each activeRelation.element2_element1_value_to_modify as connexion}
+								<div class="relation-connexion">
+									<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
+									<span class="relation-arrow" aria-hidden="true">→</span>
+									<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
+									<span class="relation-impact">
+										{m.simulation_field_impact()}: {formatValue(connexion.impact)}
+									</span>
+								</div>
+							{/each}
+						{/if}
+						{#if activeRelation.element2_element1_new_value.length > 0}
+							<h4>{m.simulation_field_new_value()}</h4>
+							{#each activeRelation.element2_element1_new_value as added}
+								<div class="relation-connexion">
+									<span>{formatRelationProperty(added.Element2Property, relationElement2)}</span>
+									<span class="relation-arrow" aria-hidden="true">→</span>
+									<span class="relation-new-value">
+										<span class="relation-new-name">{added.Element1Property}</span>
+										<span class="relation-new-content">{formatValue(added.value)}</span>
+									</span>
+									<span class="relation-impact">
+										{m.simulation_field_impact()}: {formatValue(added.impact)}
+									</span>
+								</div>
+							{/each}
+						{/if}
 					{/if}
 				</section>
 			{/if}
@@ -820,6 +863,46 @@
 	.relation-arrow {
 		color: #7dd3fc;
 		text-align: center;
+	}
+
+	.relation-new-value {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		min-width: 0;
+		padding: 6px 8px;
+		border-left: 3px solid #7dd3fc;
+		border-radius: 4px;
+		background: rgb(125 211 252 / 8%);
+		text-align: left;
+	}
+
+	.relation-new-name {
+		color: #94a3b8;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.relation-new-content {
+		color: #f1f5f9;
+		font-size: 13px;
+		font-weight: 600;
+		white-space: pre-wrap;
+	}
+
+	:global(body.light) .relation-new-value {
+		border-left-color: #087e8b;
+		background: rgb(8 126 139 / 8%);
+	}
+
+	:global(body.light) .relation-new-name {
+		color: #64748b;
+	}
+
+	:global(body.light) .relation-new-content {
+		color: #0f172a;
 	}
 
 	:global(body.light) .relation-connexion {

@@ -9,6 +9,13 @@ export const RelationConnexionSchema = z.object({
 	impact: z.number().describe('The strength of the relation between these properties')
 });
 
+/** A value created by the relation: it links an existing property to the name of the new value, with its value and impact. */
+export const RelationNewValueSchema = RelationConnexionSchema.extend({
+	value: z.union([z.string(), z.number(), z.boolean()]).describe('The value created')
+});
+
+export type RelationNewValueData = z.infer<typeof RelationNewValueSchema>;
+
 export type RelationConnexionData = z.infer<typeof RelationConnexionSchema>;
 
 export const RelationElementTypeSchema = z.enum([
@@ -31,14 +38,22 @@ export const RelationSchema = z.object({
 	Element1Type: RelationElementTypeSchema,
 	Element2ID: z.uuid().describe('The UUID of element 2 from the existing simulation elements'),
 	Element2Type: RelationElementTypeSchema,
-	element1_element2_connexions: z
+	element1_element2_value_to_modify: z
 		.array(RelationConnexionSchema)
 		.default([])
-		.describe('Connexions from element 1 to element 2'),
-	element2_element1_connexions: z
+		.describe('Existing values modified, from element 1 to element 2: existing property, modified property, impact'),
+	element1_element2_new_value: z
+		.array(RelationNewValueSchema)
+		.default([])
+		.describe('Values added, from element 1 to element 2: existing property, name of the new value, its value, impact'),
+	element2_element1_value_to_modify: z
 		.array(RelationConnexionSchema)
 		.default([])
-		.describe('Connexions from element 2 to element 1'),
+		.describe('Existing values modified, from element 2 to element 1: existing property, modified property, impact'),
+	element2_element1_new_value: z
+		.array(RelationNewValueSchema)
+		.default([])
+		.describe('Values added, from element 2 to element 1: existing property, name of the new value, its value, impact'),
 	impossibility: z
 		.number()
 		.min(0)

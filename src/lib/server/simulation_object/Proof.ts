@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
 import { ProofSchema, type ProofData } from '$lib/simulation/Proof';
+import { ModificationSchema } from '$lib/simulation/Modification';
 import { convertToPg } from './Genie';
 import { db } from '../utils/database';
 
@@ -181,7 +182,7 @@ ${instruction}` : ''),
 				id,
 				name,
 				description,
-				new_value,
+				modification,
 				verification_method,
 				falsifiability_method,
 				source,
@@ -196,7 +197,7 @@ ${instruction}` : ''),
 				proof.id ?? randomUUID(),
 				convertToPg(proof.name),
 				convertToPg(proof.description),
-				proof.new_value !== undefined ? JSON.stringify(proof.new_value) : null,
+				JSON.stringify(proof.modification ?? ModificationSchema.parse({})),
 				convertToPg(proof.verification_method),
 				convertToPg(proof.falsifiability_method),
 				convertToPg(proof.source || []),
@@ -222,7 +223,7 @@ ${instruction}` : ''),
 			type: 'proof' as const,
 			name: row.name,
 			description: row.description,
-			new_value: row.new_value,
+			modification: ModificationSchema.parse(row.modification ?? {}),
 			verification_method: row.verification_method,
 			falsifiability_method: row.falsifiability_method,
 			source: row.source || [],
