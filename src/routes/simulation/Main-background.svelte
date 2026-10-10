@@ -8,7 +8,13 @@
 	import { getLocale } from '$lib/paraglide/runtime';
 	import * as m from '$lib/paraglide/messages';
 	import ProbabilityDistributionChart from './ProbabilityDistributionChart.svelte';
+	import EvolutionChart from './EvolutionChart.svelte';
 	import ProofList from './ProofList.svelte';
+	import {
+		parseEvolutionFunction,
+		parseEvolutionValue,
+		type EvolutionValue
+	} from '$lib/simulation/event/EvolutionFunction';
 	import type { ProofData } from '$lib/simulation/Proof';
 	import { onMount } from 'svelte';
 
@@ -173,6 +179,9 @@
 		if (typeof value === 'number' || typeof value === 'boolean') return String(value);
 		if (Array.isArray(value)) return localizedValue(value) || '—';
 		if (typeof value === 'object') {
+			const evolution = parseEvolutionValue(value);
+			if (evolution) return formatEvolution(evolution);
+
 			const translated = localizedValue(value);
 			if (translated) return translated;
 
@@ -181,6 +190,26 @@
 				.join('\n');
 		}
 		return String(value);
+	}
+
+	// Text summary of an evolution, for the places where its chart does not fit (lists...)
+	function formatEvolution({ evolution, unit }: EvolutionValue): string {
+		const mix = evolution
+			.map((item) => (evolution.length > 1 ? `${item.weight} × (${item.function})` : item.function))
+			.join(' + ');
+		return unit ? `${mix} [${unit}]` : mix;
+	}
+
+	// The evolution drawn by the chart for a field: an evolution_t value, or the function of an evolution element
+	function evolutionOfField(key: string, value: unknown): EvolutionValue | null {
+		const nested = parseEvolutionValue(value);
+		if (nested) return nested;
+		if (key === 'evolution' && activeElement?.type === 'evolution') {
+			const evolution = parseEvolutionFunction(value);
+			const unit = (activeElement as Record<string, unknown>).unit;
+			if (evolution) return { evolution, unit: typeof unit === 'string' ? unit : '' };
+		}
+		return null;
 	}
 
 	function formatLabel(value: string): string {
@@ -382,6 +411,7 @@
 						key !== 'type' &&
 						key !== 'other' &&
 						key !== 'modification' &&
+						!(activeElement.type === 'evolution' && key === 'unit') &&
 						!/^element[12]_element[12]_(new_value|value_to_modify)$/.test(key) &&
 						!(
 							activeRelation &&
@@ -499,7 +529,16 @@
 				{#each activeFields as [key, value]}
 					<div class="detail-row">
 						<dt>{formatLabel(key)}</dt>
-						{#if listItems(value)}
+						{#if evolutionOfField(key, value)}
+							{@const evolution = evolutionOfField(key, value)!}
+							<dd>
+								<EvolutionChart
+									evolution={evolution.evolution}
+									unit={evolution.unit}
+									distribution={activeDistribution}
+								/>
+							</dd>
+						{:else if listItems(value)}
 							<dd>
 								<ul class="value-list">
 									{#each listItems(value) ?? [] as item}

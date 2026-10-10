@@ -82,6 +82,11 @@ export function convertToPg(value: unknown): string {
 			return `(${convertToPgCompositeField(object.name)},${convertToPgCompositeField(JSON.stringify(object.value))})`;
 		}
 
+		// evolution_t stores its mix of functions as JSONB.
+		if ('evolution' in object && 'unit' in object && Object.keys(object).length === 2) {
+			return `(${convertToPgCompositeField(JSON.stringify(object.evolution))},${convertToPgCompositeField(object.unit)})`;
+		}
+
 		return `(${Object.values(object).map(convertToPgCompositeField).join(',')})`;
 	}
 
@@ -243,7 +248,7 @@ export class Genie {
 		- create_organisation (for create an organisation)
 		- create_person (for create a person)
 		- create_interest_group (for create an interest group. An interest group it's a thing that describe the will of certain person or organization, an interest group dosn't have structre like an organization it's simply a thing that represent interest of people like anti abortion, anti AI person etc.)
-		- create_evolution (for create an evolution. Create a evolution for all the things that can be dependant of a time variable like the price of a material resource, the level of accessible ressource of  a material resource,  etc.)
+		- create_evolution (for create an evolution. Create a evolution for all the things that can be dependant of a time variable like the price of a material resource, the level of accessible ressource of  a material resource,  etc. Its evolution is a mathematical function of the year t, usually one single function.)
 		- create_fact (for create a fact)
 		- create_event (for create an event)
 		- create_ranking (for create a ranking. Create a ranking for all the things that can be dependant of a ranking system like a political election, a competition, etc.)

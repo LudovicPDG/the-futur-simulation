@@ -46,7 +46,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 					evolution,
 					unit
 				) VALUES ($1, $2, $3)`,
-				[id, evolution.evolution, evolution.unit]
+				[id, JSON.stringify(evolution.evolution), evolution.unit]
 			);
 
 			await client.query('COMMIT');

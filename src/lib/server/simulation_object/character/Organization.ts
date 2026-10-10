@@ -69,8 +69,8 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 		const result = await db.query(`
 			SELECT 
 				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
-				c.financial_resource, c.power,
-				o.human_resource
+				to_jsonb(c.financial_resource) AS financial_resource, c.power,
+				to_jsonb(o.human_resource) AS human_resource
 			FROM organizations o
 			JOIN characters c ON o.id = c.id
 			JOIN facts f ON c.id = f.id

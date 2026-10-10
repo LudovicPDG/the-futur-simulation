@@ -44,7 +44,7 @@ export async function createDatabase() {
 		await client.query(`
 			DO $$ BEGIN
 				CREATE TYPE evolution_t AS (
-					evolution TEXT,
+					evolution JSONB,
 					unit TEXT
 				);
 			EXCEPTION
@@ -290,7 +290,7 @@ export async function createDatabase() {
 		await client.query(`
 			CREATE TABLE IF NOT EXISTS evolutions (
 				id UUID PRIMARY KEY DEFAULT gen_random_uuid() REFERENCES events(id) ON DELETE CASCADE,
-				evolution TEXT NOT NULL,
+				evolution JSONB NOT NULL,
 				unit TEXT NOT NULL
 			);
 		`);

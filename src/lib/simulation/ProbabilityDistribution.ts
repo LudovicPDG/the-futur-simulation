@@ -180,3 +180,67 @@ export function evaluateSkewNormalMixture(t: number, mixture: SkewNormalParamete
 
 	return totalWeight > 0 ? weightedSum / totalWeight : 0;
 }
+
+/**
+ * Normalizes a distribution received from the app into a clean list of skew normal components.
+ * Accepts the list itself, its JSON text, or the raw postgres array literal
+ * {"(xi,omega,alpha,weight)",...}.
+ */
+export function parseSkewNormalMixture(distribution: unknown): {
+	parameters: SkewNormalParameter[];
+	error: string | null;
+} {
+	if (!distribution) {
+		return { parameters: [], error: null };
+	}
+
+	let rawList: unknown = distribution;
+
+	if (typeof rawList === 'string') {
+		const trimmed = rawList.trim();
+		if (trimmed.startsWith('{"(') || trimmed.startsWith('{(')) {
+			rawList = [...trimmed.matchAll(/\([^)]*\)/g)].map((match) => match[0]);
+		} else if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+			try {
+				rawList = JSON.parse(trimmed);
+			} catch {
+				return { parameters: [], error: 'Invalid distribution format' };
+			}
+		} else {
+			return { parameters: [], error: null };
+		}
+	}
+
+	const array = Array.isArray(rawList) ? rawList : [rawList];
+	const parsed: SkewNormalParameter[] = [];
+
+	for (let item of array) {
+		// Composite literal "(xi,omega,alpha,weight)" left unparsed by pg
+		if (typeof item === 'string') {
+			const match = item.match(/^\s*\(([^)]*)\)\s*$/);
+			if (!match) continue;
+			const [xi, omega, alpha, weight] = match[1].split(',').map(Number);
+			item = { xi, omega, alpha, weight };
+		}
+		if (typeof item === 'object' && item !== null) {
+			const xi = Number((item as any).xi);
+			const omega = Number((item as any).omega);
+			const alpha = Number((item as any).alpha ?? 0);
+			const weight = Number((item as any).weight ?? 1);
+
+			if (!isNaN(xi) && !isNaN(omega) && omega > 0) {
+				parsed.push({
+					xi,
+					omega,
+					alpha: isNaN(alpha) ? 0 : alpha,
+					weight: isNaN(weight) || weight <= 0 ? 1 : weight
+				});
+			}
+		}
+	}
+
+	return {
+		parameters: parsed,
+		error: parsed.length === 0 && distribution ? 'No valid skew normal parameters' : null
+	};
+}

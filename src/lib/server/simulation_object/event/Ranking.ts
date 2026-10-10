@@ -62,7 +62,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 		const result = await db.query(`
 			SELECT 
 				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
-				r.rankings
+				to_jsonb(r.rankings) AS rankings
 			FROM rankings r
 			JOIN events e ON r.id = e.id
 			JOIN facts f ON e.id = f.id
