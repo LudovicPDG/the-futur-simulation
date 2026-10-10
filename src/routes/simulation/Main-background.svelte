@@ -140,6 +140,33 @@
 		return '';
 	}
 
+	function parsePgArray(value: string): string[] | null {
+		const input = value.trim();
+		if (!input.startsWith('{') || !input.endsWith('}')) return null;
+		const body = input.slice(1, -1);
+		if (body === '') return [];
+		const items: string[] = [];
+		let item = '';
+		let quoted = false;
+		for (let i = 0; i < body.length; i++) {
+			const c = body[i];
+			if (c === '\\' && quoted && i + 1 < body.length) item += body[++i];
+			else if (c === '"') quoted = !quoted;
+			else if (c === ',' && !quoted) {
+				items.push(item);
+				item = '';
+			} else item += c;
+		}
+		items.push(item);
+		return items;
+	}
+
+	function listItems(value: unknown): string[] | null {
+		const raw = typeof value === 'string' ? parsePgArray(value) : Array.isArray(value) ? value : null;
+		if (!raw || raw.length === 0) return null;
+		return raw.map((item) => formatValue(item));
+	}
+
 	function formatValue(value: unknown): string {
 		if (value === null || value === undefined || value === '') return '—';
 		if (typeof value === 'string') return localizedValue(value);
@@ -472,7 +499,17 @@
 				{#each activeFields as [key, value]}
 					<div class="detail-row">
 						<dt>{formatLabel(key)}</dt>
-						<dd>{formatValue(value)}</dd>
+						{#if listItems(value)}
+							<dd>
+								<ul class="value-list">
+									{#each listItems(value) ?? [] as item}
+										<li>{item}</li>
+									{/each}
+								</ul>
+							</dd>
+						{:else}
+							<dd>{formatValue(value)}</dd>
+						{/if}
 					</div>
 				{/each}
 			</dl>
@@ -802,6 +839,13 @@
 		line-height: 1.5;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
+	}
+
+	.value-list {
+		margin: 0;
+		padding-left: 18px;
+		display: grid;
+		gap: 4px;
 	}
 
 	:global(body.light) .detail-row dd,
