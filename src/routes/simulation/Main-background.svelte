@@ -407,6 +407,7 @@
 		activeElement
 			? Object.entries(activeElement as Record<string, unknown>).filter(
 					([key]) =>
+						key !== 'id' &&
 						key !== 'name' &&
 						key !== 'type' &&
 						key !== 'other' &&
@@ -536,6 +537,7 @@
 									evolution={evolution.evolution}
 									unit={evolution.unit}
 									distribution={activeDistribution}
+									showCloud={key === 'evolution' && activeElement?.type === 'evolution'}
 								/>
 							</dd>
 						{:else if listItems(value)}

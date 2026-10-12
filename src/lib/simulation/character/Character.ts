@@ -5,7 +5,15 @@ import { TranslationSchema } from '../Translation';
 
 export const CharacterSchema = FactSchema.extend({
 	type: z.string().default('character').describe('The type of character'),
-	financial_resource: EvolutionTypeSchema.describe('Financial resource of the character'),
+	financial_resource: EvolutionTypeSchema.extend({
+		unit: z
+			.string()
+			.describe(
+				'A currency (e.g. "EUR", "USD"). It must NEVER be an index, a score or a level of influence/power/popularity.'
+			)
+	}).describe(
+		'The money the character owns or controls (personal wealth, treasury, budget, funds), as an amount of money over time, in a currency. It is NOT the influence, power, popularity or political weight of the character (that belongs to "power"). Estimate it from real-world knowledge for a real character (e.g. the net worth/assets of a person, the budget of an organization or state). The function must return a realistic amount in the currency, never a constant like 1 or a dimensionless index.'
+	),
 	power: z.array(TranslationSchema).describe('list of what this character can do')
 });
 
