@@ -59,10 +59,11 @@ export const RelationSchema = z.object({
 		.min(0)
 		.max(1)
 		.describe(
-			'describe the impossibility that the relation happen. This number will after normalize the probability distribution.'
+			'describe the impossibility that the relation happen. This number will after normalize the start and end probability distributions.'
 		),
 
-	probability_distribution: ProbabilityDistributionSchema,
+	start_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the START of the relation (when it begins), as a mixture of skew normal distributions over time t in years.'),
+	end_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the END of the relation (when it stops), as a mixture of skew normal distributions over time t in years. It must be coherent with the start distribution (the end comes after the start); for something that never ends or is instantaneous, put it shortly after or at the start.'),
 	originality: z
 		.number()
 		.min(0)

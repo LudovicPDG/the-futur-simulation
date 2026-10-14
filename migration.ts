@@ -128,7 +128,8 @@ export async function createDatabase() {
 				description translation_t NOT NULL,
 				other other_fact_t[],
 				impossibility NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (impossibility >= 0 AND impossibility <= 1),
-				probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
+				start_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
+				end_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100)
 			);
 		`);
@@ -148,7 +149,8 @@ export async function createDatabase() {
 				element1_element2_connexions relation_connexion_t[] NOT NULL DEFAULT '{}',
 				element2_element1_connexions relation_connexion_t[] NOT NULL DEFAULT '{}',
 				impossibility NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (impossibility >= 0 AND impossibility <= 1),
-				probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
+				start_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
+				end_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100)
 			);
 		`);
@@ -211,10 +213,31 @@ export async function createDatabase() {
 				falsifiability_method translation_t NOT NULL,
 				source TEXT[] NOT NULL DEFAULT '{}',
 				impossibility NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (impossibility >= 0 AND impossibility <= 1),
-				probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
+				start_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
+				end_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100)
 			);
 		`);
+
+		// Migration : probability_distribution devient la distribution du début, et une distribution de fin est ajoutée
+		for (const table of ['facts', 'relations', 'proofs']) {
+			await client.query(`
+				DO $$ BEGIN
+					IF EXISTS (
+						SELECT 1 FROM information_schema.columns
+						WHERE table_name = '${table}' AND column_name = 'probability_distribution'
+					) THEN
+						ALTER TABLE ${table} RENAME COLUMN probability_distribution TO start_probability_distribution;
+					END IF;
+				END $$;
+			`);
+			await client.query(`
+				ALTER TABLE ${table}
+					ADD COLUMN IF NOT EXISTS end_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}';
+				UPDATE ${table} SET end_probability_distribution = start_probability_distribution
+					WHERE end_probability_distribution = '{}' AND start_probability_distribution <> '{}';
+			`);
+		}
 
 		// Lien d'une preuve vers le fait débattu et vers sa preuve parente (sous-preuves / débat)
 		await client.query(`

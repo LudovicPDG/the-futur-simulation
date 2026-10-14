@@ -220,7 +220,8 @@
 		const labels: Record<string, () => string> = {
 			description: m.simulation_field_description,
 			impossibility: m.simulation_field_impossibility,
-			probability_distribution: m.simulation_field_probability_distribution,
+			start_probability_distribution: m.simulation_field_start_probability_distribution,
+			end_probability_distribution: m.simulation_field_end_probability_distribution,
 			originality: m.simulation_field_originality,
 			name: m.simulation_field_name,
 			type: m.simulation_field_type,
@@ -425,7 +426,7 @@
 								'element2_element1_connexions'
 							].includes(key)
 						) &&
-						!['impossibility', 'probability_distribution', 'originality'].includes(key)
+						!['impossibility', 'start_probability_distribution', 'end_probability_distribution', 'originality'].includes(key)
 				)
 			: []
 	);
@@ -436,8 +437,13 @@
 				)
 			: []
 	);
-	const activeDistribution = $derived(
-		activeElement ? (activeElement as Record<string, unknown>).probability_distribution : undefined
+	const activeStartDistribution = $derived(
+		activeElement
+			? (activeElement as Record<string, unknown>).start_probability_distribution
+			: undefined
+	);
+	const activeEndDistribution = $derived(
+		activeElement ? (activeElement as Record<string, unknown>).end_probability_distribution : undefined
 	);
 	const activeImpossibility = $derived(
 		activeElement && typeof (activeElement as any).impossibility === 'number'
@@ -536,7 +542,7 @@
 								<EvolutionChart
 									evolution={evolution.evolution}
 									unit={evolution.unit}
-									distribution={activeDistribution}								/>
+									distribution={activeStartDistribution}								/>
 							</dd>
 						{:else if listItems(value)}
 							<dd>
@@ -641,14 +647,14 @@
 					</dl>
 				</section>
 			{/if}
-			{#if activeParameters.length > 0 || activeDistribution !== undefined}
+			{#if activeParameters.length > 0 || activeStartDistribution !== undefined || activeEndDistribution !== undefined}
 				<section class="parameter-details">
 					<h3>{m.simulation_section_parameters()}</h3>
-					{#if activeDistribution !== undefined}
+					{#if activeStartDistribution !== undefined}
 						<div class="distribution-block">
-							<h4>{m.simulation_field_probability_distribution()}</h4>
+							<h4>{m.simulation_field_start_probability_distribution()}</h4>
 							<ProbabilityDistributionChart
-								distribution={activeDistribution}
+								distribution={activeStartDistribution}
 								impossibility={activeImpossibility ?? 0}
 							/>
 							{#if activeImpossibility !== undefined}
@@ -657,6 +663,15 @@
 									<dd>{formatValue(activeImpossibility)}</dd>
 								</div>
 							{/if}
+						</div>
+					{/if}
+					{#if activeEndDistribution !== undefined}
+						<div class="distribution-block">
+							<h4>{m.simulation_field_end_probability_distribution()}</h4>
+							<ProbabilityDistributionChart
+								distribution={activeEndDistribution}
+								impossibility={activeImpossibility ?? 0}
+							/>
 						</div>
 					{/if}
 					<dl>

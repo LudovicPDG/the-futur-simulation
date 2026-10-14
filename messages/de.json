@@ -69,6 +69,8 @@
 	"simulation_field_description": "Beschreibung",
 	"simulation_field_impossibility": "Unmöglichkeit",
 	"simulation_field_probability_distribution": "Wahrscheinlichkeitsverteilung",
+	"simulation_field_start_probability_distribution": "Wahrscheinlichkeitsverteilung des Beginns",
+	"simulation_field_end_probability_distribution": "Wahrscheinlichkeitsverteilung des Endes",
 	"simulation_field_originality": "Originalität",
 	"simulation_field_name": "Name",
 	"simulation_field_type": "Typ",

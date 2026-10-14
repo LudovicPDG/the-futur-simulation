@@ -20,9 +20,10 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 					description,
 					other,
 					impossibility,
-					probability_distribution,
+					start_probability_distribution,
+					end_probability_distribution,
 					originality
-				) VALUES ($1, $2, $3, $4, $5, $6, $7)
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 				RETURNING id`,
 				[
 					convertToPg(organization.name),
@@ -30,7 +31,8 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 					convertToPg(organization.description),
 					convertToPgNullable(organization.other),
 					organization.impossibility,
-					convertToPg(organization.probability_distribution),
+					convertToPg(organization.start_probability_distribution),
+					convertToPg(organization.end_probability_distribution),
 					organization.originality
 				]
 			);
@@ -68,7 +70,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 	async get_all(): Promise<OrganizationData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.start_probability_distribution, f.end_probability_distribution, f.originality,
 				to_jsonb(c.financial_resource) AS financial_resource, c.power,
 				to_jsonb(o.human_resource) AS human_resource
 			FROM organizations o
@@ -84,7 +86,8 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 			description: row.description,
 			other: row.other,
 			impossibility: Number(row.impossibility),
-			probability_distribution: row.probability_distribution,
+			start_probability_distribution: row.start_probability_distribution,
+			end_probability_distribution: row.end_probability_distribution,
 			originality: Number(row.originality),
 			financial_resource: row.financial_resource,
 			power: row.power || [],

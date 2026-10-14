@@ -23,9 +23,10 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 					description,
 					other,
 					impossibility,
-					probability_distribution,
+					start_probability_distribution,
+					end_probability_distribution,
 					originality
-				) VALUES ($1, $2, $3, $4, $5, $6, $7)
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 				RETURNING id`,
 				[
 					convertToPg(group.name),
@@ -33,7 +34,8 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 					convertToPg(group.description),
 					convertToPgNullable(group.other),
 					group.impossibility,
-					convertToPg(group.probability_distribution),
+					convertToPg(group.start_probability_distribution),
+					convertToPg(group.end_probability_distribution),
 					group.originality
 				]
 			);
@@ -81,7 +83,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 	async get_all(): Promise<InterestGroupData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.start_probability_distribution, f.end_probability_distribution, f.originality,
 				to_jsonb(c.financial_resource) AS financial_resource, c.power,
 				to_jsonb(o.human_resource) AS human_resource,
 				ig.willing, to_jsonb(ig.satisfaction) AS satisfaction
@@ -98,7 +100,8 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 			description: row.description,
 			other: row.other,
 			impossibility: Number(row.impossibility),
-			probability_distribution: row.probability_distribution,
+			start_probability_distribution: row.start_probability_distribution,
+			end_probability_distribution: row.end_probability_distribution,
 			originality: Number(row.originality),
 			financial_resource: row.financial_resource,
 			power: row.power || [],

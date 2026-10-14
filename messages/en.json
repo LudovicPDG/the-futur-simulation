@@ -69,6 +69,8 @@
 	"simulation_field_description": "Description",
 	"simulation_field_impossibility": "Impossibility",
 	"simulation_field_probability_distribution": "Probability distribution",
+	"simulation_field_start_probability_distribution": "Start probability distribution",
+	"simulation_field_end_probability_distribution": "End probability distribution",
 	"simulation_field_originality": "Originality",
 	"simulation_field_name": "Name",
 	"simulation_field_type": "Type",

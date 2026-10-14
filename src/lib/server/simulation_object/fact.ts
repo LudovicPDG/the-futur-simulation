@@ -16,9 +16,10 @@ export class FactServer extends BaseSimulationObject<FactData> {
 				description,
 				other,
 				impossibility,
-				probability_distribution,
+				start_probability_distribution,
+				end_probability_distribution,
 				originality
-			) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			RETURNING id`,
 			[
 				convertToPg(fact.name),
@@ -26,7 +27,8 @@ export class FactServer extends BaseSimulationObject<FactData> {
 				convertToPg(fact.description),
 				convertToPgNullable(fact.other),
 				fact.impossibility,
-				convertToPg(fact.probability_distribution),
+				convertToPg(fact.start_probability_distribution),
+				convertToPg(fact.end_probability_distribution),
 				fact.originality
 			]
 		);
@@ -47,7 +49,8 @@ export class FactServer extends BaseSimulationObject<FactData> {
 			description: row.description,
 			other: row.other_json,
 			impossibility: Number(row.impossibility),
-			probability_distribution: row.probability_distribution,
+			start_probability_distribution: row.start_probability_distribution,
+			end_probability_distribution: row.end_probability_distribution,
 			originality: Number(row.originality)
 		}));
 	}

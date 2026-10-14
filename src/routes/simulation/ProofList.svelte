@@ -134,10 +134,19 @@
 						<dd>{format(proof.originality)}</dd>
 					</div>
 					<div class="param-row">
-						<dt>{m.simulation_field_probability_distribution()}</dt>
+						<dt>{m.simulation_field_start_probability_distribution()}</dt>
 						<dd>
 							<ProbabilityDistributionChart
-								distribution={proof.probability_distribution}
+								distribution={proof.start_probability_distribution}
+								impossibility={proof.impossibility ?? 0}
+							/>
+						</dd>
+					</div>
+					<div class="param-row">
+						<dt>{m.simulation_field_end_probability_distribution()}</dt>
+						<dd>
+							<ProbabilityDistributionChart
+								distribution={proof.end_probability_distribution}
 								impossibility={proof.impossibility ?? 0}
 							/>
 						</dd>

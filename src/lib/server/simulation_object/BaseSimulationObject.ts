@@ -10,7 +10,8 @@ export abstract class BaseSimulationObject<
 		description?: any;
 		other?: any;
 		impossibility?: number;
-		probability_distribution?: any;
+		start_probability_distribution?: any;
+		end_probability_distribution?: any;
 		originality?: number;
 	}
 > {
@@ -33,7 +34,8 @@ export abstract class BaseSimulationObject<
 				const { ProofServer } = await import('./Proof');
 				await ProofServer.instance.createInitialProof(model_name, level_of_reasoning, prompt, this.proofOwner === 'relation' ? { relationId: id } : { factId: id }, {
 						impossibility: data.impossibility,
-						probability_distribution: data.probability_distribution,
+						start_probability_distribution: data.start_probability_distribution,
+						end_probability_distribution: data.end_probability_distribution,
 						originality: data.originality
 					});
 			} catch (error) {

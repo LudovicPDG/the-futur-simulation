@@ -20,9 +20,10 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 					description,
 					other,
 					impossibility,
-					probability_distribution,
+					start_probability_distribution,
+					end_probability_distribution,
 					originality
-				) VALUES ($1, $2, $3, $4, $5, $6, $7)
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 				RETURNING id`,
 				[
 					convertToPg(action.name),
@@ -30,7 +31,8 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 					convertToPg(action.description),
 					convertToPgNullable(action.other),
 					action.impossibility,
-					convertToPg(action.probability_distribution),
+					convertToPg(action.start_probability_distribution),
+					convertToPg(action.end_probability_distribution),
 					action.originality
 				]
 			);
@@ -65,7 +67,7 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 	async get_all(): Promise<ActionData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.start_probability_distribution, f.end_probability_distribution, f.originality,
 				to_jsonb(a.material_resource_used) AS material_resource_used, to_jsonb(a.fund_used) AS fund_used, to_jsonb(a.human_mobilized) AS human_mobilized
 			FROM actions a
 			JOIN facts f ON a.id = f.id
@@ -78,7 +80,8 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 			description: row.description,
 			other: row.other,
 			impossibility: Number(row.impossibility),
-			probability_distribution: row.probability_distribution,
+			start_probability_distribution: row.start_probability_distribution,
+			end_probability_distribution: row.end_probability_distribution,
 			originality: Number(row.originality),
 			material_resource_used: row.material_resource_used || [],
 			fund_used: row.fund_used,

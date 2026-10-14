@@ -20,9 +20,10 @@ export class EventServer extends BaseSimulationObject<EventData> {
 					description,
 					other,
 					impossibility,
-					probability_distribution,
+					start_probability_distribution,
+					end_probability_distribution,
 					originality
-				) VALUES ($1, $2, $3, $4, $5, $6, $7)
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 				RETURNING id`,
 				[
 					convertToPg(event.name),
@@ -30,7 +31,8 @@ export class EventServer extends BaseSimulationObject<EventData> {
 					convertToPg(event.description),
 					convertToPgNullable(event.other),
 					event.impossibility,
-					convertToPg(event.probability_distribution),
+					convertToPg(event.start_probability_distribution),
+					convertToPg(event.end_probability_distribution),
 					event.originality
 				]
 			);
@@ -52,7 +54,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 	async get_all(): Promise<EventData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.probability_distribution, f.originality
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.start_probability_distribution, f.end_probability_distribution, f.originality
 			FROM events e
 			JOIN facts f ON e.id = f.id
 			WHERE f.type = 'event'
@@ -65,7 +67,8 @@ export class EventServer extends BaseSimulationObject<EventData> {
 			description: row.description,
 			other: row.other,
 			impossibility: Number(row.impossibility),
-			probability_distribution: row.probability_distribution,
+			start_probability_distribution: row.start_probability_distribution,
+			end_probability_distribution: row.end_probability_distribution,
 			originality: Number(row.originality)
 		}));
 	}
