@@ -15,14 +15,11 @@
 		evolution,
 		unit = '',
 		distribution,
-		showCloud = true,
 		width = 320,
 		height = 210
 	}: {
 		evolution?: unknown;
 		unit?: string;
-		/** Draw the uncertainty cloud (not wanted for the evolution types nested in other elements) */
-		showCloud?: boolean;
 		/** Probability distribution of the date of the fact: it drives the width of the uncertainty cloud */
 		distribution?: unknown;
 		width?: number;
@@ -112,10 +109,7 @@
 			range *
 			(WIDTH_MIN + (WIDTH_MAX - WIDTH_MIN) * Math.pow(1 - certaintyAt(t), WIDTH_SHAPE));
 
-		const curve: CurvePoint[] = values.map((d) => ({
-			...d,
-			width: showCloud ? widthAt(d.t) : 0
-		}));
+		const curve: CurvePoint[] = values.map((d) => ({ ...d, width: widthAt(d.t) }));
 
 		return { valueAt, widthAt, certaintyAt, curve, peaks, outsidePeaks };
 	});
@@ -138,7 +132,7 @@
 			.curve(d3.curveMonotoneX);
 		// The cloud is the density of a normal law of standard deviation w/2 around the curve (so that
 		// +-w is about +-2 sigma), drawn as nested bands: the denser the color, the more probable.
-		const cloud = (showCloud ? CLOUD_LEVELS : []).map((level) =>
+		const cloud = CLOUD_LEVELS.map((level) =>
 			d3
 				.area<CurvePoint>()
 				.x((d) => xScale(d.t))
@@ -293,12 +287,10 @@
 					{m.simulation_field_value()} :
 					<span class="readout-value">{preciseFormatter.format(active.value)} {unit}</span>
 				</span>
-				{#if showCloud}
-					<span>
-						{m.simulation_evolution_uncertainty()} :
-						<span class="readout-value">± {preciseFormatter.format(active.width)} {unit}</span>
-					</span>
-				{/if}
+				<span>
+					{m.simulation_evolution_uncertainty()} :
+					<span class="readout-value">± {preciseFormatter.format(active.width)} {unit}</span>
+				</span>
 			{:else}
 				<span class="readout-empty">—</span>
 			{/if}
@@ -306,9 +298,7 @@
 
 		<div class="legend">
 			<span class="legend-item"><span class="swatch line"></span>{m.simulation_evolution_legend_curve()}</span>
-			{#if showCloud}
-				<span class="legend-item"><span class="swatch cloud"></span>{m.simulation_evolution_legend_cloud()}</span>
-			{/if}
+			<span class="legend-item"><span class="swatch cloud"></span>{m.simulation_evolution_legend_cloud()}</span>
 		</div>
 	{/if}
 </div>

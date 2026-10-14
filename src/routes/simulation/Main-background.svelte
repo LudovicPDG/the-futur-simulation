@@ -536,9 +536,7 @@
 								<EvolutionChart
 									evolution={evolution.evolution}
 									unit={evolution.unit}
-									distribution={activeDistribution}
-									showCloud={key === 'evolution' && activeElement?.type === 'evolution'}
-								/>
+									distribution={activeDistribution}								/>
 							</dd>
 						{:else if listItems(value)}
 							<dd>
