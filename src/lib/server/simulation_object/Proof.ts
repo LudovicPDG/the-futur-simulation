@@ -143,7 +143,7 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		prompt: string,
 		target: ProofTarget,
 		factValues: Partial<
-			Pick<ProofData, 'impossibility' | 'start_probability_distribution' | 'end_probability_distribution' | 'originality'>
+			Pick<ProofData, 'impossibility' | 'end_impossibility' | 'start_probability_distribution' | 'end_probability_distribution' | 'originality'>
 		> = {}
 	): Promise<ProofData> {
 		const generated = await this.generateForTarget(
@@ -260,13 +260,14 @@ ${instruction}`
 				falsifiability_method,
 				source,
 				impossibility,
+				end_impossibility,
 				start_probability_distribution,
 				end_probability_distribution,
 				originality,
 				fact_id,
 				relation_id,
 				parent_proof_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 			[
 				proof.id ?? randomUUID(),
 				convertToPg(proof.name),
@@ -276,6 +277,7 @@ ${instruction}`
 				convertToPg(proof.falsifiability_method),
 				convertToPg(proof.source || []),
 				proof.impossibility,
+				proof.end_impossibility,
 				convertToPg(proof.start_probability_distribution),
 				convertToPg(proof.end_probability_distribution),
 				proof.originality,
@@ -303,6 +305,7 @@ ${instruction}`
 			falsifiability_method: row.falsifiability_method,
 			source: row.source || [],
 			impossibility: Number(row.impossibility),
+			end_impossibility: Number(row.end_impossibility),
 			start_probability_distribution: row.start_probability_distribution,
 			end_probability_distribution: row.end_probability_distribution,
 			originality: Number(row.originality),

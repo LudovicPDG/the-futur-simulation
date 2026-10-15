@@ -381,6 +381,13 @@ export async function createDatabase() {
 			ON proofs(parent_proof_id);
 		`);
 
+		// Impossibility of the END distribution (impossibility is the one of the start distribution)
+		for (const table of ['facts', 'relations', 'proofs']) {
+			await client.query(
+				`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS end_impossibility NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (end_impossibility >= 0 AND end_impossibility <= 1);`
+			);
+		}
+
 		await client.query('COMMIT');
 		console.log('✅ Migration terminée avec succès !');
 	} catch (error) {

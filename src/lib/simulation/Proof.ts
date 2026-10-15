@@ -19,7 +19,14 @@ export const ProofSchema = z.object({
 		.min(0)
 		.max(1)
 		.describe(
-			'describe the impossibility that the proof happen. This number will after normalize the start and end probability distributions.'
+			'Probability (0 to 1) that the START of the proof never happens. The start distribution is capped at 1 - impossibility.'
+		),
+	end_impossibility: z
+		.number()
+		.min(0)
+		.max(1)
+		.describe(
+			'Probability (0 to 1) that the END of the proof never happens. The end distribution is capped at 1 - end_impossibility.'
 		),
 	start_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the START of the proof (when it begins), as a mixture of skew normal distributions over time t in years.'),
 	end_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the END of the proof (when it stops), as a mixture of skew normal distributions over time t in years. It must be coherent with the start distribution (the end comes after the start); for something that never ends or is instantaneous, put it shortly after or at the start.'),

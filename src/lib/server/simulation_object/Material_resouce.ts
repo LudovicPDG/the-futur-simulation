@@ -23,10 +23,11 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 					description,
 					other,
 					impossibility,
+					end_impossibility,
 					start_probability_distribution,
 					end_probability_distribution,
 					originality
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 				RETURNING id`,
 				[
 					convertToPg(resource.name),
@@ -34,6 +35,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 					convertToPg(resource.description),
 					convertToPgNullable(resource.other),
 					resource.impossibility,
+					resource.end_impossibility,
 					convertToPg(resource.start_probability_distribution),
 					convertToPg(resource.end_probability_distribution),
 					resource.originality
@@ -70,7 +72,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 	async get_all(): Promise<MaterialResourceData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.start_probability_distribution, f.end_probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.end_impossibility, f.start_probability_distribution, f.end_probability_distribution, f.originality,
 				to_jsonb(m.number_of_units) AS number_of_units, to_jsonb(m.financial_value) AS financial_value, m.power
 			FROM material_resources m
 			JOIN facts f ON m.id = f.id
@@ -83,6 +85,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 			description: row.description,
 			other: row.other,
 			impossibility: Number(row.impossibility),
+			end_impossibility: Number(row.end_impossibility),
 			start_probability_distribution: row.start_probability_distribution,
 			end_probability_distribution: row.end_probability_distribution,
 			originality: Number(row.originality),

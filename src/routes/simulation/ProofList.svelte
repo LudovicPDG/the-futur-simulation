@@ -147,13 +147,17 @@
 						<dd>
 							<ProbabilityDistributionChart
 								distribution={proof.end_probability_distribution}
-								impossibility={proof.impossibility ?? 0}
+								impossibility={proof.end_impossibility ?? 0}
 							/>
 						</dd>
 					</div>
 					<div class="param-row impossibility">
 						<dt>{m.simulation_field_impossibility()}</dt>
 						<dd>{format(proof.impossibility)}</dd>
+					</div>
+					<div class="param-row impossibility">
+						<dt>{m.simulation_field_impossibility()} ({m.simulation_field_end_probability_distribution()})</dt>
+						<dd>{format(proof.end_impossibility)}</dd>
 					</div>
 				</dl>
 			{/if}

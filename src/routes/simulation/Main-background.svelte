@@ -426,7 +426,7 @@
 								'element2_element1_connexions'
 							].includes(key)
 						) &&
-						!['impossibility', 'start_probability_distribution', 'end_probability_distribution', 'originality'].includes(key)
+						!['impossibility', 'end_impossibility', 'start_probability_distribution', 'end_probability_distribution', 'originality'].includes(key)
 				)
 			: []
 	);
@@ -495,6 +495,11 @@
 	const activeImpossibility = $derived(
 		activeElement && typeof (activeElement as any).impossibility === 'number'
 			? ((activeElement as any).impossibility as number)
+			: undefined
+	);
+	const activeEndImpossibility = $derived(
+		activeElement && typeof (activeElement as any).end_impossibility === 'number'
+			? ((activeElement as any).end_impossibility as number)
 			: undefined
 	);
 	const activeOther = $derived(
@@ -717,8 +722,14 @@
 							<h4>{distributionTitle('end')}</h4>
 							<ProbabilityDistributionChart
 								distribution={activeEndDistribution}
-								impossibility={activeImpossibility ?? 0}
+								impossibility={activeEndImpossibility ?? 0}
 							/>
+							{#if activeEndImpossibility !== undefined}
+								<div class="detail-row impossibility-row">
+									<dt>{m.simulation_field_impossibility()}</dt>
+									<dd>{formatValue(activeEndImpossibility)}</dd>
+								</div>
+							{/if}
 						</div>
 					{/if}
 					<dl>

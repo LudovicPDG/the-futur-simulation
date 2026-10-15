@@ -34,14 +34,92 @@ export const SkewNormalParameterSchema = z.object({
 
 export type SkewNormalParameter = z.infer<typeof SkewNormalParameterSchema>;
 
+/**
+ * A precise moment, as the model writes it (UTC). It is converted to the decimal year xi of a skew
+ * normal component by dateToDecimalYear.
+ */
+export const DateTimeSchema = z.object({
+	year: z.number().int().describe('The year (e.g. 1977).'),
+	month: z.number().int().min(1).max(12).describe('The month, from 1 (January) to 12 (December).'),
+	day: z.number().int().min(1).max(31).describe('The day of the month, from 1 to 31.'),
+	hour: z.number().int().min(0).max(23).describe('The hour, from 0 to 23 (use 12 if unknown).'),
+	minute: z.number().int().min(0).max(59).describe('The minute, from 0 to 59 (use 0 if unknown).')
+});
+
+export type DateTime = z.infer<typeof DateTimeSchema>;
+
+/** A skew normal component as the model writes it: the most probable moment instead of xi. */
+export const DatedSkewNormalParameterSchema = z.object({
+	date: DateTimeSchema.describe(
+		'The most probable moment, as precise as possible (year, month, day, hour, minute). It is converted to the location xi of the skew normal.'
+	),
+	omega: z
+		.number()
+		.positive()
+		.describe(
+			'Scale parameter (omega): the uncertainty of the date, in years (must be > 0). Use a very small value for a precisely documented moment (0.0005 = about 4 hours, 0.003 = about 1 day), a larger one when the date is only an estimate (0.5 = about 6 months, 5 = 5 years).'
+		),
+	alpha: z
+		.number()
+		.default(0)
+		.describe(
+			'Shape/skewness parameter (alpha): asymmetry of the distribution (0 = symmetric, >0 = tail towards the future, <0 = tail towards the past).'
+		),
+	weight: z
+		.number()
+		.positive()
+		.default(1)
+		.describe('Mixture component weight: relative weight of this scenario in the overall mixture.')
+});
+
 export const ProbabilityDistributionSchema = z
-	.array(SkewNormalParameterSchema)
+	.array(DatedSkewNormalParameterSchema)
 	.min(1)
 	.describe(
-		'The probability distribution as a mixture of skew normal distributions over time variable t in years. Each element in the array represents a scenario/component with xi (most probable date/time in years), omega (uncertainty/dispersion), alpha (asymmetry/skewness), and optional weight.'
+		'The probability distribution as a mixture of skew normal distributions over time. Each element represents a scenario with the most probable moment (year, month, day, hour, minute), omega (uncertainty in years), alpha (asymmetry) and weight. It is stored as the decimal year xi of each moment.'
 	);
 
 export type ProbabilityDistribution = z.infer<typeof ProbabilityDistributionSchema>;
+
+/** Decimal year of a moment (UTC): 2026.75 = October 2026, the same convention as the time axis. */
+export function dateToDecimalYear(date: DateTime): number {
+	const moment = new Date(0);
+	moment.setUTCFullYear(date.year, date.month - 1, date.day);
+	moment.setUTCHours(date.hour, date.minute, 0, 0);
+	const start = new Date(0);
+	start.setUTCFullYear(date.year, 0, 1);
+	start.setUTCHours(0, 0, 0, 0);
+	const end = new Date(0);
+	end.setUTCFullYear(date.year + 1, 0, 1);
+	end.setUTCHours(0, 0, 0, 0);
+	return date.year + (moment.getTime() - start.getTime()) / (end.getTime() - start.getTime());
+}
+
+/**
+ * Replaces, in whatever the model generated, the dated components of every *_probability_distribution
+ * by the stored form { xi, omega, alpha, weight }.
+ */
+export function convertDatedDistributions<T>(value: T): T {
+	if (Array.isArray(value)) return value.map(convertDatedDistributions) as T;
+	if (typeof value !== 'object' || value === null) return value;
+	const result: Record<string, unknown> = {};
+	for (const [key, item] of Object.entries(value)) {
+		result[key] =
+			key.endsWith('_probability_distribution') && Array.isArray(item)
+				? item.map((component) =>
+						typeof component === 'object' && component !== null && 'date' in component
+							? {
+									xi: dateToDecimalYear(component.date as DateTime),
+									omega: component.omega,
+									alpha: component.alpha ?? 0,
+									weight: component.weight ?? 1
+								}
+							: component
+					)
+				: convertDatedDistributions(item);
+	}
+	return result as T;
+}
 
 /**
  * Standard Normal PDF: phi(x) = (1 / sqrt(2*pi)) * exp(-x^2 / 2)

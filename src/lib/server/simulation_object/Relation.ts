@@ -14,6 +14,7 @@ const commonElementProperties = [
 	'description',
 	'other',
 	'impossibility',
+	'end_impossibility',
 	'start_probability_distribution',
 	'end_probability_distribution',
 	'originality'
@@ -174,10 +175,11 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				element1_element2_new_value,
 				element2_element1_new_value,
 				impossibility,
+				end_impossibility,
 				start_probability_distribution,
 				end_probability_distribution,
 				originality
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
 			[
 				convertToPg(relation.name),
 				convertToPg(relation.description),
@@ -202,6 +204,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				JSON.stringify(relation.element1_element2_new_value ?? []),
 				JSON.stringify(relation.element2_element1_new_value ?? []),
 				relation.impossibility,
+				relation.end_impossibility,
 				convertToPg(relation.start_probability_distribution),
 				convertToPg(relation.end_probability_distribution),
 				relation.originality
@@ -232,6 +235,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			element1_element2_new_value: row.element1_element2_new_value ?? [],
 			element2_element1_new_value: row.element2_element1_new_value ?? [],
 			impossibility: Number(row.impossibility),
+			end_impossibility: Number(row.end_impossibility),
 			start_probability_distribution: row.start_probability_distribution,
 			end_probability_distribution: row.end_probability_distribution,
 			originality: Number(row.originality)

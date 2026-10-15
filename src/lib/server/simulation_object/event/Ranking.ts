@@ -20,10 +20,11 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 					description,
 					other,
 					impossibility,
+					end_impossibility,
 					start_probability_distribution,
 					end_probability_distribution,
 					originality
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 				RETURNING id`,
 				[
 					convertToPg(ranking.name),
@@ -31,6 +32,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 					convertToPg(ranking.description),
 					convertToPgNullable(ranking.other),
 					ranking.impossibility,
+					ranking.end_impossibility,
 					convertToPg(ranking.start_probability_distribution),
 					convertToPg(ranking.end_probability_distribution),
 					ranking.originality
@@ -63,7 +65,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 	async get_all(): Promise<RankingData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.start_probability_distribution, f.end_probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.end_impossibility, f.start_probability_distribution, f.end_probability_distribution, f.originality,
 				to_jsonb(r.rankings) AS rankings
 			FROM rankings r
 			JOIN events e ON r.id = e.id
@@ -77,6 +79,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 			description: row.description,
 			other: row.other,
 			impossibility: Number(row.impossibility),
+			end_impossibility: Number(row.end_impossibility),
 			start_probability_distribution: row.start_probability_distribution,
 			end_probability_distribution: row.end_probability_distribution,
 			originality: Number(row.originality),

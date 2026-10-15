@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { OPENROUTER_API_KEY } from '$env/static/private';
 import { Genie, convertToPg } from './Genie';
+import { convertDatedDistributions } from '$lib/simulation/ProbabilityDistribution';
 import { db } from '../utils/database';
 
 export abstract class BaseSimulationObject<
@@ -10,6 +11,7 @@ export abstract class BaseSimulationObject<
 		description?: any;
 		other?: any;
 		impossibility?: number;
+		end_impossibility?: number;
 		start_probability_distribution?: any;
 		end_probability_distribution?: any;
 		originality?: number;
@@ -34,6 +36,7 @@ export abstract class BaseSimulationObject<
 				const { ProofServer } = await import('./Proof');
 				await ProofServer.instance.createInitialProof(model_name, level_of_reasoning, prompt, this.proofOwner === 'relation' ? { relationId: id } : { factId: id }, {
 						impossibility: data.impossibility,
+						end_impossibility: data.end_impossibility,
 						start_probability_distribution: data.start_probability_distribution,
 						end_probability_distribution: data.end_probability_distribution,
 						originality: data.originality
@@ -124,7 +127,8 @@ export abstract class BaseSimulationObject<
 			throw new Error('OpenRouter returned invalid JSON');
 		}
 
-		const actionResult = schema.parse(json);
+		// The model writes moments (year, month, day, hour, minute): they become the decimal years stored
+		const actionResult = convertDatedDistributions(schema.parse(json));
 		console.log(`${this.typeName} parsed:`, actionResult);
 
 		return actionResult;

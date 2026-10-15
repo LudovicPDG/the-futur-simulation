@@ -41,11 +41,19 @@ export const FactSchema = z.object({
 		.min(0)
 		.max(1)
 		.describe(
-			'describe the impossibility of the fact. This number will after normalize the start and end probability distributions.'
+			'Probability (0 to 1) that the START of the fact never happens (0 = it certainly begins, e.g. a person who is born). The start distribution is capped at 1 - impossibility.'
 		),
 
-	start_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the START of the fact (when it begins), as a mixture of skew normal distributions over time t in years.'),
-	end_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the END of the fact (when it stops), as a mixture of skew normal distributions over time t in years. It must be coherent with the start distribution (the end comes after the start); for something that never ends or is instantaneous, put it shortly after or at the start.'),
+	end_impossibility: z
+		.number()
+		.min(0)
+		.max(1)
+		.describe(
+			'Probability (0 to 1) that the END of the fact never happens (0 = it certainly ends, e.g. every person dies one day; high for something that may last forever, e.g. an organization that may never be dissolved). The end distribution is capped at 1 - end_impossibility.'
+		),
+
+	start_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the START of the fact (when it begins), as a mixture of skew normal distributions. Give the most probable moment as precisely as possible (year, month, day, hour, minute).'),
+	end_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the END of the fact (when it stops), as a mixture of skew normal distributions. Give the most probable moment as precisely as possible (year, month, day, hour, minute). It must be coherent with the start distribution (the end comes after the start); for something that never ends or is instantaneous, put it shortly after or at the start.'),
 
 	originality: z
 		.number()
