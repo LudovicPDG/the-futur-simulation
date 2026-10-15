@@ -437,6 +437,53 @@
 				)
 			: []
 	);
+	const distributionTitles: Record<string, Record<'start' | 'end', () => string>> = {
+		person: {
+			start: m.simulation_distribution_title_start_person,
+			end: m.simulation_distribution_title_end_person
+		},
+		organization: {
+			start: m.simulation_distribution_title_start_organization,
+			end: m.simulation_distribution_title_end_organization
+		},
+		interest_group: {
+			start: m.simulation_distribution_title_start_interest_group,
+			end: m.simulation_distribution_title_end_interest_group
+		},
+		event: {
+			start: m.simulation_distribution_title_start_event,
+			end: m.simulation_distribution_title_end_event
+		},
+		ranking: {
+			start: m.simulation_distribution_title_start_ranking,
+			end: m.simulation_distribution_title_end_ranking
+		},
+		evolution: {
+			start: m.simulation_distribution_title_start_evolution,
+			end: m.simulation_distribution_title_end_evolution
+		},
+		action: {
+			start: m.simulation_distribution_title_start_action,
+			end: m.simulation_distribution_title_end_action
+		},
+		fact: {
+			start: m.simulation_distribution_title_start_fact,
+			end: m.simulation_distribution_title_end_fact
+		},
+		material_resource: {
+			start: m.simulation_distribution_title_start_material_resource,
+			end: m.simulation_distribution_title_end_material_resource
+		}
+	};
+	function distributionTitle(kind: 'start' | 'end'): string {
+		const type = (activeElement as Record<string, unknown> | null | undefined)?.type;
+		const title = typeof type === 'string' ? distributionTitles[type]?.[kind] : undefined;
+		return title
+			? title()
+			: kind === 'start'
+				? m.simulation_field_start_probability_distribution()
+				: m.simulation_field_end_probability_distribution();
+	}
 	const activeStartDistribution = $derived(
 		activeElement
 			? (activeElement as Record<string, unknown>).start_probability_distribution
@@ -652,7 +699,7 @@
 					<h3>{m.simulation_section_parameters()}</h3>
 					{#if activeStartDistribution !== undefined}
 						<div class="distribution-block">
-							<h4>{m.simulation_field_start_probability_distribution()}</h4>
+							<h4>{distributionTitle('start')}</h4>
 							<ProbabilityDistributionChart
 								distribution={activeStartDistribution}
 								impossibility={activeImpossibility ?? 0}
@@ -667,7 +714,7 @@
 					{/if}
 					{#if activeEndDistribution !== undefined}
 						<div class="distribution-block">
-							<h4>{m.simulation_field_end_probability_distribution()}</h4>
+							<h4>{distributionTitle('end')}</h4>
 							<ProbabilityDistributionChart
 								distribution={activeEndDistribution}
 								impossibility={activeImpossibility ?? 0}
