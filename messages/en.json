@@ -107,7 +107,7 @@
 	"simulation_evolution_function_hint": "f(t), with t = the year",
 	"simulation_evolution_uncertainty": "Uncertainty",
 	"simulation_evolution_legend_curve": "Evolution",
-	"simulation_evolution_legend_cloud": "Uncertainty cloud (wider where the date is unlikely)",
+	"simulation_evolution_legend_cloud": "Uncertainty cloud (width proportional to the uncertainty parameter)",
 	"simulation_field_rankings": "Ranking entries",
 	"simulation_field_material_resource_used": "Materials used",
 	"simulation_field_fund_used": "Funds used",

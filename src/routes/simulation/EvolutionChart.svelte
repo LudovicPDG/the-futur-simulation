@@ -2,26 +2,20 @@
 	import * as d3 from 'd3';
 	import {
 		buildEvolutionFunction,
+		buildEvolutionUncertainty,
 		parseEvolutionFunction
 	} from '$lib/simulation/event/EvolutionFunction';
-	import {
-		evaluateSkewNormalMixture,
-		parseSkewNormalMixture
-	} from '$lib/simulation/ProbabilityDistribution';
 	import * as m from '$lib/paraglide/messages';
 	import { getLocale } from '$lib/paraglide/runtime';
 
 	let {
 		evolution,
 		unit = '',
-		distribution,
 		width = 320,
 		height = 210
 	}: {
 		evolution?: unknown;
 		unit?: string;
-		/** Probability distribution of the date of the fact: it drives the width of the uncertainty cloud */
-		distribution?: unknown;
 		width?: number;
 		height?: number;
 	} = $props();
@@ -31,13 +25,8 @@
 	const STEP = 0.25;
 	// Half-widths of the nested bands of the cloud, in standard deviations (w = 2 sigma)
 	const CLOUD_LEVELS = [2.4, 2, 1.6, 1.2, 0.8, 0.4];
-	// Cloud width, as a share of the vertical range of the curve
-	const WIDTH_MIN = 0.03;
-	const WIDTH_MAX = 0.3;
-	const WIDTH_SHAPE = 0.8;
-	// Smallest spread (in years) of the distribution used for the cloud: a date known to the day
-	// would otherwise make a dip thinner than a pixel on a 100 years axis
-	const MIN_SPREAD = 2;
+	// Thinnest cloud, as a share of the vertical range of the curve (keeps it visible when the uncertainty is 0)
+	const MIN_WIDTH_SHARE = 0.015;
 
 	interface CurvePoint {
 		t: number;
@@ -65,36 +54,7 @@
 		if (!components) return null;
 		const valueAt = buildEvolutionFunction(components);
 
-		// Certainty at t: density of the probability distribution relative to its peak. Each component
-		// is widened to at least MIN_SPREAD years (like a blur at the resolution of the axis).
-		const mixture = parseSkewNormalMixture(distribution).parameters.map((comp) => ({
-			...comp,
-			omega: Math.sqrt(comp.omega * comp.omega + MIN_SPREAD * MIN_SPREAD)
-		}));
-		// The peak is searched on the whole distribution, also outside of the window: far from the
-		// most probable date, the evolution is uncertain
-		let densityMax = 0;
-		if (mixture.length > 0) {
-			const from = Math.min(lo, ...mixture.map((c) => c.xi - 6 * c.omega));
-			const to = Math.max(hi, ...mixture.map((c) => c.xi + 6 * c.omega));
-			const step = Math.max(0.05, (to - from) / 4000);
-			for (let t = from; t <= to; t += step) {
-				densityMax = Math.max(densityMax, evaluateSkewNormalMixture(t, mixture));
-			}
-		}
-		const certaintyAt = (t: number) =>
-			densityMax > 0 ? Math.min(1, evaluateSkewNormalMixture(t, mixture) / densityMax) : 0;
-
-		// Most certain dates: local maxima of the certainty (inside the window) or, when they are all
-		// outside, the dates of the components
-		const peaks: number[] = [];
-		for (let t = lo + STEP; t < hi; t += STEP) {
-			const c = certaintyAt(t);
-			if (c > 0.5 && c >= certaintyAt(t - STEP) && c > certaintyAt(t + STEP)) peaks.push(t);
-		}
-		const outsidePeaks =
-			peaks.length === 0 ? mixture.map((c) => c.xi).filter((xi) => xi < lo || xi > hi) : [];
-
+		const uncertaintyAt = buildEvolutionUncertainty(components);
 		const values: { t: number; value: number }[] = [];
 		for (let t = lo; t <= hi + 1e-9; t += STEP) {
 			const value = valueAt(t);
@@ -104,14 +64,13 @@
 
 		const [minValue, maxValue] = d3.extent(values, (d) => d.value) as [number, number];
 		const range = maxValue - minValue > 1e-9 ? maxValue - minValue : Math.max(Math.abs(maxValue), 1) * 0.2;
-		// The more certain the date (density near its maximum), the thinner the cloud
+		// The cloud is the uncertainty of the components (a share of their value), never thinner than a few pixels
 		const widthAt = (t: number) =>
-			range *
-			(WIDTH_MIN + (WIDTH_MAX - WIDTH_MIN) * Math.pow(1 - certaintyAt(t), WIDTH_SHAPE));
+			Math.max(uncertaintyAt(t), range * MIN_WIDTH_SHARE);
 
 		const curve: CurvePoint[] = values.map((d) => ({ ...d, width: widthAt(d.t) }));
 
-		return { valueAt, widthAt, certaintyAt, curve, peaks, outsidePeaks };
+		return { valueAt, widthAt, curve };
 	});
 
 	const margin = { top: 10, right: 12, bottom: 24, left: 46 };
@@ -166,7 +125,6 @@
 			t,
 			value,
 			width,
-			certainty: model.certaintyAt(t) * 100,
 			x: geometry.xScale(t),
 			y: geometry.yScale(value)
 		};
@@ -200,6 +158,10 @@
 					<div class="function-field">
 						<span class="field-label">{m.simulation_evolution_function_label()}</span>
 						<span class="function-expression">{component.function}</span>
+					</div>
+					<div class="function-field weight">
+						<span class="field-label">{m.simulation_evolution_uncertainty()}</span>
+						<span class="function-weight">± {Math.round(component.uncertainty * 1000) / 10}%</span>
 					</div>
 					<div class="function-field weight">
 						<span class="field-label">{m.simulation_distribution_weight()}</span>
@@ -238,17 +200,6 @@
 					{/each}
 					<path d={geometry.linePath} class="curve" />
 
-					<!-- Most certain dates: the cloud is the thinnest there -->
-					{#each model.peaks as peak}
-						<line
-							x1={geometry.xScale(peak)}
-							y1="0"
-							x2={geometry.xScale(peak)}
-							y2={innerHeight}
-							class="peak-line"
-						/>
-					{/each}
-
 					<!-- Today: the time axis is centered on it -->
 					<line
 						x1={geometry.xScale(today)}
@@ -271,14 +222,6 @@
 				</g>
 			</svg>
 		</div>
-
-		{#if model.outsidePeaks.length > 0}
-			<p class="function-hint">
-				{m.simulation_evolution_peak_outside({
-					dates: model.outsidePeaks.map((xi) => Math.round(xi)).join(', ')
-				})}
-			</p>
-		{/if}
 
 		<div class="readout">
 			{#if active}
@@ -454,13 +397,6 @@
 		stroke: #fbbf24;
 		stroke-width: 1;
 		stroke-dasharray: 3 3;
-		opacity: 0.8;
-	}
-
-	.peak-line {
-		stroke: #a78bfa;
-		stroke-width: 1;
-		stroke-dasharray: 2 3;
 		opacity: 0.8;
 	}
 

@@ -7,6 +7,8 @@ import { all, create } from 'mathjs';
 export interface EvolutionComponent {
 	function: string;
 	weight: number;
+	/** Relative uncertainty of the values of this function (0.1 = +-10%) */
+	uncertainty: number;
 }
 
 const math = create(all);
@@ -51,6 +53,22 @@ export function isValidEvolutionFunction(expression: string): boolean {
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Builds the function t -> half-width (about 2 sigma) of the uncertainty of an evolution: the weighted
+ * average of the uncertainty (a share of the value) of each of its components.
+ */
+export function buildEvolutionUncertainty(components: EvolutionComponent[]): (t: number) => number {
+	const parts = components.map((component) => ({
+		valueAt: buildEvolutionFunction([component]),
+		uncertainty: component.uncertainty,
+		weight: component.weight
+	}));
+	const totalWeight = components.reduce((sum, component) => sum + component.weight, 0);
+	return (t: number) =>
+		parts.reduce((sum, part) => sum + part.weight * part.uncertainty * Math.abs(part.valueAt(t)), 0) /
+		totalWeight;
 }
 
 /**
@@ -113,7 +131,11 @@ function toComponents(raw: unknown): EvolutionComponent[] | null {
 		const expression = (item as Record<string, unknown>).function;
 		const weight = Number((item as Record<string, unknown>).weight ?? 1);
 		if (typeof expression !== 'string' || expression.trim() === '') return null;
-		components.push({ function: expression, weight: Number.isFinite(weight) && weight > 0 ? weight : 1 });
+		components.push({
+			function: expression,
+			weight: Number.isFinite(weight) && weight > 0 ? weight : 1,
+			uncertainty: parseUncertainty((item as Record<string, unknown>).uncertainty)
+		});
 	}
 	return components;
 }
@@ -132,7 +154,7 @@ export function parseEvolutionFunction(raw: unknown): EvolutionComponent[] | nul
 				return null;
 			}
 		}
-		return text === '' ? null : [{ function: text, weight: 1 }];
+		return text === '' ? null : [{ function: text, weight: 1, uncertainty: DEFAULT_UNCERTAINTY }];
 	}
 	if (typeof raw === 'object' && raw !== null && !Array.isArray(raw) && 'function' in raw) {
 		return toComponents([raw]);
@@ -143,6 +165,16 @@ export function parseEvolutionFunction(raw: unknown): EvolutionComponent[] | nul
 export interface EvolutionValue {
 	evolution: EvolutionComponent[];
 	unit: string;
+}
+
+export const DEFAULT_UNCERTAINTY = 0.1;
+
+/** Reads an uncertainty (number or numeric text), falling back to the default one */
+export function parseUncertainty(raw: unknown): number {
+	const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
+	return typeof value === 'number' && Number.isFinite(value) && value >= 0
+		? Math.min(value, 1)
+		: DEFAULT_UNCERTAINTY;
 }
 
 /**

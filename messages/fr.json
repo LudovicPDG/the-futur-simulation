@@ -107,7 +107,7 @@
 	"simulation_evolution_function_hint": "f(t), avec t = l'année",
 	"simulation_evolution_uncertainty": "Incertitude",
 	"simulation_evolution_legend_curve": "Évolution",
-	"simulation_evolution_legend_cloud": "Nuage d'incertitude (plus large là où la date est improbable)",
+	"simulation_evolution_legend_cloud": "Nuage d'incertitude (largeur proportionnelle au paramètre d'incertitude)",
 	"simulation_field_rankings": "Éléments du classement",
 	"simulation_field_material_resource_used": "Ressources matérielles utilisées",
 	"simulation_field_fund_used": "Fonds utilisés",

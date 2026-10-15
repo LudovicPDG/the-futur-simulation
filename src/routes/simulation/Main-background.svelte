@@ -195,7 +195,7 @@
 	// Text summary of an evolution, for the places where its chart does not fit (lists...)
 	function formatEvolution({ evolution, unit }: EvolutionValue): string {
 		const mix = evolution
-			.map((item) => (evolution.length > 1 ? `${item.weight} × (${item.function})` : item.function))
+			.map((item) => (evolution.length > 1 ? `${item.weight} × (${item.function})` : item.function) + ` ±${Math.round(item.uncertainty * 1000) / 10}%`)
 			.join(' + ');
 		return unit ? `${mix} [${unit}]` : mix;
 	}
@@ -589,7 +589,7 @@
 								<EvolutionChart
 									evolution={evolution.evolution}
 									unit={evolution.unit}
-									distribution={activeStartDistribution}								/>
+								/>
 							</dd>
 						{:else if listItems(value)}
 							<dd>
