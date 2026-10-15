@@ -5,24 +5,42 @@
 		buildEvolutionUncertainty,
 		parseEvolutionFunction
 	} from '$lib/simulation/event/EvolutionFunction';
+	import {
+		parseSkewNormalMixture,
+		skewNormalMixtureQuantile
+	} from '$lib/simulation/ProbabilityDistribution';
 	import * as m from '$lib/paraglide/messages';
 	import { getLocale } from '$lib/paraglide/runtime';
 
 	let {
 		evolution,
 		unit = '',
+		startDistribution,
+		endDistribution,
+		startImpossibility = 0,
+		endImpossibility = 0,
 		width = 320,
 		height = 210
 	}: {
 		evolution?: unknown;
 		unit?: string;
+		/** Distributions of the start and of the end of the fact: the evolution only exists between them */
+		startDistribution?: unknown;
+		endDistribution?: unknown;
+		startImpossibility?: number;
+		endImpossibility?: number;
 		width?: number;
 		height?: number;
 	} = $props();
 
-	// The graph shows 50 years of past and 50 years of future around today
+	// Without a bound of existence, the graph shows 50 years from today (or from the other bound)
 	const HALF_SPAN = 50;
-	const STEP = 0.25;
+	// Number of points of the curve
+	const POINTS = 400;
+	// Smallest span of the time axis: a day
+	const MIN_SPAN = 1 / 365.25;
+	// Margin around the existence, as a share of its length, so that its bounds are not on the edges
+	const PADDING = 0.04;
 	// Half-widths of the nested bands of the cloud, in standard deviations (w = 2 sigma)
 	const CLOUD_LEVELS = [2.4, 2, 1.6, 1.2, 0.8, 0.4];
 	// Thinnest cloud, as a share of the vertical range of the curve (keeps it visible when the uncertainty is 0)
@@ -47,8 +65,63 @@
 		const end = Date.UTC(now.getUTCFullYear() + 1, 0, 1);
 		return now.getUTCFullYear() + (now.getTime() - start) / (end - start);
 	})();
-	const lo = today - HALF_SPAN;
-	const hi = today + HALF_SPAN;
+
+	/**
+	 * Moment when the cumulative probability of a distribution (capped at 1 - impossibility) goes over
+	 * 50%. undefined: no distribution (unbounded); null: it never gets there.
+	 */
+	function halfCumulativeDate(distribution: unknown, impossibility: number): number | null | undefined {
+		const mixture = parseSkewNormalMixture(distribution).parameters;
+		if (mixture.length === 0) return undefined;
+		const target = 0.5 / (1 - Math.min(1, Math.max(0, impossibility)));
+		return Number.isFinite(target) && target < 1 ? skewNormalMixtureQuantile(target, mixture) : null;
+	}
+
+	// The fact exists between the moment its start is more probable than not and the one its end is
+	const existence = $derived.by(() => {
+		const start = halfCumulativeDate(startDistribution, startImpossibility);
+		const end = halfCumulativeDate(endDistribution, endImpossibility);
+		return {
+			// null start: the fact never begins
+			exists: start !== null,
+			from: start ?? -Infinity,
+			to: end === undefined || end === null ? Infinity : end
+		};
+	});
+
+	// The time axis goes from the beginning to the end of the existence
+	const axis = $derived.by(() => {
+		const { from, to } = existence;
+		let a: number;
+		let b: number;
+		if (Number.isFinite(from) && Number.isFinite(to)) {
+			a = from;
+			b = Math.max(to, from);
+		} else if (Number.isFinite(from)) {
+			a = from;
+			b = Math.max(today, from) + HALF_SPAN;
+		} else if (Number.isFinite(to)) {
+			b = to;
+			a = Math.min(today, to) - HALF_SPAN;
+		} else {
+			a = today - HALF_SPAN;
+			b = today + HALF_SPAN;
+		}
+		if (b - a < MIN_SPAN) {
+			const middle = (a + b) / 2;
+			a = middle - MIN_SPAN / 2;
+			b = middle + MIN_SPAN / 2;
+		}
+		const pad = (b - a) * PADDING;
+		return {
+			lo: Number.isFinite(from) ? a - pad : a,
+			hi: Number.isFinite(to) ? b + pad : b
+		};
+	});
+	const lo = $derived(axis.lo);
+	const hi = $derived(axis.hi);
+	const shownFrom = $derived(Math.max(lo, existence.from));
+	const shownTo = $derived(Math.min(hi, existence.to));
 
 	const model = $derived.by(() => {
 		if (!components) return null;
@@ -56,11 +129,26 @@
 
 		const uncertaintyAt = buildEvolutionUncertainty(components);
 		const values: { t: number; value: number }[] = [];
-		for (let t = lo; t <= hi + 1e-9; t += STEP) {
-			const value = valueAt(t);
-			if (Number.isFinite(value)) values.push({ t, value });
+		if (existence.exists && shownFrom <= shownTo) {
+			const times: number[] = [];
+			const step = (hi - lo) / POINTS;
+			for (let t = lo; t <= hi + 1e-9; t += step) {
+				if (t >= shownFrom && t <= shownTo) times.push(t);
+			}
+			// The curve starts and stops exactly on the bounds of the existence
+			if (times.length === 0 || times[0] > shownFrom) times.unshift(shownFrom);
+			if (times[times.length - 1] < shownTo) times.push(shownTo);
+			for (const t of times) {
+				const value = valueAt(t);
+				if (Number.isFinite(value)) values.push({ t, value });
+			}
 		}
-		if (values.length === 0) return null;
+		if (values.length === 0) {
+			// Nothing to draw in the window (the fact does not exist there), but the formula is valid
+			const sample = [lo, today, hi].map(valueAt).filter(Number.isFinite);
+			if (sample.length === 0) return null;
+			return { valueAt, widthAt: () => 0, curve: [] as CurvePoint[] };
+		}
 
 		const [minValue, maxValue] = d3.extent(values, (d) => d.value) as [number, number];
 		const range = maxValue - minValue > 1e-9 ? maxValue - minValue : Math.max(Math.abs(maxValue), 1) * 0.2;
@@ -82,6 +170,7 @@
 		const xScale = d3.scaleLinear().domain([lo, hi]).range([0, innerWidth]);
 		const low = d3.min(model.curve, (d) => d.value - d.width) ?? 0;
 		const high = d3.max(model.curve, (d) => d.value + d.width) ?? 1;
+
 		const yScale = d3.scaleLinear().domain([low, high]).nice().range([innerHeight, 0]);
 
 		const line = d3
@@ -105,7 +194,7 @@
 			yScale,
 			linePath: line(model.curve) || '',
 			cloud,
-			xTicks: d3.range(Math.ceil(lo / 10) * 10, hi + 1e-9, 10),
+			xTicks: xScale.ticks(6),
 			yTicks: yScale.ticks(5)
 		};
 	});
@@ -118,6 +207,7 @@
 	const active = $derived.by(() => {
 		if (hoverT === null || !model || !geometry) return null;
 		const t = Math.max(lo, Math.min(hi, hoverT));
+		if (!existence.exists || t < shownFrom || t > shownTo) return null;
 		const value = model.valueAt(t);
 		if (!Number.isFinite(value)) return null;
 		const width = model.widthAt(t);
@@ -135,6 +225,31 @@
 		const rect = svgRef.getBoundingClientRect();
 		const x = ((event.clientX - rect.left) / rect.width) * width - margin.left;
 		hoverT = x < 0 || x > innerWidth ? null : geometry.xScale.invert(x);
+	}
+
+	// Years when the axis is long, otherwise a more precise date
+	function formatTick(t: number): string {
+		const span = hi - lo;
+		if (span >= 8) return String(Math.round(t));
+		const date = yearToDate(t);
+		const options: Intl.DateTimeFormatOptions =
+			span >= 1
+				? { month: 'short', year: 'numeric' }
+				: span >= 0.1
+					? { day: 'numeric', month: 'short', year: 'numeric' }
+					: { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+		return date.toLocaleString(locale, { ...options, timeZone: 'UTC' });
+	}
+
+	function yearToDate(t: number): Date {
+		const year = Math.floor(t);
+		const start = new Date(0);
+		start.setUTCFullYear(year, 0, 1);
+		start.setUTCHours(0, 0, 0, 0);
+		const end = new Date(0);
+		end.setUTCFullYear(year + 1, 0, 1);
+		end.setUTCHours(0, 0, 0, 0);
+		return new Date(start.getTime() + (t - year) * (end.getTime() - start.getTime()));
 	}
 
 	function formatDate(t: number): string {
@@ -192,7 +307,7 @@
 					{#each geometry.xTicks as tick}
 						{@const x = geometry.xScale(tick)}
 						<line x1={x} y1="0" x2={x} y2={innerHeight} class="grid-line" />
-						<text x={x} y={innerHeight + 14} class="axis-label x-axis">{tick}</text>
+						<text x={x} y={innerHeight + 14} class="axis-label x-axis">{formatTick(tick)}</text>
 					{/each}
 
 					{#each geometry.cloud as band}
@@ -200,7 +315,21 @@
 					{/each}
 					<path d={geometry.linePath} class="curve" />
 
-					<!-- Today: the time axis is centered on it -->
+					<!-- Existence of the fact: the evolution only exists between these two moments -->
+					{#each [existence.from, existence.to] as bound}
+						{#if existence.exists && bound > lo && bound < hi}
+							<line
+								x1={geometry.xScale(bound)}
+								y1="0"
+								x2={geometry.xScale(bound)}
+								y2={innerHeight}
+								class="bound-line"
+							/>
+						{/if}
+					{/each}
+
+					<!-- Today -->
+					{#if today >= lo && today <= hi}
 					<line
 						x1={geometry.xScale(today)}
 						y1="0"
@@ -211,6 +340,7 @@
 					<text x={geometry.xScale(today) + 3} y="9" class="today-label">
 						{m.simulation_evolution_today()}
 					</text>
+					{/if}
 
 					{#if active}
 						<line x1={active.x} y1="0" x2={active.x} y2={innerHeight} class="active-line" />
@@ -222,6 +352,17 @@
 				</g>
 			</svg>
 		</div>
+
+		<p class="function-hint">
+			{#if !existence.exists}
+				{m.simulation_evolution_never_exists()}
+			{:else}
+				{m.simulation_evolution_existence({
+					start: Number.isFinite(existence.from) ? formatDate(existence.from) : '…',
+					end: Number.isFinite(existence.to) ? formatDate(existence.to) : '…'
+				})}
+			{/if}
+		</p>
 
 		<div class="readout">
 			{#if active}
@@ -397,6 +538,13 @@
 		stroke: #fbbf24;
 		stroke-width: 1;
 		stroke-dasharray: 3 3;
+		opacity: 0.8;
+	}
+
+	.bound-line {
+		stroke: #a78bfa;
+		stroke-width: 1;
+		stroke-dasharray: 2 3;
 		opacity: 0.8;
 	}
 

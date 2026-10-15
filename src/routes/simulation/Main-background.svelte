@@ -594,6 +594,10 @@
 								<EvolutionChart
 									evolution={evolution.evolution}
 									unit={evolution.unit}
+									startDistribution={activeStartDistribution}
+									endDistribution={activeEndDistribution}
+									startImpossibility={activeImpossibility ?? 0}
+									endImpossibility={activeEndImpossibility ?? 0}
 								/>
 							</dd>
 						{:else if listItems(value)}
