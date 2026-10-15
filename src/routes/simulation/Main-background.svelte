@@ -212,6 +212,13 @@
 		return null;
 	}
 
+	// Characters: financial resource in gold, human resource in blue, satisfaction in pink
+	const ACCENTS: Record<string, { dark: string; light: string }> = {
+		financial_resource: { dark: '#fbbf24', light: '#a16207' },
+		human_resource: { dark: '#38bdf8', light: '#0369a1' },
+		satisfaction: { dark: '#f472b6', light: '#be185d' }
+	};
+
 	function formatLabel(value: string): string {
 		const key = value
 			.replace(/([a-z0-9])([A-Z])/g, '$1_$2')
@@ -594,6 +601,7 @@
 								<EvolutionChart
 									evolution={evolution.evolution}
 									unit={evolution.unit}
+									accent={ACCENTS[key]}
 									startDistribution={activeStartDistribution}
 									endDistribution={activeEndDistribution}
 									startImpossibility={activeImpossibility ?? 0}

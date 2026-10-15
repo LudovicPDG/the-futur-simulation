@@ -20,7 +20,8 @@
 		startImpossibility = 0,
 		endImpossibility = 0,
 		width = 320,
-		height = 210
+		height = 210,
+		accent
 	}: {
 		evolution?: unknown;
 		unit?: string;
@@ -31,6 +32,8 @@
 		endImpossibility?: number;
 		width?: number;
 		height?: number;
+		/** Color of the curve and of the formula (a character's resource or satisfaction) */
+		accent?: { dark: string; light: string };
 	} = $props();
 
 	// Without a bound of existence, the graph shows 50 years from today (or from the other bound)
@@ -263,7 +266,12 @@
 	}
 </script>
 
-<div class="evolution-container">
+<div
+	class="evolution-container"
+	class:accented={!!accent}
+	style:--accent={accent?.dark}
+	style:--accent-light={accent?.light}
+>
 	{#if !components || !model || !geometry}
 		<div class="error-badge">{m.simulation_evolution_invalid()}</div>
 	{:else}
@@ -417,7 +425,7 @@
 	}
 
 	.function-expression {
-		color: #34d399;
+		color: var(--accent, #34d399);
 		font-size: 12px;
 		font-weight: 600;
 		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -425,7 +433,7 @@
 	}
 
 	:global(body.light) .function-expression {
-		color: #047857;
+		color: var(--accent-light, #047857);
 	}
 
 	.function-field {
@@ -522,13 +530,13 @@
 	}
 
 	.cloud-band {
-		fill: #10b981;
+		fill: var(--accent, #10b981);
 		fill-opacity: 0.1;
 	}
 
 	.curve {
 		fill: none;
-		stroke: #10b981;
+		stroke: var(--accent, #10b981);
 		stroke-width: 2.2;
 		stroke-linecap: round;
 		stroke-linejoin: round;
@@ -598,12 +606,12 @@
 	}
 
 	.readout-value {
-		color: #34d399;
+		color: var(--accent, #34d399);
 		font-weight: 700;
 	}
 
 	:global(body.light) .readout-value {
-		color: #047857;
+		color: var(--accent-light, #047857);
 	}
 
 	.readout-empty {
@@ -637,11 +645,11 @@
 
 	.swatch.line {
 		height: 2px;
-		background: #10b981;
+		background: var(--accent, #10b981);
 	}
 
 	.swatch.cloud {
-		background: rgb(16 185 129 / 40%);
+		background: color-mix(in srgb, var(--accent, #10b981) 40%, transparent);
 	}
 
 	.error-badge {
