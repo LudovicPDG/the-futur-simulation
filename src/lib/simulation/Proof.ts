@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
-import { ProbabilityDistributionSchema } from './ProbabilityDistribution';
 import { ModificationSchema } from './Modification';
 
 export const ProofSchema = z.object({
@@ -14,22 +13,11 @@ export const ProofSchema = z.object({
 	verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
 	falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),
 	source: z.array(z.string()).default([]).describe('Sources for the proof'),
-	impossibility: z
+	veracity: z
 		.number()
 		.min(0)
-		.max(1)
-		.describe(
-			'Probability (0 to 1) that the START of the proof never happens. The start distribution is capped at 1 - impossibility.'
-		),
-	end_impossibility: z
-		.number()
-		.min(0)
-		.max(1)
-		.describe(
-			'Probability (0 to 1) that the END of the proof never happens. The end distribution is capped at 1 - end_impossibility.'
-		),
-	start_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the START of the proof (when it begins), as a mixture of skew normal distributions over time t in years.'),
-	end_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the END of the proof (when it stops), as a mixture of skew normal distributions over time t in years. It must be coherent with the start distribution (the end comes after the start); for something that never ends or is instantaneous, put it shortly after or at the start.'),
+		.max(100)
+		.describe('Veracity of the proof, from 0 (certainly false) to 100 (certainly true)'),
 	originality: z.number().min(0).max(100).describe('Originality of the proof')
 });
 

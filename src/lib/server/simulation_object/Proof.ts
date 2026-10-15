@@ -143,7 +143,7 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		prompt: string,
 		target: ProofTarget,
 		factValues: Partial<
-			Pick<ProofData, 'impossibility' | 'end_impossibility' | 'start_probability_distribution' | 'end_probability_distribution' | 'originality'>
+			Pick<ProofData, 'originality'>
 		> = {}
 	): Promise<ProofData> {
 		const generated = await this.generateForTarget(
@@ -154,7 +154,7 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			undefined,
 			'Create the founding proof of this element: the source and the information it is based on (documents, data, statements, observations). The sources must be real and verifiable. This proof will be the starting point of the debate about this element.'
 		);
-		// The founding proof shares impossibility, probability distribution and originality with its element.
+		// The founding proof shares its originality with its element.
 		const data: ProofData = {
 			...generated,
 			...Object.fromEntries(Object.entries(factValues).filter(([, value]) => value !== undefined))
@@ -259,15 +259,12 @@ ${instruction}`
 				verification_method,
 				falsifiability_method,
 				source,
-				impossibility,
-				end_impossibility,
-				start_probability_distribution,
-				end_probability_distribution,
+				veracity,
 				originality,
 				fact_id,
 				relation_id,
 				parent_proof_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 			[
 				proof.id ?? randomUUID(),
 				convertToPg(proof.name),
@@ -276,10 +273,7 @@ ${instruction}`
 				convertToPg(proof.verification_method),
 				convertToPg(proof.falsifiability_method),
 				convertToPg(proof.source || []),
-				proof.impossibility,
-				proof.end_impossibility,
-				convertToPg(proof.start_probability_distribution),
-				convertToPg(proof.end_probability_distribution),
+				proof.veracity,
 				proof.originality,
 				proof.fact_id ?? null,
 				proof.relation_id ?? null,
@@ -304,10 +298,7 @@ ${instruction}`
 			verification_method: row.verification_method,
 			falsifiability_method: row.falsifiability_method,
 			source: row.source || [],
-			impossibility: Number(row.impossibility),
-			end_impossibility: Number(row.end_impossibility),
-			start_probability_distribution: row.start_probability_distribution,
-			end_probability_distribution: row.end_probability_distribution,
+			veracity: Number(row.veracity),
 			originality: Number(row.originality),
 			fact_id: row.fact_id,
 			relation_id: row.relation_id,

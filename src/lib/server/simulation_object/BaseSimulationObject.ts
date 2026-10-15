@@ -35,10 +35,6 @@ export abstract class BaseSimulationObject<
 			try {
 				const { ProofServer } = await import('./Proof');
 				await ProofServer.instance.createInitialProof(model_name, level_of_reasoning, prompt, this.proofOwner === 'relation' ? { relationId: id } : { factId: id }, {
-						impossibility: data.impossibility,
-						end_impossibility: data.end_impossibility,
-						start_probability_distribution: data.start_probability_distribution,
-						end_probability_distribution: data.end_probability_distribution,
 						originality: data.originality
 					});
 			} catch (error) {

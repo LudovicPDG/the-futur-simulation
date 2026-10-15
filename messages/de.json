@@ -89,6 +89,7 @@
 	"simulation_distribution_title_end_fact": "Wahrscheinlichkeitsverteilung des Endes der Tatsache",
 	"simulation_distribution_title_start_material_resource": "Wahrscheinlichkeitsverteilung des Beginns der Nutzung der Ressource",
 	"simulation_distribution_title_end_material_resource": "Wahrscheinlichkeitsverteilung des Endes der Nutzung der Ressource",
+	"simulation_field_veracity": "Wahrhaftigkeit",
 	"simulation_field_originality": "Originalität",
 	"simulation_field_name": "Name",
 	"simulation_field_type": "Typ",

@@ -248,6 +248,16 @@ export async function createDatabase() {
 				ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 		`);
 
+		// Veracity: remplace les distributions de début / fin et les impossibilités des preuves
+		await client.query(`
+			ALTER TABLE proofs
+				ADD COLUMN IF NOT EXISTS veracity NUMERIC(5, 2) NOT NULL DEFAULT 50.0 CHECK (veracity >= 0 AND veracity <= 100),
+				DROP COLUMN IF EXISTS impossibility,
+				DROP COLUMN IF EXISTS end_impossibility,
+				DROP COLUMN IF EXISTS start_probability_distribution,
+				DROP COLUMN IF EXISTS end_probability_distribution;
+		`);
+
 		// Modification: valeurs ajoutées / modifiées / supprimées (remplace l'ancienne colonne new_value)
 		await client.query(`
 			ALTER TABLE proofs

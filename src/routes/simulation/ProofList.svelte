@@ -4,7 +4,6 @@
 	import * as m from '$lib/paraglide/messages';
 	import ProofList from './ProofList.svelte';
 	import ModificationView from './ModificationView.svelte';
-	import ProbabilityDistributionChart from './ProbabilityDistributionChart.svelte';
 
 	const PAGE_SIZE = 5;
 
@@ -134,30 +133,8 @@
 						<dd>{format(proof.originality)}</dd>
 					</div>
 					<div class="param-row">
-						<dt>{m.simulation_field_start_probability_distribution()}</dt>
-						<dd>
-							<ProbabilityDistributionChart
-								distribution={proof.start_probability_distribution}
-								impossibility={proof.impossibility ?? 0}
-							/>
-						</dd>
-					</div>
-					<div class="param-row">
-						<dt>{m.simulation_field_end_probability_distribution()}</dt>
-						<dd>
-							<ProbabilityDistributionChart
-								distribution={proof.end_probability_distribution}
-								impossibility={proof.end_impossibility ?? 0}
-							/>
-						</dd>
-					</div>
-					<div class="param-row impossibility">
-						<dt>{m.simulation_field_impossibility()}</dt>
-						<dd>{format(proof.impossibility)}</dd>
-					</div>
-					<div class="param-row impossibility">
-						<dt>{m.simulation_field_impossibility()} ({m.simulation_field_end_probability_distribution()})</dt>
-						<dd>{format(proof.end_impossibility)}</dd>
+						<dt>{m.simulation_field_veracity()}</dt>
+						<dd>{format(proof.veracity)}</dd>
 					</div>
 				</dl>
 			{/if}

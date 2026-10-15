@@ -89,6 +89,7 @@
 	"simulation_distribution_title_end_fact": "Probability distribution of the end of the fact",
 	"simulation_distribution_title_start_material_resource": "Probability distribution of the start of the resource's exploitation",
 	"simulation_distribution_title_end_material_resource": "Probability distribution of the end of the resource's exploitation",
+	"simulation_field_veracity": "Veracity",
 	"simulation_field_originality": "Originality",
 	"simulation_field_name": "Name",
 	"simulation_field_type": "Type",
