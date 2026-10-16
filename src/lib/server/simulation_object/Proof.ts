@@ -18,11 +18,18 @@ function upgradeLegacyModification(modification: unknown): unknown {
 
 	const upgradeEntries = (entries: unknown) =>
 		Array.isArray(entries)
-			? entries.map((entry) =>
-					typeof entry?.value === 'string'
-						? { ...entry, value: { fr: entry.value, en: entry.value, de: entry.value, es: entry.value } }
-						: entry
-				)
+			? entries.map((entry) => ({
+					...entry,
+					value:
+						typeof entry?.value === 'string'
+							? { fr: entry.value, en: entry.value, de: entry.value, es: entry.value }
+							: entry?.value,
+					// Entries saved before values had a veracity are considered certainly true.
+					veracity: entry?.veracity ?? {
+						evolution: [{ function: '100', weight: 1, uncertainty: 0 }],
+						unit: '%'
+					}
+				}))
 			: [];
 	const { value_to_modify, new_value } = modification as Record<string, unknown>;
 	return { value_to_modify: upgradeEntries(value_to_modify), new_value: upgradeEntries(new_value) };

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { ModificationData } from '$lib/simulation/Modification';
 	import * as m from '$lib/paraglide/messages';
+	import EvolutionChart from './EvolutionChart.svelte';
+	import { parseEvolutionValue } from '$lib/simulation/event/EvolutionFunction';
 
 	let {
 		modification,
@@ -25,6 +27,13 @@
 				<span class="modification-impact">
 					{m.simulation_field_impact()}: <strong>{format(entry.impact)}</strong>
 				</span>
+				{#if parseEvolutionValue(entry.veracity)}
+					{@const veracity = parseEvolutionValue(entry.veracity)!}
+					<div class="modification-veracity">
+						<span class="modification-name">{m.simulation_field_veracity()}</span>
+						<EvolutionChart evolution={veracity.evolution} unit={veracity.unit} bounds={[0, 100]} />
+					</div>
+				{/if}
 			</div>
 		{/each}
 	</div>
@@ -53,6 +62,9 @@
 		border-radius: 4px;
 		background: rgb(125 211 252 / 8%);
 		overflow-wrap: anywhere;
+	}
+	.modification-veracity {
+		grid-column: 1 / -1;
 	}
 	.modification-name {
 		grid-column: 1 / -1;

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
+import { PercentageEvolutionSchema } from './Existence';
 
 /**
  * One value touched by a modification: its name, the value itself and the impact of the change.
@@ -18,7 +19,10 @@ export const ModificationEntrySchema = z.object({
 		.describe(
 			'The value. A text is translated in every language (never a plain string). When it modifies an existing value, it MUST have the same type as that value: a number replaces a number, a boolean a boolean, a translated text a translated text. Never split one value into several entries (one per language).'
 		),
-	impact: z.number().describe('The impact of this change, written as a number like a relation impact')
+	impact: z.number().describe('The impact of this change, written as a number like a relation impact'),
+	veracity: PercentageEvolutionSchema.describe(
+		'Evolution of the veracity of this value, in percent (0 = certainly false, 100 = certainly true), depending on the time t. Use a constant (e.g. "80") when the veracity does not change.'
+	)
 });
 
 export type ModificationValueKind = 'translation' | 'number' | 'boolean';

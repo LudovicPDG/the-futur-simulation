@@ -9,9 +9,15 @@
 	import * as m from '$lib/paraglide/messages';
 	import EvolutionChart from './EvolutionChart.svelte';
 	import ProofList from './ProofList.svelte';
+	import ValueParameters, {
+		type RelationInfluenceEntry,
+		type ValueInfluence
+	} from './ValueParameters.svelte';
 	import {
 		parseEvolutionFunction,
 		parseEvolutionValue,
+		buildEvolutionFunction,
+		buildEvolutionUncertainty,
 		type EvolutionValue
 	} from '$lib/simulation/event/EvolutionFunction';
 	import type { ProofData } from '$lib/simulation/Proof';
@@ -473,6 +479,113 @@
 				element.type === 'proof' && typeof element.id === 'string'
 		)
 	);
+	// Veracity (0-100) of a value of the active element, now: the latest proof that adds or edits this value,
+	// else the founding proof of the element.
+	function nameKeys(name: unknown): string[] {
+		if (typeof name === 'string') return [name.toLowerCase()];
+		if (typeof name === 'object' && name !== null) {
+			return Object.values(name)
+				.filter((item): item is string => typeof item === 'string')
+				.map((item) => item.toLowerCase());
+		}
+		return [];
+	}
+	function currentYear(): number {
+		const year = new Date().getUTCFullYear();
+		return year + (Date.now() - Date.UTC(year, 0, 1)) / 31_557_600_000;
+	}
+	// Veracity of a proof value now (0-100) and its uncertainty (in percentage points)
+	function veracityNow(raw: unknown): { veracity: number; uncertainty: number } | null {
+		const parsed = parseEvolutionValue(raw);
+		if (!parsed) return null;
+		const t = currentYear();
+		const veracity = buildEvolutionFunction(parsed.evolution)(t);
+		if (!Number.isFinite(veracity)) return null;
+		const uncertainty = buildEvolutionUncertainty(parsed.evolution)(t);
+		return {
+			veracity: Math.min(100, Math.max(0, veracity)),
+			uncertainty: Number.isFinite(uncertainty) ? uncertainty : 0
+		};
+	}
+	const allRelations = $derived(
+		simulation_data.filter((element): element is SimulationElementWithId & RelationData =>
+			isRelationElement(element)
+		)
+	);
+	// Value parameters of a value of the active element: its veracity and uncertainty (from the latest proof
+	// that adds or edits it, else from the founding proof of the element), its originality (only for the values
+	// of an array, such as the other data) and the proofs and relations that influence it.
+	function valueInfluence(name: unknown, inArray: boolean): ValueInfluence | null {
+		if (!activeElement) return null;
+		const id = activeElement.id;
+		const own = allProofs.filter((proof) =>
+			activeRelation ? proof.relation_id === id : proof.fact_id === id
+		);
+		const keys = nameKeys(name);
+		const matches = (candidate: unknown) => nameKeys(candidate).some((key) => keys.includes(key));
+
+		const proofs = own.flatMap((proof) => {
+			const modification = {
+				value_to_modify: (proof.modification?.value_to_modify ?? []).filter((entry) => matches(entry.name)),
+				new_value: (proof.modification?.new_value ?? []).filter((entry) => matches(entry.name))
+			};
+			return modification.value_to_modify.length > 0 || modification.new_value.length > 0
+				? [{ proof, modification }]
+				: [];
+		});
+
+		// A relation influences the value when it modifies (or adds) it on the side of the active element.
+		const relations = activeRelation
+			? []
+			: allRelations.flatMap((relation) => {
+					const other = (otherId: string) => simulation_data.find((element) => element.id === otherId);
+					const entries: RelationInfluenceEntry[] = [];
+					if (relation.Element2ID === id) {
+						const source = other(relation.Element1ID);
+						for (const c of relation.element1_element2_value_to_modify ?? []) {
+							if (matches(c.Element2Property)) {
+								entries.push({ from: formatRelationProperty(c.Element1Property, source), to: formatLabel(c.Element2Property), impact: c.impact, added: false });
+							}
+						}
+						for (const c of relation.element1_element2_new_value ?? []) {
+							if (matches(c.Element2Property)) {
+								entries.push({ from: formatRelationProperty(c.Element1Property, source), to: c.Element2Property, impact: c.impact, value: c.value, added: true });
+							}
+						}
+					}
+					if (relation.Element1ID === id) {
+						const source = other(relation.Element2ID);
+						for (const c of relation.element2_element1_value_to_modify ?? []) {
+							if (matches(c.Element1Property)) {
+								entries.push({ from: formatRelationProperty(c.Element2Property, source), to: formatLabel(c.Element1Property), impact: c.impact, added: false });
+							}
+						}
+						for (const c of relation.element2_element1_new_value ?? []) {
+							if (matches(c.Element1Property)) {
+								entries.push({ from: formatRelationProperty(c.Element2Property, source), to: c.Element1Property, impact: c.impact, value: c.value, added: true });
+							}
+						}
+					}
+					return entries.length > 0 ? [{ relation, entries }] : [];
+				});
+
+		// Scores: the latest proof that touches the value, else the founding proof of the element.
+		const latest = proofs.find(({ modification }) =>
+			[...modification.value_to_modify, ...modification.new_value].some((entry) => veracityNow(entry.veracity))
+		);
+		const latestEntry = latest && [...latest.modification.value_to_modify, ...latest.modification.new_value].find((entry) => veracityNow(entry.veracity));
+		const founding = own.filter((proof) => !proof.parent_proof_id).at(-1);
+		const source = latest ?? (founding ? { proof: founding } : undefined);
+		const now = veracityNow(latestEntry ? latestEntry.veracity : founding?.veracity);
+
+		return {
+			veracity: now ? `${Math.round(now.veracity)}%` : null,
+			uncertainty: now ? `±${Math.round(now.uncertainty * 10) / 10}%` : null,
+			originality: inArray && source ? `${Math.round(source.proof.originality)}%` : null,
+			proofs,
+			relations
+		};
+	}
 	const proofFactId = $derived(
 		activeElement && activeElement.type !== 'relation' && activeElement.type !== 'proof'
 			? activeElement.id
@@ -545,6 +658,7 @@
 			</header>
 			<dl>
 				{#each activeFields as [key, value]}
+					{@const influence = valueInfluence(key, false)}
 					<div class="detail-row">
 						<dt>{formatLabel(key)}</dt>
 						{#if evolutionOfField(key, value)}
@@ -568,6 +682,7 @@
 						{:else}
 							<dd>{formatValue(value)}</dd>
 						{/if}
+						{#if influence}<ValueParameters info={influence} format={formatValue} />{/if}
 					</div>
 				{/each}
 			</dl>
@@ -652,9 +767,11 @@
 					<h3>{m.simulation_section_other_information()}</h3>
 					<dl>
 						{#each activeOther as item}
+							{@const influence = valueInfluence(item.name, true)}
 							<div class="other-row">
 								<dt>{formatLabel(formatValue(item.name) || 'Other')}</dt>
 								<dd>{formatValue(item.value)}</dd>
+								{#if influence}<ValueParameters info={influence} format={formatValue} />{/if}
 							</div>
 						{/each}
 					</dl>
@@ -662,7 +779,7 @@
 			{/if}
 			{#if activeParameters.length > 0 || activeExistence}
 				<section class="parameter-details">
-					<h3>{m.simulation_section_parameters()}</h3>
+					<h3>{m.simulation_section_type_parameters({ type: formatType(activeElement.type || 'fact') })}</h3>
 					{#if activeExistence}
 						<div class="distribution-block">
 							<h4>{existenceTitle()}</h4>
