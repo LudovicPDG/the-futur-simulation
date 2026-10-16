@@ -273,7 +273,7 @@ ${instruction}`
 				convertToPg(proof.verification_method),
 				convertToPg(proof.falsifiability_method),
 				convertToPg(proof.source || []),
-				proof.veracity,
+				convertToPg(proof.veracity),
 				proof.originality,
 				proof.fact_id ?? null,
 				proof.relation_id ?? null,
@@ -284,7 +284,7 @@ ${instruction}`
 
 	async get_all(): Promise<ProofData[]> {
 		const result = await db.query(`
-			SELECT *
+			SELECT *, to_jsonb(veracity) AS veracity_json
 			FROM proofs
 			ORDER BY created_at DESC
 		`);
@@ -298,7 +298,7 @@ ${instruction}`
 			verification_method: row.verification_method,
 			falsifiability_method: row.falsifiability_method,
 			source: row.source || [],
-			veracity: Number(row.veracity),
+			veracity: row.veracity_json,
 			originality: Number(row.originality),
 			fact_id: row.fact_id,
 			relation_id: row.relation_id,

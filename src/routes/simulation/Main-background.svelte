@@ -671,7 +671,7 @@
 								unit={activeExistence.unit}
 								existence={activeExistence.evolution}
 								clipToExistence={false}
-								bounds={[0, 1]}
+								bounds={[0, 100]}
 							/>
 						</div>
 					{/if}

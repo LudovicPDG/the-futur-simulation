@@ -201,15 +201,15 @@ const SCAN_START = 0;
 const SCAN_END = 3500;
 const SCAN_STEP = 0.25;
 
-/** True when the expression compiles and never gives a number outside of [0, 1] (a probability). */
-export function isProbabilityFunction(expression: string): boolean {
+/** True when the expression compiles and never gives a number outside of [0, 100] (a percentage). */
+export function isPercentageFunction(expression: string): boolean {
 	try {
 		const compiled = compile(expression);
 		let finite = 0;
 		for (let t = SCAN_START; t <= SCAN_END; t += SCAN_STEP) {
 			const value = evaluateCompiled(compiled, t);
 			if (!Number.isFinite(value)) continue;
-			if (value < -1e-9 || value > 1 + 1e-9) return false;
+			if (value < -1e-7 || value > 100 + 1e-7) return false;
 			finite++;
 		}
 		return finite > 0;
@@ -219,19 +219,19 @@ export function isProbabilityFunction(expression: string): boolean {
 }
 
 export interface ExistenceInterval {
-	/** False when the probability never goes over 50% */
+	/** False when the existence never goes over 50% */
 	exists: boolean;
-	/** First moment (decimal year) the probability goes over 50%, -Infinity if it already is at the start of the scan */
+	/** First moment (decimal year) the existence goes over 50%, -Infinity if it already is at the start of the scan */
 	from: number;
-	/** Last moment the probability is over 50%, Infinity if it still is at the end of the scan */
+	/** Last moment the existence is over 50%, Infinity if it still is at the end of the scan */
 	to: number;
 }
 
 const intervals = new Map<string, ExistenceInterval>();
 
 /**
- * Period during which an existence (or occurrence) probability is over 50%: the thing is considered to
- * exist from the moment it is more probable than not until the moment it is not anymore.
+ * Period during which the existence (in percent) is over 50%: the thing is considered to exist from the
+ * moment it is more probable than not until the moment it is not anymore.
  */
 export function existenceInterval(components: EvolutionComponent[]): ExistenceInterval {
 	const key = JSON.stringify(components);
@@ -239,7 +239,7 @@ export function existenceInterval(components: EvolutionComponent[]): ExistenceIn
 	if (cached) return cached;
 
 	const valueAt = buildEvolutionFunction(components);
-	const over = (t: number) => valueAt(t) >= 0.5;
+	const over = (t: number) => valueAt(t) >= 50;
 	// Moment between a point where the probability is under 50% and one where it is over, to the second
 	const edge = (outside: number, inside: number) => {
 		let a = outside;

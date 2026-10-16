@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
 import { ModificationSchema } from './Modification';
+import { PercentageEvolutionSchema } from './Existence';
 
 export const ProofSchema = z.object({
 	type: z.literal('proof').default('proof').describe('The type of proof'),
@@ -13,11 +14,9 @@ export const ProofSchema = z.object({
 	verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
 	falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),
 	source: z.array(z.string()).default([]).describe('Sources for the proof'),
-	veracity: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe('Veracity of the proof, from 0 (certainly false) to 100 (certainly true)'),
+	veracity: PercentageEvolutionSchema.describe(
+		'Evolution of the veracity of the proof, in percent (0 = certainly false, 100 = certainly true), depending on the time t: it can change when new information is found or when the proof is debated. Use a constant (e.g. "80") when the veracity does not change.'
+	),
 	originality: z
 		.number()
 		.min(0)

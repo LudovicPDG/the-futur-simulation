@@ -4,6 +4,8 @@
 	import * as m from '$lib/paraglide/messages';
 	import ProofList from './ProofList.svelte';
 	import ModificationView from './ModificationView.svelte';
+	import EvolutionChart from './EvolutionChart.svelte';
+	import { parseEvolutionValue } from '$lib/simulation/event/EvolutionFunction';
 
 	const PAGE_SIZE = 5;
 
@@ -129,12 +131,19 @@
 						</dd>
 					</div>
 					<div class="param-row">
-						<dt>{m.simulation_field_originality()}</dt>
-						<dd>{format(proof.originality)}</dd>
+						<dt>{m.simulation_field_veracity()}</dt>
+						<dd>
+							{#if parseEvolutionValue(proof.veracity)}
+								{@const veracity = parseEvolutionValue(proof.veracity)!}
+								<EvolutionChart evolution={veracity.evolution} unit={veracity.unit} bounds={[0, 100]} />
+							{:else}
+								—
+							{/if}
+						</dd>
 					</div>
 					<div class="param-row">
-						<dt>{m.simulation_field_veracity()}</dt>
-						<dd>{format(proof.veracity)}</dd>
+						<dt>{m.simulation_field_originality()}</dt>
+						<dd>{format(proof.originality)}</dd>
 					</div>
 				</dl>
 			{/if}

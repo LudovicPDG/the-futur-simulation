@@ -127,7 +127,7 @@ export async function createDatabase() {
 				name translation_t NOT NULL,
 				description translation_t NOT NULL,
 				other other_fact_t[],
-				existence evolution_t NOT NULL DEFAULT ROW('[{"function":"1","weight":1,"uncertainty":0}]'::jsonb, 'probability')::evolution_t,
+				existence evolution_t NOT NULL DEFAULT ROW('[{"function":"100","weight":1,"uncertainty":0}]'::jsonb, '%')::evolution_t,
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100)
 			);
 		`);
@@ -146,7 +146,7 @@ export async function createDatabase() {
 				element2_type TEXT NOT NULL,
 				element1_element2_connexions relation_connexion_t[] NOT NULL DEFAULT '{}',
 				element2_element1_connexions relation_connexion_t[] NOT NULL DEFAULT '{}',
-				existence evolution_t NOT NULL DEFAULT ROW('[{"function":"1","weight":1,"uncertainty":0}]'::jsonb, 'probability')::evolution_t,
+				existence evolution_t NOT NULL DEFAULT ROW('[{"function":"100","weight":1,"uncertainty":0}]'::jsonb, '%')::evolution_t,
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100)
 			);
 		`);
@@ -247,11 +247,31 @@ export async function createDatabase() {
 		// Veracity: remplace les distributions de début / fin et les impossibilités des preuves
 		await client.query(`
 			ALTER TABLE proofs
-				ADD COLUMN IF NOT EXISTS veracity NUMERIC(5, 2) NOT NULL DEFAULT 50.0 CHECK (veracity >= 0 AND veracity <= 100),
 				DROP COLUMN IF EXISTS impossibility,
 				DROP COLUMN IF EXISTS end_impossibility,
 				DROP COLUMN IF EXISTS start_probability_distribution,
 				DROP COLUMN IF EXISTS end_probability_distribution;
+		`);
+
+		// Veracity: evolution in percent (0 to 100) over time. A former number becomes a constant function.
+		await client.query(`
+			DO $$ BEGIN
+				IF EXISTS (
+					SELECT 1 FROM information_schema.columns
+					WHERE table_name = 'proofs' AND column_name = 'veracity' AND data_type = 'numeric'
+				) THEN
+					ALTER TABLE proofs DROP CONSTRAINT IF EXISTS proofs_veracity_check;
+					ALTER TABLE proofs ALTER COLUMN veracity DROP DEFAULT;
+					ALTER TABLE proofs ALTER COLUMN veracity TYPE evolution_t USING ROW(
+						jsonb_build_array(jsonb_build_object('function', veracity::text, 'weight', 1, 'uncertainty', 0)),
+						'%'
+					)::evolution_t;
+				END IF;
+			END $$;
+		`);
+		await client.query(`
+			ALTER TABLE proofs
+				ADD COLUMN IF NOT EXISTS veracity evolution_t NOT NULL DEFAULT ROW('[{"function":"50","weight":1,"uncertainty":0}]'::jsonb, '%')::evolution_t;
 		`);
 
 		// Modification: valeurs ajoutées / modifiées / supprimées (remplace l'ancienne colonne new_value)
@@ -399,12 +419,25 @@ export async function createDatabase() {
 		for (const table of ['facts', 'relations']) {
 			await client.query(`
 				ALTER TABLE ${table}
-					ADD COLUMN IF NOT EXISTS existence evolution_t NOT NULL DEFAULT ROW('[{"function":"1","weight":1,"uncertainty":0}]'::jsonb, 'probability')::evolution_t,
+					ADD COLUMN IF NOT EXISTS existence evolution_t NOT NULL DEFAULT ROW('[{"function":"100","weight":1,"uncertainty":0}]'::jsonb, '%')::evolution_t,
 					DROP COLUMN IF EXISTS impossibility,
 					DROP COLUMN IF EXISTS end_impossibility,
 					DROP COLUMN IF EXISTS probability_distribution,
 					DROP COLUMN IF EXISTS start_probability_distribution,
 					DROP COLUMN IF EXISTS end_probability_distribution;
+			`);
+		}
+
+		// Existence is now a percentage (0 to 100): the first version stored a probability between 0 and 1
+		for (const table of ['facts', 'relations']) {
+			await client.query(`
+				UPDATE ${table}
+				SET existence = ROW(
+					(SELECT jsonb_agg(jsonb_set(component, '{function}', to_jsonb('100 * (' || (component->>'function') || ')')))
+					 FROM jsonb_array_elements((existence).evolution) AS component),
+					'%'
+				)::evolution_t
+				WHERE (existence).unit = 'probability';
 			`);
 		}
 
