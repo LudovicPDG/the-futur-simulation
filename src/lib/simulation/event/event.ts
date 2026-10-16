@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { FactSchema, type SvgShapeOptions } from '../fact';
+import { occurrenceSchema } from '../Existence';
 
 export const EventSchema = FactSchema.extend({
-	type: z.string().default('event').describe('The type of event')
+	type: z.string().default('event').describe('The type of event'),
+	existence: occurrenceSchema('event')
 }).describe('An event in the simulation');
 
 export type EventData = z.infer<typeof EventSchema>;

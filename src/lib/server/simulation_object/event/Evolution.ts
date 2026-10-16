@@ -19,22 +19,16 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 					type,
 					description,
 					other,
-					impossibility,
-					end_impossibility,
-					start_probability_distribution,
-					end_probability_distribution,
+					existence,
 					originality
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+				) VALUES ($1, $2, $3, $4, $5, $6)
 				RETURNING id`,
 				[
 					convertToPg(evolution.name),
 					evolution.type || 'evolution',
 					convertToPg(evolution.description),
 					convertToPgNullable(evolution.other),
-					evolution.impossibility,
-					evolution.end_impossibility,
-					convertToPg(evolution.start_probability_distribution),
-					convertToPg(evolution.end_probability_distribution),
+					convertToPg(evolution.existence),
 					evolution.originality
 				]
 			);
@@ -66,7 +60,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 	async get_all(): Promise<EvolutionData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, f.impossibility, f.end_impossibility, f.start_probability_distribution, f.end_probability_distribution, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality,
 				ev.evolution, ev.unit
 			FROM evolutions ev
 			JOIN events e ON ev.id = e.id
@@ -79,10 +73,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 			name: row.name,
 			description: row.description,
 			other: row.other,
-			impossibility: Number(row.impossibility),
-			end_impossibility: Number(row.end_impossibility),
-			start_probability_distribution: row.start_probability_distribution,
-			end_probability_distribution: row.end_probability_distribution,
+			existence: row.existence,
 			originality: Number(row.originality),
 			evolution: row.evolution,
 			unit: row.unit

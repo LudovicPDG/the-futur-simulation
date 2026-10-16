@@ -15,22 +15,16 @@ export class FactServer extends BaseSimulationObject<FactData> {
 				type,
 				description,
 				other,
-				impossibility,
-				end_impossibility,
-				start_probability_distribution,
-				end_probability_distribution,
+				existence,
 				originality
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			) VALUES ($1, $2, $3, $4, $5, $6)
 			RETURNING id`,
 			[
 				convertToPg(fact.name),
 				fact.type || 'fact',
 				convertToPg(fact.description),
 				convertToPgNullable(fact.other),
-				fact.impossibility,
-				fact.end_impossibility,
-				convertToPg(fact.start_probability_distribution),
-				convertToPg(fact.end_probability_distribution),
+				convertToPg(fact.existence),
 				fact.originality
 			]
 		);
@@ -39,7 +33,7 @@ export class FactServer extends BaseSimulationObject<FactData> {
 
 	async get_all(): Promise<FactData[]> {
 		const result = await db.query(`
-			SELECT facts.*, to_jsonb(facts.other) AS other_json
+			SELECT facts.*, to_jsonb(facts.other) AS other_json, to_jsonb(facts.existence) AS existence_json
 			FROM facts
 			WHERE type = 'fact'
 		`);
@@ -50,10 +44,7 @@ export class FactServer extends BaseSimulationObject<FactData> {
 			type: row.type || 'fact',
 			description: row.description,
 			other: row.other_json,
-			impossibility: Number(row.impossibility),
-			end_impossibility: Number(row.end_impossibility),
-			start_probability_distribution: row.start_probability_distribution,
-			end_probability_distribution: row.end_probability_distribution,
+			existence: row.existence_json,
 			originality: Number(row.originality)
 		}));
 	}

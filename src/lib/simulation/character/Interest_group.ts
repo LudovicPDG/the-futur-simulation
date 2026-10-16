@@ -4,18 +4,16 @@ import { EvolutionTypeSchema } from '../event/Evolution';
 import { TranslationSchema } from '../Translation';
 import { character_svg_shape } from './Character';
 import type { SvgShapeOptions } from '../fact';
-import { ProbabilityDistributionSchema } from '../ProbabilityDistribution';
+import { existenceSchema } from '../Existence';
 
 export const InterestGroupSchema = OrganizationSchema.extend({
 	type: z
 		.literal('interest_group')
 		.default('interest_group')
 		.describe('The type of interest group'),
-	start_probability_distribution: ProbabilityDistributionSchema.describe(
-		'START of the existence of the interest group = its EMERGENCE: the moment when this shared interest became a visible, identifiable movement (a founding event, a first manifestation, a publication). Choose the most accurate moment you know. Give the exact moment (year, month, day, hour, minute) of the event: it becomes the center of the distribution. Use a very small omega when the moment is documented.'
-	),
-	end_probability_distribution: ProbabilityDistributionSchema.describe(
-		'END of the existence of the interest group = its DISAPPEARANCE: the moment when this interest stops being shared or visible (goal reached, dissolution, loss of all its supporters). If it is not foreseeable, estimate it with a large omega. Give the exact moment (year, month, day, hour, minute) of the event if it is known or planned (otherwise your best estimate, with a larger omega): it becomes the center of the distribution.'
+	existence: existenceSchema(
+		'interest group',
+		'The existence starts at its EMERGENCE (the moment when this shared interest became a visible, identifiable movement: a founding event, a first manifestation, a publication) and ends at its DISAPPEARANCE (goal reached, dissolution, loss of all its supporters); if it is not foreseeable, make the end a slow decline.'
 	),
 	willing: z.array(TranslationSchema).describe('list of what this person is willing to do'),
 	satisfaction: EvolutionTypeSchema.describe(

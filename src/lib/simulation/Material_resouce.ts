@@ -2,12 +2,14 @@ import { z } from 'zod';
 import { FactSchema, type SvgShapeOptions } from './fact';
 import { EvolutionTypeSchema } from './event/Evolution';
 import { TranslationSchema } from './Translation';
+import { existenceSchema } from './Existence';
 
 export const MaterialResourceSchema = FactSchema.extend({
 	type: z
 		.literal('material_resource')
 		.default('material_resource')
 		.describe('The type of material resource'),
+	existence: existenceSchema('material resource'),
 	number_of_units: EvolutionTypeSchema.describe('Number of units of the material resource'),
 	financial_value: EvolutionTypeSchema.describe('Financial value of the material resource'),
 	power: z.array(TranslationSchema).describe('list of what this resource can do')

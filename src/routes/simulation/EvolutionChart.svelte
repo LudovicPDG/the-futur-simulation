@@ -3,33 +3,30 @@
 	import {
 		buildEvolutionFunction,
 		buildEvolutionUncertainty,
+		existenceInterval,
 		parseEvolutionFunction
 	} from '$lib/simulation/event/EvolutionFunction';
-	import {
-		parseSkewNormalMixture,
-		skewNormalMixtureQuantile
-	} from '$lib/simulation/ProbabilityDistribution';
 	import * as m from '$lib/paraglide/messages';
 	import { getLocale } from '$lib/paraglide/runtime';
 
 	let {
 		evolution,
 		unit = '',
-		startDistribution,
-		endDistribution,
-		startImpossibility = 0,
-		endImpossibility = 0,
+		existence: existenceEvolution,
+		clipToExistence = true,
+		bounds,
 		width = 320,
 		height = 210,
 		accent
 	}: {
 		evolution?: unknown;
 		unit?: string;
-		/** Distributions of the start and of the end of the fact: the evolution only exists between them */
-		startDistribution?: unknown;
-		endDistribution?: unknown;
-		startImpossibility?: number;
-		endImpossibility?: number;
+		/** Probability that the fact exists over time: the evolution only exists while it is over 50% */
+		existence?: unknown;
+		/** False to draw the curve outside of the existence too (the existence curve itself) */
+		clipToExistence?: boolean;
+		/** Fixed bounds of the vertical axis (a probability goes from 0 to 1) */
+		bounds?: [number, number];
 		width?: number;
 		height?: number;
 		/** Color of the curve and of the formula (a character's resource or satisfaction) */
@@ -69,28 +66,15 @@
 		return now.getUTCFullYear() + (now.getTime() - start) / (end - start);
 	})();
 
-	/**
-	 * Moment when the cumulative probability of a distribution (capped at 1 - impossibility) goes over
-	 * 50%. undefined: no distribution (unbounded); null: it never gets there.
-	 */
-	function halfCumulativeDate(distribution: unknown, impossibility: number): number | null | undefined {
-		const mixture = parseSkewNormalMixture(distribution).parameters;
-		if (mixture.length === 0) return undefined;
-		const target = 0.5 / (1 - Math.min(1, Math.max(0, impossibility)));
-		return Number.isFinite(target) && target < 1 ? skewNormalMixtureQuantile(target, mixture) : null;
-	}
-
-	// The fact exists between the moment its start is more probable than not and the one its end is
-	const existence = $derived.by(() => {
-		const start = halfCumulativeDate(startDistribution, startImpossibility);
-		const end = halfCumulativeDate(endDistribution, endImpossibility);
-		return {
-			// null start: the fact never begins
-			exists: start !== null,
-			from: start ?? -Infinity,
-			to: end === undefined || end === null ? Infinity : end
-		};
-	});
+	// The fact exists while its probability of existing is over 50%
+	const existenceComponents = $derived(parseEvolutionFunction(existenceEvolution));
+	const existence = $derived(
+		existenceComponents
+			? existenceInterval(existenceComponents)
+			: { exists: true, from: -Infinity, to: Infinity }
+	);
+	// Without clipping, the curve is drawn on the whole axis
+	const drawn = $derived(!clipToExistence || existence.exists);
 
 	// The time axis goes from the beginning to the end of the existence
 	const axis = $derived.by(() => {
@@ -123,8 +107,8 @@
 	});
 	const lo = $derived(axis.lo);
 	const hi = $derived(axis.hi);
-	const shownFrom = $derived(Math.max(lo, existence.from));
-	const shownTo = $derived(Math.min(hi, existence.to));
+	const shownFrom = $derived(clipToExistence ? Math.max(lo, existence.from) : lo);
+	const shownTo = $derived(clipToExistence ? Math.min(hi, existence.to) : hi);
 
 	const model = $derived.by(() => {
 		if (!components) return null;
@@ -132,7 +116,7 @@
 
 		const uncertaintyAt = buildEvolutionUncertainty(components);
 		const values: { t: number; value: number }[] = [];
-		if (existence.exists && shownFrom <= shownTo) {
+		if (drawn && shownFrom <= shownTo) {
 			const times: number[] = [];
 			const step = (hi - lo) / POINTS;
 			for (let t = lo; t <= hi + 1e-9; t += step) {
@@ -174,7 +158,9 @@
 		const low = d3.min(model.curve, (d) => d.value - d.width) ?? 0;
 		const high = d3.max(model.curve, (d) => d.value + d.width) ?? 1;
 
-		const yScale = d3.scaleLinear().domain([low, high]).nice().range([innerHeight, 0]);
+		const yScale = bounds
+			? d3.scaleLinear().domain(bounds).range([innerHeight, 0])
+			: d3.scaleLinear().domain([low, high]).nice().range([innerHeight, 0]);
 
 		const line = d3
 			.line<CurvePoint>()
@@ -210,7 +196,7 @@
 	const active = $derived.by(() => {
 		if (hoverT === null || !model || !geometry) return null;
 		const t = Math.max(lo, Math.min(hi, hoverT));
-		if (!existence.exists || t < shownFrom || t > shownTo) return null;
+		if (!drawn || t < shownFrom || t > shownTo) return null;
 		const value = model.valueAt(t);
 		if (!Number.isFinite(value)) return null;
 		const width = model.widthAt(t);

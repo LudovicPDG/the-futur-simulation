@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { FactSchema, type SvgShapeOptions } from './fact';
 import { EvolutionTypeSchema } from './event/Evolution';
+import { existenceSchema } from './Existence';
 
 const ActionMaterialResourceSchema = z.object({
 	name: z.string().describe('The name of the material resource'),
@@ -10,6 +11,7 @@ const ActionMaterialResourceSchema = z.object({
 
 export const ActionSchema = FactSchema.extend({
 	type: z.literal('action').default('action').describe('The type of action'),
+	existence: existenceSchema('action'),
 	material_resource_used: z
 		.array(ActionMaterialResourceSchema)
 		.default([])

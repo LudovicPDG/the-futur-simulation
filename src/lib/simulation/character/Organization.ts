@@ -2,15 +2,13 @@ import { z } from 'zod';
 import { EvolutionTypeSchema } from '../event/Evolution';
 import { CharacterSchema, character_svg_shape } from './Character';
 import type { SvgShapeOptions } from '../fact';
-import { ProbabilityDistributionSchema } from '../ProbabilityDistribution';
+import { existenceSchema } from '../Existence';
 
 export const OrganizationSchema = CharacterSchema.extend({
 	type: z.literal('organization').default('organization').describe('The type of organization'),
-	start_probability_distribution: ProbabilityDistributionSchema.describe(
-		'START of the existence of the organization = its CREATION (legal foundation, official birth): the date, hour and minute of the foundation. Give the exact moment (year, month, day, hour, minute) of the event: it becomes the center of the distribution. Use a very small omega when the moment is documented.'
-	),
-	end_probability_distribution: ProbabilityDistributionSchema.describe(
-		'END of the existence of the organization = its DISSOLUTION (closure, bankruptcy, merger, collapse). If it is not planned, estimate it with a large omega. Give the exact moment (year, month, day, hour, minute) of the event if it is known or planned (otherwise your best estimate, with a larger omega): it becomes the center of the distribution.'
+	existence: existenceSchema(
+		'organization',
+		'The existence starts at the CREATION of the organization (legal foundation, official birth) and ends at its DISSOLUTION (closure, bankruptcy, merger, collapse); if it is not planned, make the end a slow decline, or keep the probability high for an organization that may never be dissolved.'
 	),
 	human_resource: EvolutionTypeSchema.describe('Number of human that are in this organization')
 });

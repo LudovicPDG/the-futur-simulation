@@ -18,7 +18,13 @@ export const ProofSchema = z.object({
 		.min(0)
 		.max(100)
 		.describe('Veracity of the proof, from 0 (certainly false) to 100 (certainly true)'),
-	originality: z.number().min(0).max(100).describe('Originality of the proof')
+	originality: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe(
+			'Originality of the proof compared with other proofs, as a percentage from 0 to 100 (NOT a ratio between 0 and 1): 0 = a copy of something that already exists, 50 = moderately original, 100 = completely new. Use the whole scale, e.g. 35 or 80, never 0.35 or 0.8. It avoids that people spam the same thing and increase the probability of certain things.'
+		)
 });
 
 /**

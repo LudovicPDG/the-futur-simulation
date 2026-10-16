@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
-import { ProbabilityDistributionSchema } from './ProbabilityDistribution';
+import { existenceSchema } from './Existence';
 
 export const RelationConnexionSchema = z.object({
 	Element1Property: z.string().describe('The property of element 1 in this relation'),
@@ -54,29 +54,13 @@ export const RelationSchema = z.object({
 		.array(RelationNewValueSchema)
 		.default([])
 		.describe('Values added, from element 2 to element 1: existing property, name of the new value, its value, impact'),
-	impossibility: z
-		.number()
-		.min(0)
-		.max(1)
-		.describe(
-			'Probability (0 to 1) that the START of the relation never happens. The start distribution is capped at 1 - impossibility.'
-		),
-	end_impossibility: z
-		.number()
-		.min(0)
-		.max(1)
-		.describe(
-			'Probability (0 to 1) that the END of the relation never happens. The end distribution is capped at 1 - end_impossibility.'
-		),
-
-	start_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the START of the relation (when it begins), as a mixture of skew normal distributions over time t in years.'),
-	end_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the END of the relation (when it stops), as a mixture of skew normal distributions over time t in years. It must be coherent with the start distribution (the end comes after the start); for something that never ends or is instantaneous, put it shortly after or at the start.'),
+	existence: existenceSchema('relation'),
 	originality: z
 		.number()
 		.min(0)
 		.max(100)
 		.describe(
-			'Originality of the relation compared with other relations. Its for avoid that people spam same thing and increase the probability of certain things.'
+			'Originality of the relation compared with other relations, as a percentage from 0 to 100 (NOT a ratio between 0 and 1): 0 = a copy of something that already exists, 50 = moderately original, 100 = completely new. Use the whole scale, e.g. 35 or 80, never 0.35 or 0.8. It avoids that people spam the same thing and increase the probability of certain things.'
 		)
 });
 

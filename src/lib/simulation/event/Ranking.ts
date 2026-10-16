@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { EventSchema, event_svg_shape } from './event';
 import { EvolutionTypeSchema } from './Evolution';
 import { TranslationSchema } from '../Translation';
+import { occurrenceSchema } from '../Existence';
 import type { SvgShapeOptions } from '../fact';
 
 const RankingElementSchema = z.object({
@@ -14,6 +15,7 @@ export type RankingElementData = z.infer<typeof RankingElementSchema>;
 
 export const RankingSchema = EventSchema.extend({
 	type: z.literal('ranking').default('ranking').describe('The type of ranking'),
+	existence: occurrenceSchema('ranking'),
 	rankings: z.array(RankingElementSchema).describe('The rankings elements of the ranking')
 });
 

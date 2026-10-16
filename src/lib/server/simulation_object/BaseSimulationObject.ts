@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { OPENROUTER_API_KEY } from '$env/static/private';
 import { Genie, convertToPg } from './Genie';
-import { convertDatedDistributions } from '$lib/simulation/ProbabilityDistribution';
 import { db } from '../utils/database';
 
 export abstract class BaseSimulationObject<
@@ -10,10 +9,7 @@ export abstract class BaseSimulationObject<
 		name?: any;
 		description?: any;
 		other?: any;
-		impossibility?: number;
-		end_impossibility?: number;
-		start_probability_distribution?: any;
-		end_probability_distribution?: any;
+		existence?: any;
 		originality?: number;
 	}
 > {
@@ -123,8 +119,7 @@ export abstract class BaseSimulationObject<
 			throw new Error('OpenRouter returned invalid JSON');
 		}
 
-		// The model writes moments (year, month, day, hour, minute): they become the decimal years stored
-		const actionResult = convertDatedDistributions(schema.parse(json));
+		const actionResult = schema.parse(json);
 		console.log(`${this.typeName} parsed:`, actionResult);
 
 		return actionResult;

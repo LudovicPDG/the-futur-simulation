@@ -7,7 +7,6 @@
 	import { clickOutside } from '$lib/actions/clickOutside';
 	import { getLocale } from '$lib/paraglide/runtime';
 	import * as m from '$lib/paraglide/messages';
-	import ProbabilityDistributionChart from './ProbabilityDistributionChart.svelte';
 	import EvolutionChart from './EvolutionChart.svelte';
 	import ProofList from './ProofList.svelte';
 	import {
@@ -226,9 +225,7 @@
 			.toLowerCase();
 		const labels: Record<string, () => string> = {
 			description: m.simulation_field_description,
-			impossibility: m.simulation_field_impossibility,
-			start_probability_distribution: m.simulation_field_start_probability_distribution,
-			end_probability_distribution: m.simulation_field_end_probability_distribution,
+			existence: m.simulation_field_existence,
 			originality: m.simulation_field_originality,
 			name: m.simulation_field_name,
 			type: m.simulation_field_type,
@@ -433,7 +430,7 @@
 								'element2_element1_connexions'
 							].includes(key)
 						) &&
-						!['impossibility', 'end_impossibility', 'start_probability_distribution', 'end_probability_distribution', 'originality'].includes(key)
+						!['existence', 'originality'].includes(key)
 				)
 			: []
 	);
@@ -444,70 +441,25 @@
 				)
 			: []
 	);
-	const distributionTitles: Record<string, Record<'start' | 'end', () => string>> = {
-		person: {
-			start: m.simulation_distribution_title_start_person,
-			end: m.simulation_distribution_title_end_person
-		},
-		organization: {
-			start: m.simulation_distribution_title_start_organization,
-			end: m.simulation_distribution_title_end_organization
-		},
-		interest_group: {
-			start: m.simulation_distribution_title_start_interest_group,
-			end: m.simulation_distribution_title_end_interest_group
-		},
-		event: {
-			start: m.simulation_distribution_title_start_event,
-			end: m.simulation_distribution_title_end_event
-		},
-		ranking: {
-			start: m.simulation_distribution_title_start_ranking,
-			end: m.simulation_distribution_title_end_ranking
-		},
-		evolution: {
-			start: m.simulation_distribution_title_start_evolution,
-			end: m.simulation_distribution_title_end_evolution
-		},
-		action: {
-			start: m.simulation_distribution_title_start_action,
-			end: m.simulation_distribution_title_end_action
-		},
-		fact: {
-			start: m.simulation_distribution_title_start_fact,
-			end: m.simulation_distribution_title_end_fact
-		},
-		material_resource: {
-			start: m.simulation_distribution_title_start_material_resource,
-			end: m.simulation_distribution_title_end_material_resource
-		}
+	// Probability that the element exists (or that the event occurs), titled after its type
+	const existenceTitles: Record<string, () => string> = {
+		person: m.simulation_existence_title_person,
+		organization: m.simulation_existence_title_organization,
+		interest_group: m.simulation_existence_title_interest_group,
+		event: m.simulation_occurrence_title_event,
+		ranking: m.simulation_occurrence_title_ranking,
+		evolution: m.simulation_occurrence_title_evolution,
+		action: m.simulation_existence_title_action,
+		fact: m.simulation_existence_title_fact,
+		material_resource: m.simulation_existence_title_material_resource,
+		relation: m.simulation_existence_title_relation
 	};
-	function distributionTitle(kind: 'start' | 'end'): string {
+	function existenceTitle(): string {
 		const type = (activeElement as Record<string, unknown> | null | undefined)?.type;
-		const title = typeof type === 'string' ? distributionTitles[type]?.[kind] : undefined;
-		return title
-			? title()
-			: kind === 'start'
-				? m.simulation_field_start_probability_distribution()
-				: m.simulation_field_end_probability_distribution();
+		return (typeof type === 'string' ? existenceTitles[type] : undefined)?.() ?? m.simulation_field_existence();
 	}
-	const activeStartDistribution = $derived(
-		activeElement
-			? (activeElement as Record<string, unknown>).start_probability_distribution
-			: undefined
-	);
-	const activeEndDistribution = $derived(
-		activeElement ? (activeElement as Record<string, unknown>).end_probability_distribution : undefined
-	);
-	const activeImpossibility = $derived(
-		activeElement && typeof (activeElement as any).impossibility === 'number'
-			? ((activeElement as any).impossibility as number)
-			: undefined
-	);
-	const activeEndImpossibility = $derived(
-		activeElement && typeof (activeElement as any).end_impossibility === 'number'
-			? ((activeElement as any).end_impossibility as number)
-			: undefined
+	const activeExistence = $derived(
+		activeElement ? parseEvolutionValue((activeElement as Record<string, unknown>).existence) : null
 	);
 	const activeOther = $derived(
 		activeElement && Array.isArray((activeElement as Record<string, unknown>).other)
@@ -602,10 +554,7 @@
 									evolution={evolution.evolution}
 									unit={evolution.unit}
 									accent={ACCENTS[key]}
-									startDistribution={activeStartDistribution}
-									endDistribution={activeEndDistribution}
-									startImpossibility={activeImpossibility ?? 0}
-									endImpossibility={activeEndImpossibility ?? 0}
+									existence={activeExistence?.evolution}
 								/>
 							</dd>
 						{:else if listItems(value)}
@@ -711,37 +660,19 @@
 					</dl>
 				</section>
 			{/if}
-			{#if activeParameters.length > 0 || activeStartDistribution !== undefined || activeEndDistribution !== undefined}
+			{#if activeParameters.length > 0 || activeExistence}
 				<section class="parameter-details">
 					<h3>{m.simulation_section_parameters()}</h3>
-					{#if activeStartDistribution !== undefined}
+					{#if activeExistence}
 						<div class="distribution-block">
-							<h4>{distributionTitle('start')}</h4>
-							<ProbabilityDistributionChart
-								distribution={activeStartDistribution}
-								impossibility={activeImpossibility ?? 0}
+							<h4>{existenceTitle()}</h4>
+							<EvolutionChart
+								evolution={activeExistence.evolution}
+								unit={activeExistence.unit}
+								existence={activeExistence.evolution}
+								clipToExistence={false}
+								bounds={[0, 1]}
 							/>
-							{#if activeImpossibility !== undefined}
-								<div class="detail-row impossibility-row">
-									<dt>{m.simulation_field_impossibility()}</dt>
-									<dd>{formatValue(activeImpossibility)}</dd>
-								</div>
-							{/if}
-						</div>
-					{/if}
-					{#if activeEndDistribution !== undefined}
-						<div class="distribution-block">
-							<h4>{distributionTitle('end')}</h4>
-							<ProbabilityDistributionChart
-								distribution={activeEndDistribution}
-								impossibility={activeEndImpossibility ?? 0}
-							/>
-							{#if activeEndImpossibility !== undefined}
-								<div class="detail-row impossibility-row">
-									<dt>{m.simulation_field_impossibility()}</dt>
-									<dd>{formatValue(activeEndImpossibility)}</dd>
-								</div>
-							{/if}
 						</div>
 					{/if}
 					<dl>
@@ -1168,21 +1099,6 @@
 
 	:global(body.light) .distribution-block h4 {
 		color: #a16207;
-	}
-
-	.impossibility-row {
-		margin-top: 6px;
-		border-bottom: 0;
-	}
-
-	.impossibility-row dt,
-	.impossibility-row dd {
-		color: #f87171;
-	}
-
-	:global(body.light) .impossibility-row dt,
-	:global(body.light) .impossibility-row dd {
-		color: #dc2626;
 	}
 
 	.other-details dl {

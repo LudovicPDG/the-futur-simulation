@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
-import { ProbabilityDistributionSchema } from './ProbabilityDistribution';
+import { existenceSchema } from './Existence';
 
 const otherSchema = z.array(
 	z.object({
@@ -36,31 +36,14 @@ export const FactSchema = z.object({
 
 	other: otherSchema.describe('Other data about the fact').nullable(),
 
-	impossibility: z
-		.number()
-		.min(0)
-		.max(1)
-		.describe(
-			'Probability (0 to 1) that the START of the fact never happens (0 = it certainly begins, e.g. a person who is born). The start distribution is capped at 1 - impossibility.'
-		),
-
-	end_impossibility: z
-		.number()
-		.min(0)
-		.max(1)
-		.describe(
-			'Probability (0 to 1) that the END of the fact never happens (0 = it certainly ends, e.g. every person dies one day; high for something that may last forever, e.g. an organization that may never be dissolved). The end distribution is capped at 1 - end_impossibility.'
-		),
-
-	start_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the START of the fact (when it begins), as a mixture of skew normal distributions. Give the most probable moment as precisely as possible (year, month, day, hour, minute).'),
-	end_probability_distribution: ProbabilityDistributionSchema.describe('Probability distribution of the END of the fact (when it stops), as a mixture of skew normal distributions. Give the most probable moment as precisely as possible (year, month, day, hour, minute). It must be coherent with the start distribution (the end comes after the start); for something that never ends or is instantaneous, put it shortly after or at the start.'),
+	existence: existenceSchema('fact'),
 
 	originality: z
 		.number()
 		.min(0)
 		.max(100)
 		.describe(
-			'Originality of the fact compared with other facts. Its for avoid that people spam same thing and increase the probability of certain things.'
+			'Originality of the fact compared with other facts, as a percentage from 0 to 100 (NOT a ratio between 0 and 1): 0 = a copy of something that already exists, 50 = moderately original, 100 = completely new. Use the whole scale, e.g. 35 or 80, never 0.35 or 0.8. It avoids that people spam the same thing and increase the probability of certain things.'
 		)
 });
 

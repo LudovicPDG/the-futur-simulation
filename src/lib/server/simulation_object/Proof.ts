@@ -175,7 +175,7 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		let originalElement: Record<string, unknown> | undefined;
 		if ('factId' in target) {
 			const fact = await db.query(
-				`SELECT to_jsonb(facts) - 'start_probability_distribution' - 'end_probability_distribution' AS element FROM facts WHERE id = $1`,
+				`SELECT to_jsonb(facts) - 'existence' AS element FROM facts WHERE id = $1`,
 				[target.factId]
 			);
 			if (fact.rows.length === 0) throw new Error('The debated element does not exist');

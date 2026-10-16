@@ -1,15 +1,13 @@
 import { z } from 'zod';
 import { CharacterSchema, character_svg_shape } from './Character';
 import type { SvgShapeOptions } from '../fact';
-import { ProbabilityDistributionSchema } from '../ProbabilityDistribution';
+import { existenceSchema } from '../Existence';
 
 export const PersonSchema = CharacterSchema.extend({
 	type: z.literal('person').default('person').describe('The type of person'),
-	start_probability_distribution: ProbabilityDistributionSchema.describe(
-		'START of the existence of the person = their BIRTH: the date, hour and minute of birth (for a living or historical person, the real birth date and time; if the hour is unknown use 12:00). Give the exact moment (year, month, day, hour, minute) of the event: it becomes the center of the distribution. Use a very small omega when the moment is documented.'
-	),
-	end_probability_distribution: ProbabilityDistributionSchema.describe(
-		'END of the existence of the person = their DEATH: the date, hour and minute of death for a dead person. For a living person, estimate the death from their age and life expectancy, with a large omega (several years). Give the exact moment (year, month, day, hour, minute) of the event if it is known or planned (otherwise your best estimate, with a larger omega): it becomes the center of the distribution.'
+	existence: existenceSchema(
+		'person',
+		'The existence starts at the BIRTH of the person (the real birth date and time for a living or historical person, 12:00 if the hour is unknown) and ends at their DEATH (the real one for a dead person; for a living person, estimate it from their age and life expectancy and make the end a slow decline over several years).'
 	)
 });
 

@@ -127,9 +127,7 @@ export async function createDatabase() {
 				name translation_t NOT NULL,
 				description translation_t NOT NULL,
 				other other_fact_t[],
-				impossibility NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (impossibility >= 0 AND impossibility <= 1),
-				start_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
-				end_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
+				existence evolution_t NOT NULL DEFAULT ROW('[{"function":"1","weight":1,"uncertainty":0}]'::jsonb, 'probability')::evolution_t,
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100)
 			);
 		`);
@@ -148,9 +146,7 @@ export async function createDatabase() {
 				element2_type TEXT NOT NULL,
 				element1_element2_connexions relation_connexion_t[] NOT NULL DEFAULT '{}',
 				element2_element1_connexions relation_connexion_t[] NOT NULL DEFAULT '{}',
-				impossibility NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (impossibility >= 0 AND impossibility <= 1),
-				start_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
-				end_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}',
+				existence evolution_t NOT NULL DEFAULT ROW('[{"function":"1","weight":1,"uncertainty":0}]'::jsonb, 'probability')::evolution_t,
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100)
 			);
 		`);
@@ -220,7 +216,7 @@ export async function createDatabase() {
 		`);
 
 		// Migration : probability_distribution devient la distribution du début, et une distribution de fin est ajoutée
-		for (const table of ['facts', 'relations', 'proofs']) {
+		for (const table of ['proofs']) {
 			await client.query(`
 				DO $$ BEGIN
 					IF EXISTS (
@@ -392,10 +388,24 @@ export async function createDatabase() {
 		`);
 
 		// Impossibility of the END distribution (impossibility is the one of the start distribution)
-		for (const table of ['facts', 'relations', 'proofs']) {
+		for (const table of ['proofs']) {
 			await client.query(
 				`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS end_impossibility NUMERIC(5, 4) NOT NULL DEFAULT 0.0 CHECK (end_impossibility >= 0 AND end_impossibility <= 1);`
 			);
+		}
+
+		// Existence: probability (0 to 1) over time that a fact exists (or that an event occurs). It replaces the
+		// impossibilities and the start / end distributions of the facts and relations. The existing rows exist forever.
+		for (const table of ['facts', 'relations']) {
+			await client.query(`
+				ALTER TABLE ${table}
+					ADD COLUMN IF NOT EXISTS existence evolution_t NOT NULL DEFAULT ROW('[{"function":"1","weight":1,"uncertainty":0}]'::jsonb, 'probability')::evolution_t,
+					DROP COLUMN IF EXISTS impossibility,
+					DROP COLUMN IF EXISTS end_impossibility,
+					DROP COLUMN IF EXISTS probability_distribution,
+					DROP COLUMN IF EXISTS start_probability_distribution,
+					DROP COLUMN IF EXISTS end_probability_distribution;
+			`);
 		}
 
 		await client.query('COMMIT');

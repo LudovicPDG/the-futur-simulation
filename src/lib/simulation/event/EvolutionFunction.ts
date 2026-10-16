@@ -195,3 +195,79 @@ export function parseEvolutionValue(raw: unknown): EvolutionValue | null {
 	if (!evolution) return null;
 	return { evolution, unit: typeof record.unit === 'string' ? record.unit : '' };
 }
+
+/** Years scanned to check that a probability stays between 0 and 1 (and to find when something exists). */
+const SCAN_START = 0;
+const SCAN_END = 3500;
+const SCAN_STEP = 0.25;
+
+/** True when the expression compiles and never gives a number outside of [0, 1] (a probability). */
+export function isProbabilityFunction(expression: string): boolean {
+	try {
+		const compiled = compile(expression);
+		let finite = 0;
+		for (let t = SCAN_START; t <= SCAN_END; t += SCAN_STEP) {
+			const value = evaluateCompiled(compiled, t);
+			if (!Number.isFinite(value)) continue;
+			if (value < -1e-9 || value > 1 + 1e-9) return false;
+			finite++;
+		}
+		return finite > 0;
+	} catch {
+		return false;
+	}
+}
+
+export interface ExistenceInterval {
+	/** False when the probability never goes over 50% */
+	exists: boolean;
+	/** First moment (decimal year) the probability goes over 50%, -Infinity if it already is at the start of the scan */
+	from: number;
+	/** Last moment the probability is over 50%, Infinity if it still is at the end of the scan */
+	to: number;
+}
+
+const intervals = new Map<string, ExistenceInterval>();
+
+/**
+ * Period during which an existence (or occurrence) probability is over 50%: the thing is considered to
+ * exist from the moment it is more probable than not until the moment it is not anymore.
+ */
+export function existenceInterval(components: EvolutionComponent[]): ExistenceInterval {
+	const key = JSON.stringify(components);
+	const cached = intervals.get(key);
+	if (cached) return cached;
+
+	const valueAt = buildEvolutionFunction(components);
+	const over = (t: number) => valueAt(t) >= 0.5;
+	// Moment between a point where the probability is under 50% and one where it is over, to the second
+	const edge = (outside: number, inside: number) => {
+		let a = outside;
+		let b = inside;
+		for (let i = 0; i < 40; i++) {
+			const middle = (a + b) / 2;
+			if (over(middle)) b = middle;
+			else a = middle;
+		}
+		return (a + b) / 2;
+	};
+
+	let first: number | null = null;
+	let last = SCAN_START;
+	for (let t = SCAN_START; t <= SCAN_END; t += SCAN_STEP) {
+		if (!over(t)) continue;
+		first ??= t;
+		last = t;
+	}
+
+	const result: ExistenceInterval =
+		first === null
+			? { exists: false, from: -Infinity, to: Infinity }
+			: {
+					exists: true,
+					from: first <= SCAN_START ? -Infinity : edge(first - SCAN_STEP, first),
+					to: last >= SCAN_END - SCAN_STEP ? Infinity : edge(last + SCAN_STEP, last)
+				};
+	intervals.set(key, result);
+	return result;
+}
