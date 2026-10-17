@@ -515,7 +515,7 @@
 	// Value parameters of a value of the active element: its veracity and uncertainty (from the latest proof
 	// that adds or edits it, else from the founding proof of the element), its originality (only for the values
 	// of an array, such as the other data) and the proofs and relations that influence it.
-	function valueInfluence(name: unknown, inArray: boolean): ValueInfluence | null {
+	function valueInfluence(name: unknown, inArray: boolean, item?: string): ValueInfluence | null {
 		if (!activeElement) return null;
 		const id = activeElement.id;
 		const own = allProofs.filter((proof) =>
@@ -523,11 +523,18 @@
 		);
 		const keys = nameKeys(name);
 		const matches = (candidate: unknown) => nameKeys(candidate).some((key) => keys.includes(key));
+		// For one item of a list, only the entries whose value is this item.
+		const itemKey = item?.trim().toLowerCase();
+		const isItem = (value: unknown) =>
+			itemKey === undefined ||
+			(typeof value === 'object' && value !== null
+				? nameKeys(value).includes(itemKey)
+				: String(value).trim().toLowerCase() === itemKey);
 
 		const proofs = own.flatMap((proof) => {
 			const modification = {
-				value_to_modify: (proof.modification?.value_to_modify ?? []).filter((entry) => matches(entry.name)),
-				new_value: (proof.modification?.new_value ?? []).filter((entry) => matches(entry.name))
+				value_to_modify: (proof.modification?.value_to_modify ?? []).filter((entry) => matches(entry.name) && isItem(entry.value)),
+				new_value: (proof.modification?.new_value ?? []).filter((entry) => matches(entry.name) && isItem(entry.value))
 			};
 			return modification.value_to_modify.length > 0 || modification.new_value.length > 0
 				? [{ proof, modification }]
@@ -566,7 +573,8 @@
 							}
 						}
 					}
-					return entries.length > 0 ? [{ relation, entries }] : [];
+					const kept = itemKey === undefined ? entries : entries.filter((entry) => entry.added && isItem(entry.value));
+					return kept.length > 0 ? [{ relation, entries: kept }] : [];
 				});
 
 		// Scores: the latest proof that touches the value, else the founding proof of the element.
@@ -675,14 +683,18 @@
 							<dd>
 								<ul class="value-list">
 									{#each listItems(value) ?? [] as item}
-										<li>{item}</li>
+										{@const itemInfluence = valueInfluence(key, true, item)}
+										<li>
+											{item}
+											{#if itemInfluence}<ValueParameters info={itemInfluence} format={formatValue} />{/if}
+										</li>
 									{/each}
 								</ul>
 							</dd>
 						{:else}
 							<dd>{formatValue(value)}</dd>
 						{/if}
-						{#if influence}<ValueParameters info={influence} format={formatValue} />{/if}
+						{#if influence && !listItems(value)}<ValueParameters info={influence} format={formatValue} />{/if}
 					</div>
 				{/each}
 			</dl>
