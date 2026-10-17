@@ -77,6 +77,8 @@
 	"simulation_influence_proofs": "Pruebas",
 	"simulation_influence_relations": "Relaciones",
 	"simulation_influence_none": "Ninguna prueba ni relación influye en este valor",
+	"proof_founding": "Prueba fundadora del Genio",
+	"proof_founding_hint": "Primera prueba creada por el Genio al crear este elemento: añade todos sus valores",
 	"simulation_field_veracity": "Evolución de la veracidad de la prueba",
 	"simulation_field_originality": "Originalidad",
 	"simulation_field_name": "Nombre",

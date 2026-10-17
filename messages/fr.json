@@ -77,6 +77,8 @@
 	"simulation_influence_proofs": "Preuves",
 	"simulation_influence_relations": "Relations",
 	"simulation_influence_none": "Aucune preuve ni relation n'influence cette valeur",
+	"proof_founding": "Preuve fondatrice du Génie",
+	"proof_founding_hint": "Première preuve créée par le Génie à la création de cet élément : elle ajoute toutes ses valeurs",
 	"simulation_field_veracity": "Évolution de la véracité de la preuve",
 	"simulation_field_originality": "Originalité",
 	"simulation_field_name": "Nom",

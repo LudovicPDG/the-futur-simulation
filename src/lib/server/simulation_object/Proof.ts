@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
 import { ProofSchema, type ProofData } from '$lib/simulation/Proof';
-import { ModificationSchema, valueKind } from '$lib/simulation/Modification';
+import { ModificationSchema, valueKind, type ModificationEntryData } from '$lib/simulation/Modification';
 import { convertToPg } from './Genie';
 import { db } from '../utils/database';
 
@@ -73,6 +73,41 @@ function findModificationTypeError(
 		}
 	}
 	return undefined;
+}
+
+/** Keys of an element that are not values to put in its founding proof. */
+const NOT_A_VALUE = new Set(['type', 'id', 'existence', 'originality']);
+
+/**
+ * Every value of a freshly created element (its name, description, lists and "other" values) as the entries
+ * its founding proof adds. Values that are neither a text, a number nor a boolean (evolutions, rankings...) are skipped.
+ */
+function elementValuesAsEntries(
+	element: Record<string, unknown>,
+	veracity: ProofData['veracity']
+): ModificationEntryData[] {
+	const toValue = (value: unknown): ModificationEntryData['value'] | undefined => {
+		if (typeof value === 'number' || typeof value === 'boolean') return value;
+		if (typeof value === 'string') return { fr: value, en: value, de: value, es: value };
+		return valueKind(value) === 'translation' ? (value as ModificationEntryData['value']) : undefined;
+	};
+	const entries: ModificationEntryData[] = [];
+	const add = (name: ModificationEntryData['name'], raw: unknown) => {
+		const value = toValue(raw);
+		if (value !== undefined) entries.push({ name, value, impact: 1, veracity });
+	};
+
+	for (const [key, raw] of Object.entries(element)) {
+		if (NOT_A_VALUE.has(key) || raw === null || raw === undefined) continue;
+		if (key === 'other') {
+			if (Array.isArray(raw)) for (const item of raw) add(item?.name, item?.value);
+		} else if (Array.isArray(raw)) {
+			for (const item of raw) add(key, item);
+		} else {
+			add(key, raw);
+		}
+	}
+	return entries;
 }
 
 export class ProofServer extends BaseSimulationObject<ProofData> {
@@ -151,7 +186,8 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		target: ProofTarget,
 		factValues: Partial<
 			Pick<ProofData, 'originality'>
-		> = {}
+		> = {},
+		element?: Record<string, unknown>
 	): Promise<ProofData> {
 		const generated = await this.generateForTarget(
 			model_name,
@@ -159,11 +195,15 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			prompt,
 			target,
 			undefined,
-			'Create the founding proof of this element: the source and the information it is based on (documents, data, statements, observations). The sources must be real and verifiable. This proof will be the starting point of the debate about this element.'
+			'Create the founding proof of this element: the source and the information it is based on (documents, data, statements, observations). The sources must be real and verifiable. This proof will be the starting point of the debate about this element. Leave both lists of its modification empty: the values of the element are added to it automatically.'
 		);
 		// The founding proof shares its originality with its element.
 		const data: ProofData = {
 			...generated,
+			// The founding proof adds every value of its element, with the veracity of the proof.
+			modification: element
+				? { value_to_modify: [], new_value: elementValuesAsEntries(element, generated.veracity) }
+				: generated.modification,
 			...Object.fromEntries(Object.entries(factValues).filter(([, value]) => value !== undefined))
 		};
 		await this.insert_in_db(data);

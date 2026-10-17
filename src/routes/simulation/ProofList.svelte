@@ -35,6 +35,8 @@
 		)
 	);
 	const visible = $derived(siblings.slice(0, visibleCount));
+	// The founding proof is the oldest top-level proof of the element (proofs come newest first): the Genie made it when creating the element.
+	const foundingId = $derived(parentId === null ? siblings.at(-1)?.id : undefined);
 
 	function subProofCount(proofId: string) {
 		return proofs.filter((proof) => proof.parent_proof_id === proofId).length;
@@ -64,7 +66,12 @@
 	{#each visible as proof (proof.id)}
 		{@const count = subProofCount(proof.id)}
 		<li class="proof-item">
-			<h4>{format(proof.name)}</h4>
+			<h4>
+				{format(proof.name)}
+				{#if proof.id === foundingId}
+					<span class="founding-badge" title={m.proof_founding_hint()}>✦ {m.proof_founding()}</span>
+				{/if}
+			</h4>
 			<p class="proof-description">{format(proof.description)}</p>
 			<div class="proof-actions">
 				<button
@@ -177,6 +184,25 @@
 		font-size: 13px;
 		line-height: 1.35;
 		overflow-wrap: anywhere;
+	}
+
+	.founding-badge {
+		display: inline-block;
+		margin-left: 6px;
+		padding: 1px 8px;
+		color: #fbbf24;
+		background: rgb(251 191 36 / 12%);
+		border: 1px solid rgb(251 191 36 / 45%);
+		border-radius: 999px;
+		font-size: 10px;
+		font-weight: 700;
+		vertical-align: middle;
+		white-space: nowrap;
+	}
+
+	:global(body.light) .founding-badge {
+		color: #a16207;
+		border-color: rgb(161 98 7 / 45%);
 	}
 
 	.proof-description {

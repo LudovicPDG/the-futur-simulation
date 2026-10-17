@@ -77,6 +77,8 @@
 	"simulation_influence_proofs": "Beweise",
 	"simulation_influence_relations": "Beziehungen",
 	"simulation_influence_none": "Kein Beweis und keine Beziehung beeinflusst diesen Wert",
+	"proof_founding": "Gründungsbeweis des Genies",
+	"proof_founding_hint": "Erster Beweis, den das Genie bei der Erstellung dieses Elements erzeugt hat: er fügt alle seine Werte hinzu",
 	"simulation_field_veracity": "Entwicklung der Wahrhaftigkeit des Beweises",
 	"simulation_field_originality": "Originalität",
 	"simulation_field_name": "Name",

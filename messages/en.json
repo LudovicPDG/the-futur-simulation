@@ -77,6 +77,8 @@
 	"simulation_influence_proofs": "Proofs",
 	"simulation_influence_relations": "Relations",
 	"simulation_influence_none": "No proof or relation influences this value",
+	"proof_founding": "Founding proof by the Genie",
+	"proof_founding_hint": "First proof created by the Genie when this element was created: it adds all of its values",
 	"simulation_field_veracity": "Evolution of the veracity of the proof",
 	"simulation_field_originality": "Originality",
 	"simulation_field_name": "Name",
