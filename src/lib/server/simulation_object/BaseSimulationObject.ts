@@ -30,9 +30,13 @@ export abstract class BaseSimulationObject<
 		if (typeof id === 'string') {
 			try {
 				const { ProofServer } = await import('./Proof');
-				await ProofServer.instance.createInitialProof(model_name, level_of_reasoning, prompt, this.proofOwner === 'relation' ? { relationId: id } : { factId: id }, {
-						originality: data.originality
-					}, data as Record<string, unknown>);
+				await ProofServer.instance.createInitialProof(
+					model_name,
+					level_of_reasoning,
+					prompt,
+					this.proofOwner === 'relation' ? { relationId: id } : { factId: id },
+					data as Record<string, unknown>
+				);
 			} catch (error) {
 				console.error(`Could not create the initial proof of the new ${this.typeName}:`, error);
 			}

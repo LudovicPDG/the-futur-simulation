@@ -1,42 +1,28 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
-import { ProofSchema, type ProofData } from '$lib/simulation/Proof';
-import { ModificationSchema, valueKind, type ModificationEntryData } from '$lib/simulation/Modification';
+import { ProofSchema, valueKind, type ProofData } from '$lib/simulation/Proof';
 import { convertToPg } from './Genie';
 import { db } from '../utils/database';
 
 /** The element a proof is about: a fact (or subtype) or a relation. */
 type ProofTarget = { factId: string } | { relationId: string };
 
-/**
- * Proofs saved before texts had to be translated hold plain-string values (and a "value_to_delete" list):
- * a string is repeated in every language so that the stored modification still parses.
- */
-function upgradeLegacyModification(modification: unknown): unknown {
-	if (typeof modification !== 'object' || modification === null) return {};
+/** How many founding proofs are generated at the same time. */
+const FOUNDING_PROOF_CONCURRENCY = 4;
 
-	const upgradeEntries = (entries: unknown) =>
-		Array.isArray(entries)
-			? entries.map((entry) => ({
-					...entry,
-					value:
-						typeof entry?.value === 'string'
-							? { fr: entry.value, en: entry.value, de: entry.value, es: entry.value }
-							: entry?.value,
-					// Entries saved before values had a veracity are considered certainly true.
-					veracity: entry?.veracity ?? {
-						evolution: [{ function: '100', weight: 1, uncertainty: 0 }],
-						unit: '%'
-					}
-				}))
-			: [];
-	const { value_to_modify, new_value } = modification as Record<string, unknown>;
-	return { value_to_modify: upgradeEntries(value_to_modify), new_value: upgradeEntries(new_value) };
+/** The content of a founding proof: the same for every value of the element, which are added afterwards. */
+const FoundingProofSchema = ProofSchema.omit({ value_name: true, desired_value: true });
+
+/** Values saved as a plain string (before texts had to be translated) are repeated in every language. */
+function toProofValue(value: unknown): ProofData['desired_value'] | undefined {
+	if (typeof value === 'number' || typeof value === 'boolean') return value;
+	if (typeof value === 'string') return { fr: value, en: value, de: value, es: value };
+	return valueKind(value) ? (value as ProofData['desired_value']) : undefined;
 }
 
-/** Every language-keyed name of a modification entry ("description" or {fr, en, de, es}). */
-function entryNames(name: unknown): string[] {
+/** Every language-keyed name of a value ("description" or {fr, en, de, es}). */
+function valueNames(name: unknown): string[] {
 	if (typeof name === 'string') return [name];
 	if (typeof name === 'object' && name !== null) {
 		return Object.values(name).filter((value): value is string => typeof value === 'string');
@@ -44,9 +30,22 @@ function entryNames(name: unknown): string[] {
 	return [];
 }
 
-/** The current value an entry modifies: a primary property of the element or one of its "other" values. */
+/** Whether the element has the named value: a primary property or one of its "other" values. */
+function hasValue(name: unknown, element: Record<string, unknown>): boolean {
+	const names = valueNames(name);
+	if (names.some((candidate) => candidate in element)) return true;
+	const other = Array.isArray(element.other) ? element.other : [];
+	return other.some(
+		(item) =>
+			typeof item === 'object' &&
+			item !== null &&
+			valueNames((item as { name?: unknown }).name).some((candidate) => names.includes(candidate))
+	);
+}
+
+/** The current value of a primary property of the element or of one of its "other" values. */
 function findOriginalValue(name: unknown, element: Record<string, unknown>): unknown {
-	const names = entryNames(name);
+	const names = valueNames(name);
 	const key = names.find((candidate) => candidate in element);
 	if (key) return element[key];
 
@@ -55,51 +54,55 @@ function findOriginalValue(name: unknown, element: Record<string, unknown>): unk
 		(item) =>
 			typeof item === 'object' &&
 			item !== null &&
-			entryNames((item as { name?: unknown }).name).some((candidate) => names.includes(candidate))
+			valueNames((item as { name?: unknown }).name).some((candidate) => names.includes(candidate))
 	);
 	return match ? (match as { value?: unknown }).value : undefined;
 }
 
-/** Describes the first value to modify whose type differs from the value it replaces. */
-function findModificationTypeError(
-	proof: ProofData,
-	element: Record<string, unknown>
-): string | undefined {
-	for (const entry of proof.modification.value_to_modify) {
-		const originalKind = valueKind(findOriginalValue(entry.name, element));
-		const newKind = valueKind(entry.value);
-		if (originalKind && originalKind !== newKind) {
-			return `the value to modify "${entryNames(entry.name)[0]}" is a ${originalKind}, but you gave a ${newKind ?? 'value of another type'}. A modified value must keep the type of the original value (a text stays a text translated in every language).`;
-		}
+/** Describes why the value of a proof does not fit its element: an unknown value or a desired value of another type. */
+function findDesiredValueError(proof: ProofData, element: Record<string, unknown>): string | undefined {
+	const label = valueNames(proof.value_name)[0];
+	if (!hasValue(proof.value_name, element)) {
+		return `the value "${label}" does not exist in the element. A proof is about ONE existing value: use the exact key of a primary property or the exact name of an "other information".`;
+	}
+	const originalKind = valueKind(findOriginalValue(proof.value_name, element));
+	const desiredKind = valueKind(proof.desired_value);
+	if (originalKind && originalKind !== desiredKind) {
+		return `the value "${label}" is a ${originalKind}, but you gave a ${desiredKind ?? 'value of another type'}. The desired value must keep the type of the current value (a text stays a text translated in every language).`;
 	}
 	return undefined;
 }
 
-/** Keys of an element that are not values to put in its founding proof. */
-const NOT_A_VALUE = new Set(['type', 'id', 'existence', 'originality']);
+/** Keys of an element that are not values to give a founding proof. */
+const NOT_A_VALUE = new Set([
+	'type',
+	'id',
+	'unit',
+	'Element1ID',
+	'Element1Type',
+	'Element2ID',
+	'Element2Type'
+]);
 
 /**
- * Every value of a freshly created element (its name, description, lists and "other" values) as the entries
- * its founding proof adds. Values that are neither a text, a number nor a boolean (evolutions, rankings...) are skipped.
+ * Every value of a freshly created element (its name, description, list items and "other" values), each of which
+ * gets its own founding proof. Values that are neither a text, a number, a boolean nor an evolution (rankings...) are skipped.
  */
-function elementValuesAsEntries(
-	element: Record<string, unknown>,
-	veracity: ProofData['veracity']
-): ModificationEntryData[] {
-	const toValue = (value: unknown): ModificationEntryData['value'] | undefined => {
-		if (typeof value === 'number' || typeof value === 'boolean') return value;
-		if (typeof value === 'string') return { fr: value, en: value, de: value, es: value };
-		return valueKind(value) === 'translation' ? (value as ModificationEntryData['value']) : undefined;
-	};
-	const entries: ModificationEntryData[] = [];
-	const add = (name: ModificationEntryData['name'], raw: unknown) => {
-		const value = toValue(raw);
-		if (value !== undefined) entries.push({ name, value, impact: 1, veracity });
+function elementValues(
+	element: Record<string, unknown>
+): Pick<ProofData, 'value_name' | 'desired_value'>[] {
+	const values: Pick<ProofData, 'value_name' | 'desired_value'>[] = [];
+	const add = (value_name: ProofData['value_name'], raw: unknown) => {
+		const desired_value = toProofValue(raw);
+		if (value_name && desired_value !== undefined) values.push({ value_name, desired_value });
 	};
 
 	for (const [key, raw] of Object.entries(element)) {
 		if (NOT_A_VALUE.has(key) || raw === null || raw === undefined) continue;
-		if (key === 'other') {
+		if (key === 'evolution' && Array.isArray(raw) && typeof element.unit === 'string') {
+			// An evolution element holds its functions and its unit side by side: they form one value.
+			add(key, { evolution: raw, unit: element.unit });
+		} else if (key === 'other') {
 			if (Array.isArray(raw)) for (const item of raw) add(item?.name, item?.value);
 		} else if (Array.isArray(raw)) {
 			for (const item of raw) add(key, item);
@@ -107,7 +110,7 @@ function elementValuesAsEntries(
 			add(key, raw);
 		}
 	}
-	return entries;
+	return values;
 }
 
 export class ProofServer extends BaseSimulationObject<ProofData> {
@@ -148,16 +151,17 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		return this.generateForTarget(model_name, level_of_reasoning, prompt, { factId: FactID });
 	}
 
-	/** Debate: creates a sub-proof of an existing proof (the fact is the one of the parent). */
+	/** Debate: creates a sub-proof of an existing proof (the element and the value are the ones of the parent). */
 	async createSubProof(
 		model_name: string,
 		level_of_reasoning: string,
 		prompt: string,
 		parentProofId: string
 	): Promise<ProofData> {
-		const parent = await db.query(`SELECT fact_id, relation_id FROM proofs WHERE id = $1`, [
-			parentProofId
-		]);
+		const parent = await db.query(
+			`SELECT fact_id, relation_id, value_name FROM proofs WHERE id = $1`,
+			[parentProofId]
+		);
 		const target: ProofTarget | undefined = parent.rows[0]?.fact_id
 			? { factId: parent.rows[0].fact_id }
 			: parent.rows[0]?.relation_id
@@ -167,47 +171,99 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			throw new Error('The debated proof does not exist or is not linked to an element');
 		}
 
-		const data = await this.generateForTarget(
-			model_name,
-			level_of_reasoning,
-			prompt,
-			target,
-			parentProofId
-		);
+		const data = await this.generateForTarget(model_name, level_of_reasoning, prompt, target, {
+			parentProofId,
+			valueName: parent.rows[0].value_name ?? undefined
+		});
 		await this.insert_in_db(data);
 		return data;
 	}
 
-	/** Founding proof of a freshly created fact or relation: the source and information it is based on. */
+	/**
+	 * Founding proofs of a freshly created fact or relation: one per value of the element, each generated on its own
+	 * so that every value has its own sources, veracity, uncertainty and originality.
+	 */
 	async createInitialProof(
 		model_name: string,
 		level_of_reasoning: string,
 		prompt: string,
 		target: ProofTarget,
-		factValues: Partial<
-			Pick<ProofData, 'originality'>
-		> = {},
-		element?: Record<string, unknown>
-	): Promise<ProofData> {
-		const generated = await this.generateForTarget(
-			model_name,
-			level_of_reasoning,
-			prompt,
-			target,
-			undefined,
-			'Create the founding proof of this element: the source and the information it is based on (documents, data, statements, observations). The sources must be real and verifiable. This proof will be the starting point of the debate about this element. Leave both lists of its modification empty: the values of the element are added to it automatically.'
+		element: Record<string, unknown> = {}
+	): Promise<ProofData[]> {
+		const context = await this.targetContext(target);
+		const proofs: ProofData[] = [];
+
+		const values = elementValues(element);
+		for (let i = 0; i < values.length; i += FOUNDING_PROOF_CONCURRENCY) {
+			const batch = values.slice(i, i + FOUNDING_PROOF_CONCURRENCY);
+			const results = await Promise.allSettled(
+				batch.map(async (value) => {
+					const generated = await this.generateWithSchema(
+						model_name,
+						level_of_reasoning,
+						`${prompt}${context.text}
+
+Create the founding proof of ONE value of this element: the value ${JSON.stringify(value.value_name)}, whose content is ${JSON.stringify(value.desired_value)}. Give the source and the information this value is based on (documents, data, statements, observations). The sources must be real and verifiable. The veracity and the originality must be those of THIS value alone, not of the whole element: they differ from one value to another. This proof will be the starting point of the debate about this value.`,
+						FoundingProofSchema
+					);
+					const proof: ProofData = {
+						...generated,
+						...value,
+						id: randomUUID(),
+						fact_id: 'factId' in target ? target.factId : null,
+						relation_id: 'relationId' in target ? target.relationId : null,
+						parent_proof_id: null
+					};
+					await this.insert_in_db(proof);
+					return proof;
+				})
+			);
+			for (const result of results) {
+				if (result.status === 'fulfilled') proofs.push(result.value);
+				else console.error('Could not create a founding proof:', result.reason);
+			}
+		}
+		return proofs;
+	}
+
+	/** The element of the proof, as JSON for the prompt and as a record to check the value of the proof. */
+	private async targetContext(
+		target: ProofTarget
+	): Promise<{ text: string; element: Record<string, unknown> }> {
+		if ('factId' in target) {
+			const fact = await db.query(
+				`SELECT to_jsonb(facts) AS element FROM facts WHERE id = $1`,
+				[target.factId]
+			);
+			if (fact.rows.length === 0) throw new Error('The debated element does not exist');
+			return {
+				element: fact.rows[0].element,
+				text: `
+
+This proof is about the following simulation element (its "name", "description" and "other" values are translated in every language; its "existence" and its other evolutions are functions of the time t):
+${JSON.stringify(fact.rows[0].element)}`
+			};
+		}
+
+		const relation = await db.query(
+			`SELECT to_jsonb(r) AS element,
+				(e1.name).fr AS element1_name_fr, (e1.name).en AS element1_name_en,
+				(e2.name).fr AS element2_name_fr, (e2.name).en AS element2_name_en
+			FROM relations r
+			JOIN facts e1 ON e1.id = r.element1_id
+			JOIN facts e2 ON e2.id = r.element2_id
+			WHERE r.id = $1`,
+			[target.relationId]
 		);
-		// The founding proof shares its originality with its element.
-		const data: ProofData = {
-			...generated,
-			// The founding proof adds every value of its element, with the veracity of the proof.
-			modification: element
-				? { value_to_modify: [], new_value: elementValuesAsEntries(element, generated.veracity) }
-				: generated.modification,
-			...Object.fromEntries(Object.entries(factValues).filter(([, value]) => value !== undefined))
+		if (relation.rows.length === 0) throw new Error('The debated relation does not exist');
+		const { element, ...endpoints } = relation.rows[0];
+		return {
+			element,
+			text: `
+
+This proof is about the following relation between two simulation elements:
+${JSON.stringify({ ...element, ...endpoints })}`
 		};
-		await this.insert_in_db(data);
-		return data;
 	}
 
 	private async generateForTarget(
@@ -215,45 +271,16 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		level_of_reasoning: string,
 		prompt: string,
 		target: ProofTarget,
-		parentProofId?: string,
-		instruction?: string
+		{ parentProofId, valueName }: { parentProofId?: string; valueName?: ProofData['value_name'] } = {}
 	): Promise<ProofData> {
-		let context: string;
-		let originalElement: Record<string, unknown> | undefined;
-		if ('factId' in target) {
-			const fact = await db.query(
-				`SELECT to_jsonb(facts) - 'existence' AS element FROM facts WHERE id = $1`,
-				[target.factId]
-			);
-			if (fact.rows.length === 0) throw new Error('The debated element does not exist');
-			originalElement = fact.rows[0].element;
-			context = `
-
-This proof is about the following simulation element (its "name", "description" and "other" values are translated in every language):
-${JSON.stringify(originalElement)}`;
-		} else {
-			const relation = await db.query(
-				`SELECT (r.name).fr AS name_fr, (r.name).en AS name_en,
-					(r.description).fr AS description_fr, (r.description).en AS description_en,
-					r.element1_type, (e1.name).fr AS element1_name_fr, (e1.name).en AS element1_name_en,
-					r.element2_type, (e2.name).fr AS element2_name_fr, (e2.name).en AS element2_name_en
-				FROM relations r
-				JOIN facts e1 ON e1.id = r.element1_id
-				JOIN facts e2 ON e2.id = r.element2_id
-				WHERE r.id = $1`,
-				[target.relationId]
-			);
-			if (relation.rows.length === 0) throw new Error('The debated relation does not exist');
-			context = `
-
-This proof is about the following relation between two simulation elements:
-${JSON.stringify(relation.rows[0])}`;
-		}
+		const { text, element } = await this.targetContext(target);
+		let context = text;
 
 		if (parentProofId) {
 			const parent = await db.query(
 				`SELECT (name).fr AS name_fr, (name).en AS name_en,
 					(description).fr AS description_fr, (description).en AS description_en,
+					value_name, desired_value,
 					(verification_method).fr AS verification_method_fr,
 					(falsifiability_method).fr AS falsifiability_method_fr,
 					source
@@ -263,27 +290,29 @@ ${JSON.stringify(relation.rows[0])}`;
 			if (parent.rows.length === 0) throw new Error('The debated proof does not exist');
 			context += `\n\nThis proof is a sub-proof: it debates (supports, questions or refutes) the following existing proof:\n${JSON.stringify(parent.rows[0])}`;
 		}
+		if (valueName !== undefined) {
+			context += `\n\nThis proof is about the value ${JSON.stringify(valueName)} of the element: use exactly this value_name.`;
+		}
 
-		const basePrompt =
-			prompt +
-			context +
-			(instruction
-				? `
+		const basePrompt = `${prompt}${context}
 
-${instruction}`
-				: '');
+A proof is about ONE value of the element: value_name is this existing value and desired_value is the value the proof wants it to have.`;
 
-		// A value that modifies an existing one must keep its type: retry once with the error.
-		let proof = await this.generateWithSchema(model_name, level_of_reasoning, basePrompt, ProofSchema);
-		const typeError = originalElement && findModificationTypeError(proof, originalElement);
-		if (typeError) {
-			proof = await this.generateWithSchema(
+		// The value must exist and the desired value must keep its type: retry once with the error.
+		const generate = async (extra = '') => {
+			const proof = await this.generateWithSchema(
 				model_name,
 				level_of_reasoning,
-				`${basePrompt}\n\nYour previous answer was rejected: ${typeError}`,
+				basePrompt + extra,
 				ProofSchema
 			);
-			const secondError = findModificationTypeError(proof, originalElement!);
+			return valueName !== undefined ? { ...proof, value_name: valueName } : proof;
+		};
+		let proof = await generate();
+		const error = findDesiredValueError(proof, element);
+		if (error) {
+			proof = await generate(`\n\nYour previous answer was rejected: ${error}`);
+			const secondError = findDesiredValueError(proof, element);
 			if (secondError) throw new Error(secondError);
 		}
 
@@ -302,7 +331,8 @@ ${instruction}`
 				id,
 				name,
 				description,
-				modification,
+				value_name,
+				desired_value,
 				verification_method,
 				falsifiability_method,
 				source,
@@ -311,12 +341,13 @@ ${instruction}`
 				fact_id,
 				relation_id,
 				parent_proof_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 			[
 				proof.id ?? randomUUID(),
 				convertToPg(proof.name),
 				convertToPg(proof.description),
-				JSON.stringify(proof.modification ?? ModificationSchema.parse({})),
+				JSON.stringify(proof.value_name),
+				JSON.stringify(proof.desired_value),
 				convertToPg(proof.verification_method),
 				convertToPg(proof.falsifiability_method),
 				convertToPg(proof.source || []),
@@ -333,6 +364,7 @@ ${instruction}`
 		const result = await db.query(`
 			SELECT *, to_jsonb(veracity) AS veracity_json
 			FROM proofs
+			WHERE value_name IS NOT NULL
 			ORDER BY created_at DESC
 		`);
 
@@ -341,7 +373,8 @@ ${instruction}`
 			type: 'proof' as const,
 			name: row.name,
 			description: row.description,
-			modification: ModificationSchema.parse(upgradeLegacyModification(row.modification)),
+			value_name: row.value_name,
+			desired_value: toProofValue(row.desired_value) ?? row.desired_value,
 			verification_method: row.verification_method,
 			falsifiability_method: row.falsifiability_method,
 			source: row.source || [],

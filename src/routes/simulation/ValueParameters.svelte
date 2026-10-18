@@ -1,9 +1,8 @@
 <script lang="ts">
 	import type { ProofData } from '$lib/simulation/Proof';
-	import type { ModificationData } from '$lib/simulation/Modification';
 	import type { RelationData } from '$lib/simulation/Relation';
 	import * as m from '$lib/paraglide/messages';
-	import ModificationView from './ModificationView.svelte';
+	import ProofList from './ProofList.svelte';
 
 	/** A change made by a relation on the value: the property it comes from, its impact and, when it adds the value, the value. */
 	export interface RelationInfluenceEntry {
@@ -20,7 +19,9 @@
 		uncertainty: string | null;
 		/** Only for the values of an array (such as the other data). */
 		originality: string | null;
-		proofs: { proof: ProofData; modification: ModificationData }[];
+		/** Every proof, to find the sub-proofs, and the top-level proofs of this value (newest first). */
+		allProofs: (ProofData & { id: string })[];
+		proofs: (ProofData & { id: string })[];
 		relations: { relation: RelationData; entries: RelationInfluenceEntry[] }[];
 	}
 
@@ -58,15 +59,7 @@
 
 	{#if info.proofs.length > 0}
 		<h6>{m.simulation_influence_proofs()}</h6>
-		<ul class="influence-list">
-			{#each info.proofs as { proof, modification }}
-				<li>
-					<strong>{format(proof.name)}</strong>
-					<p>{format(proof.description)}</p>
-					<ModificationView {modification} {format} />
-				</li>
-			{/each}
-		</ul>
+		<ProofList proofs={info.allProofs} roots={info.proofs} {format} />
 	{/if}
 
 	{#if info.relations.length > 0}

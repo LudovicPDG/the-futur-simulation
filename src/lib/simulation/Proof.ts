@@ -1,16 +1,41 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
-import { ModificationSchema } from './Modification';
 import { PercentageEvolutionSchema } from './Existence';
+import { EvolutionTypeSchema } from './event/EvolutionType';
 
+export type ProofValueKind = 'translation' | 'number' | 'boolean' | 'evolution';
+
+/** The kind of a value (translated text, number, boolean or evolution over time), or undefined when it is none of them. */
+export function valueKind(value: unknown): ProofValueKind | undefined {
+	if (typeof value === 'number') return 'number';
+	if (typeof value === 'boolean') return 'boolean';
+	if (typeof value === 'object' && value !== null) {
+		if ('fr' in value && 'en' in value) return 'translation';
+		if ('evolution' in value && 'unit' in value) return 'evolution';
+	}
+	return undefined;
+}
+
+/**
+ * A proof is about ONE value of an element: "value_name" names this value and "desired_value" is the value the
+ * proof wants it to have. A text never exists alone in the simulation: it is always translated in every language.
+ */
 export const ProofSchema = z.object({
 	type: z.literal('proof').default('proof').describe('The type of proof'),
 	name: TranslationSchema.describe('The name of the proof'),
 	description: TranslationSchema.describe('The description of the proof'),
-	modification: ModificationSchema.describe(
-		'The values this proof modifies or adds in the element. A proof has no reason to exist without a value to modify or a value to add, so at least one of the two lists must not be empty.'
-	),
+	value_name: z
+		.union([TranslationSchema, z.string()])
+		.describe(
+			'The ONE existing value of the element this proof is about. For a primary property of the element, the exact property key as a plain string (e.g. "description"). For an "other information", its name translated in every language, exactly as in the element.'
+		),
+	// Not z.any(): its JSON schema has no "type", which strict structured outputs reject.
+	desired_value: z
+		.union([TranslationSchema, z.number(), z.boolean()])
+		.describe(
+			'The value this proof wants the value to have. A text is translated in every language (never a plain string). It MUST have the same type as the current value: a number replaces a number, a boolean a boolean, a translated text a translated text, an evolution (a mathjs function of the time t and its unit) an evolution. For the existence of the element, the evolution is a percentage between 0 and 100 with the unit "%".'
+		),
 	verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
 	falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),
 	source: z.array(z.string()).default([]).describe('Sources for the proof'),
@@ -28,7 +53,7 @@ export const ProofSchema = z.object({
 
 /**
  * A proof as stored: the generated content plus the links set by the server
- * (the debated fact and, for a sub-proof, the proof it debates).
+ * (the element of the value and, for a sub-proof, the proof it debates).
  */
 export type ProofData = z.infer<typeof ProofSchema> & {
 	id?: string;

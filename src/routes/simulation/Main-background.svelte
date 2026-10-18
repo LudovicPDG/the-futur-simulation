@@ -8,7 +8,6 @@
 	import { getLocale } from '$lib/paraglide/runtime';
 	import * as m from '$lib/paraglide/messages';
 	import EvolutionChart from './EvolutionChart.svelte';
-	import ProofList from './ProofList.svelte';
 	import ValueParameters, {
 		type RelationInfluenceEntry,
 		type ValueInfluence
@@ -251,7 +250,6 @@
 			financial_value: m.simulation_field_financial_value,
 			new_value: m.simulation_field_new_value,
 			value_to_modify: m.simulation_field_value_to_modify,
-			modification: m.simulation_field_modification,
 			verification_method: m.simulation_field_verification_method,
 			falsifiability_method: m.simulation_field_falsifiability_method,
 			source: m.simulation_field_source,
@@ -422,7 +420,6 @@
 						key !== 'name' &&
 						key !== 'type' &&
 						key !== 'other' &&
-						key !== 'modification' &&
 						!(activeElement.type === 'evolution' && key === 'unit') &&
 						!/^element[12]_element[12]_(new_value|value_to_modify)$/.test(key) &&
 						!(
@@ -479,8 +476,6 @@
 				element.type === 'proof' && typeof element.id === 'string'
 		)
 	);
-	// Veracity (0-100) of a value of the active element, now: the latest proof that adds or edits this value,
-	// else the founding proof of the element.
 	function nameKeys(name: unknown): string[] {
 		if (typeof name === 'string') return [name.toLowerCase()];
 		if (typeof name === 'object' && name !== null) {
@@ -512,9 +507,9 @@
 			isRelationElement(element)
 		)
 	);
-	// Value parameters of a value of the active element: its veracity and uncertainty (from the latest proof
-	// that adds or edits it, else from the founding proof of the element), its originality (only for the values
-	// of an array, such as the other data) and the proofs and relations that influence it.
+	// Value parameters of a value of the active element: its veracity and uncertainty (from its latest proof),
+	// its originality (only for the values of an array, such as the other data) and the proofs and relations
+	// that influence it.
 	function valueInfluence(name: unknown, inArray: boolean, item?: string): ValueInfluence | null {
 		if (!activeElement) return null;
 		const id = activeElement.id;
@@ -531,15 +526,10 @@
 				? nameKeys(value).includes(itemKey)
 				: String(value).trim().toLowerCase() === itemKey);
 
-		const proofs = own.flatMap((proof) => {
-			const modification = {
-				value_to_modify: (proof.modification?.value_to_modify ?? []).filter((entry) => matches(entry.name) && isItem(entry.value)),
-				new_value: (proof.modification?.new_value ?? []).filter((entry) => matches(entry.name) && isItem(entry.value))
-			};
-			return modification.value_to_modify.length > 0 || modification.new_value.length > 0
-				? [{ proof, modification }]
-				: [];
-		});
+		// The top-level proofs of this value (newest first); for one item of a list, those whose desired value is this item.
+		const proofs = own.filter(
+			(proof) => !proof.parent_proof_id && matches(proof.value_name) && isItem(proof.desired_value)
+		);
 
 		// A relation influences the value when it modifies (or adds) it on the side of the active element.
 		const relations = activeRelation
@@ -577,30 +567,19 @@
 					return kept.length > 0 ? [{ relation, entries: kept }] : [];
 				});
 
-		// Scores: the latest proof that touches the value, else the founding proof of the element.
-		const latest = proofs.find(({ modification }) =>
-			[...modification.value_to_modify, ...modification.new_value].some((entry) => veracityNow(entry.veracity))
-		);
-		const latestEntry = latest && [...latest.modification.value_to_modify, ...latest.modification.new_value].find((entry) => veracityNow(entry.veracity));
-		const founding = own.filter((proof) => !proof.parent_proof_id).at(-1);
-		const source = latest ?? (founding ? { proof: founding } : undefined);
-		const now = veracityNow(latestEntry ? latestEntry.veracity : founding?.veracity);
+		// Scores: the latest proof of the value (the founding proof when it has not been debated yet).
+		const latest = proofs.find((proof) => veracityNow(proof.veracity));
+		const now = veracityNow(latest?.veracity);
 
 		return {
 			veracity: now ? `${Math.round(now.veracity)}%` : null,
 			uncertainty: now ? `±${Math.round(now.uncertainty * 10) / 10}%` : null,
-			originality: inArray && source ? `${Math.round(source.proof.originality)}%` : null,
+			originality: inArray && latest ? `${Math.round(latest.originality)}%` : null,
+			allProofs,
 			proofs,
 			relations
 		};
 	}
-	const proofFactId = $derived(
-		activeElement && activeElement.type !== 'relation' && activeElement.type !== 'proof'
-			? activeElement.id
-			: undefined
-	);
-	const proofRelationId = $derived(activeRelation?.id);
-
 	$effect(() => {
 		console.log(
 			'Rendered simulation elements count:',
@@ -791,7 +770,7 @@
 			{/if}
 			{#if activeParameters.length > 0 || activeExistence}
 				<section class="parameter-details">
-					<h3>{m.simulation_section_type_parameters({ type: formatType(activeElement.type || 'fact') })}</h3>
+					<h3>{m.simulation_section_global_parameters()}</h3>
 					{#if activeExistence}
 						<div class="distribution-block">
 							<h4>{existenceTitle()}</h4>
@@ -803,30 +782,19 @@
 								bounds={[0, 100]}
 							/>
 						</div>
+						{@const existenceInfluence = valueInfluence('existence', false)}
+						{#if existenceInfluence}<ValueParameters info={existenceInfluence} format={formatValue} />{/if}
 					{/if}
 					<dl>
 						{#each activeParameters as [key, value]}
+							{@const influence = valueInfluence(key, false)}
 							<div class="detail-row">
 								<dt>{formatLabel(key)}</dt>
 								<dd>{formatValue(value)}</dd>
+								{#if influence}<ValueParameters info={influence} format={formatValue} />{/if}
 							</div>
 						{/each}
 					</dl>
-				</section>
-			{/if}
-			{#if proofFactId || proofRelationId}
-				<section class="proof-details">
-					<h3>{m.proof_section_title()}</h3>
-					{#if allProofs.some((proof) => (proofRelationId ? proof.relation_id === proofRelationId : proof.fact_id === proofFactId))}
-						<ProofList
-							proofs={allProofs}
-							factId={proofFactId}
-							relationId={proofRelationId}
-							format={formatValue}
-						/>
-					{:else}
-						<p class="proof-empty">{m.proof_empty()}</p>
-					{/if}
 				</section>
 			{/if}
 		</aside>
@@ -1146,38 +1114,6 @@
 		font-size: 11px;
 		font-weight: 700;
 		text-transform: uppercase;
-	}
-
-	.proof-details {
-		margin-top: 12px;
-		padding-top: 12px;
-		border-top: 1px solid rgb(148 163 184 / 22%);
-	}
-
-	.proof-details h3 {
-		margin: 0 0 4px;
-		color: #34d399;
-		font-size: 11px;
-		font-weight: 700;
-		text-transform: uppercase;
-	}
-
-	.proof-empty {
-		margin: 4px 0 0;
-		color: #94a3b8;
-		font-size: 12px;
-	}
-
-	:global(body.light) .proof-details {
-		border-color: rgb(71 85 105 / 18%);
-	}
-
-	:global(body.light) .proof-details h3 {
-		color: #047857;
-	}
-
-	:global(body.light) .proof-empty {
-		color: #64748b;
 	}
 
 	.parameter-details {

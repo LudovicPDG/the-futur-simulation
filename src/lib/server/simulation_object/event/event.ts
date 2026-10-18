@@ -25,7 +25,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 				RETURNING id`,
 				[
 					convertToPg(event.name),
-					event.type || 'event',
+					'event',
 					convertToPg(event.description),
 					convertToPgNullable(event.other),
 					convertToPg(event.existence),
@@ -53,7 +53,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality
 			FROM events e
 			JOIN facts f ON e.id = f.id
-			WHERE f.type = 'event'
+			WHERE lower(f.type) = 'event'
 		`);
 
 		return result.rows.map((row) => ({

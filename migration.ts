@@ -274,11 +274,43 @@ export async function createDatabase() {
 				ADD COLUMN IF NOT EXISTS veracity evolution_t NOT NULL DEFAULT ROW('[{"function":"50","weight":1,"uncertainty":0}]'::jsonb, '%')::evolution_t;
 		`);
 
-		// Modification: valeurs ajoutées / modifiées / supprimées (remplace l'ancienne colonne new_value)
+		// Preuve par valeur : une preuve porte sur une seule valeur (value_name) et donne sa valeur souhaitée (desired_value)
 		await client.query(`
 			ALTER TABLE proofs
-				ADD COLUMN IF NOT EXISTS modification JSONB NOT NULL DEFAULT '{"value_to_modify":[],"new_value":[]}',
+				ADD COLUMN IF NOT EXISTS value_name JSONB,
+				ADD COLUMN IF NOT EXISTS desired_value JSONB,
 				DROP COLUMN IF EXISTS new_value;
+		`);
+		// Anciennes preuves globales : chaque valeur de leur modification devient une preuve sur cette valeur
+		await client.query(`
+			DO $$ BEGIN
+				IF EXISTS (
+					SELECT 1 FROM information_schema.columns
+					WHERE table_name = 'proofs' AND column_name = 'modification'
+				) THEN
+					INSERT INTO proofs (
+						name, description, verification_method, falsifiability_method, source, veracity,
+						originality, fact_id, relation_id, parent_proof_id, created_at, value_name, desired_value
+					)
+					SELECT p.name, p.description, p.verification_method, p.falsifiability_method, p.source, p.veracity,
+						p.originality, p.fact_id, p.relation_id, p.parent_proof_id, p.created_at,
+						e.entry->'name', e.entry->'value'
+					FROM proofs p,
+						jsonb_array_elements(
+							COALESCE(p.modification->'value_to_modify', '[]') || COALESCE(p.modification->'new_value', '[]')
+						) WITH ORDINALITY AS e(entry, n)
+					WHERE p.value_name IS NULL AND e.n > 1;
+
+					UPDATE proofs SET
+						value_name = (COALESCE(modification->'value_to_modify', '[]') || COALESCE(modification->'new_value', '[]'))->0->'name',
+						desired_value = (COALESCE(modification->'value_to_modify', '[]') || COALESCE(modification->'new_value', '[]'))->0->'value'
+					WHERE value_name IS NULL;
+
+					ALTER TABLE proofs DROP COLUMN modification;
+				END IF;
+			END $$;
+		`);
+		await client.query(`
 			ALTER TABLE relations
 				DROP COLUMN IF EXISTS modification,
 				DROP COLUMN IF EXISTS element1_element2_value_to_modify,

@@ -2,8 +2,12 @@
 	import type { ProofData } from '$lib/simulation/Proof';
 	import { debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
+	import {
+		parseEvolutionValue,
+		buildEvolutionFunction,
+		buildEvolutionUncertainty
+	} from '$lib/simulation/event/EvolutionFunction';
 	import ProofList from './ProofList.svelte';
-	import ModificationView from './ModificationView.svelte';
 
 	const PAGE_SIZE = 5;
 
@@ -11,14 +15,14 @@
 
 	let {
 		proofs,
-		factId = null,
-		relationId = null,
+		roots = [],
 		parentId = null,
 		format
 	}: {
+		/** Every proof, to find the sub-proofs. */
 		proofs: StoredProof[];
-		factId?: string | null;
-		relationId?: string | null;
+		/** The top-level proofs of the value (newest first), listed when there is no parent. */
+		roots?: StoredProof[];
 		parentId?: string | null;
 		format: (value: unknown) => string;
 	} = $props();
@@ -28,18 +32,29 @@
 	let paramsShown = $state<Record<string, boolean>>({});
 
 	const siblings = $derived(
-		proofs.filter(
-			(proof) =>
-				(relationId ? proof.relation_id === relationId : proof.fact_id === factId) &&
-				(proof.parent_proof_id ?? null) === parentId
-		)
+		parentId === null ? roots : proofs.filter((proof) => proof.parent_proof_id === parentId)
 	);
 	const visible = $derived(siblings.slice(0, visibleCount));
-	// The founding proof is the oldest top-level proof of the element (proofs come newest first): the Genie made it when creating the element.
+	// The founding proof is the oldest top-level proof of the value (proofs come newest first): it was made when creating the element.
 	const foundingId = $derived(parentId === null ? siblings.at(-1)?.id : undefined);
 
 	function subProofCount(proofId: string) {
 		return proofs.filter((proof) => proof.parent_proof_id === proofId).length;
+	}
+
+	// Veracity and uncertainty of a proof now (the date as a decimal year)
+	function scoresNow(raw: unknown) {
+		const parsed = parseEvolutionValue(raw);
+		if (!parsed) return null;
+		const year = new Date().getUTCFullYear();
+		const t = year + (Date.now() - Date.UTC(year, 0, 1)) / 31_557_600_000;
+		const veracity = buildEvolutionFunction(parsed.evolution)(t);
+		if (!Number.isFinite(veracity)) return null;
+		const uncertainty = buildEvolutionUncertainty(parsed.evolution)(t);
+		return {
+			veracity: `${Math.round(Math.min(100, Math.max(0, veracity)))}%`,
+			uncertainty: `±${Math.round((Number.isFinite(uncertainty) ? uncertainty : 0) * 10) / 10}%`
+		};
 	}
 
 	const URL_PATTERN = /(https?:\/\/[^\s<>"')\]]+|www\.[^\s<>"')\]]+)/gi;
@@ -73,6 +88,10 @@
 				{/if}
 			</h4>
 			<p class="proof-description">{format(proof.description)}</p>
+			<div class="desired-value">
+				<span class="desired-label">{m.proof_desired_value()}</span>
+				<span class="desired-content">{format(proof.desired_value)}</span>
+			</div>
 			<div class="proof-actions">
 				<button
 					type="button"
@@ -100,11 +119,8 @@
 				</button>
 			</div>
 			{#if paramsShown[proof.id]}
+				{@const scores = scoresNow(proof.veracity)}
 				<dl class="proof-params">
-					<div class="param-row">
-						<dt>{m.simulation_field_modification()}</dt>
-						<dd><ModificationView modification={proof.modification} {format} /></dd>
-					</div>
 					<div class="param-row verification">
 						<dt>{m.simulation_field_verification_method()}</dt>
 						<dd>{format(proof.verification_method)}</dd>
@@ -137,13 +153,21 @@
 					</div>
 					<div class="param-row">
 						<dt>{m.simulation_field_originality()}</dt>
-						<dd>{format(proof.originality)}</dd>
+						<dd>{format(proof.originality)}%</dd>
+					</div>
+					<div class="param-row">
+						<dt>{m.proof_veracity()}</dt>
+						<dd>{scores?.veracity ?? '—'}</dd>
+					</div>
+					<div class="param-row">
+						<dt>{m.simulation_evolution_uncertainty()}</dt>
+						<dd>{scores?.uncertainty ?? '—'}</dd>
 					</div>
 				</dl>
 			{/if}
 			{#if expanded[proof.id]}
 				{#if count > 0}
-					<ProofList {proofs} {factId} {relationId} parentId={proof.id} {format} />
+					<ProofList {proofs} parentId={proof.id} {format} />
 				{:else}
 					<p class="proof-empty">{m.proof_no_sub()}</p>
 				{/if}
@@ -212,6 +236,46 @@
 		line-height: 1.5;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
+	}
+
+	.desired-value {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin: 0 0 8px;
+		padding: 6px 8px;
+		border-left: 3px solid #7dd3fc;
+		border-radius: 4px;
+		background: rgb(125 211 252 / 8%);
+		overflow-wrap: anywhere;
+	}
+
+	.desired-label {
+		color: #94a3b8;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.desired-content {
+		color: #f1f5f9;
+		font-size: 13px;
+		font-weight: 600;
+		white-space: pre-wrap;
+	}
+
+	:global(body.light) .desired-value {
+		border-left-color: #087e8b;
+		background: rgb(8 126 139 / 8%);
+	}
+
+	:global(body.light) .desired-label {
+		color: #64748b;
+	}
+
+	:global(body.light) .desired-content {
+		color: #0f172a;
 	}
 
 	.proof-params {
