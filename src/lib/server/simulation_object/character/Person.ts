@@ -61,7 +61,7 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 		const result = await db.query(`
 			SELECT 
 				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality,
-				to_jsonb(c.financial_resource) AS financial_resource, c.power
+				to_jsonb(c.financial_resource) AS financial_resource, to_jsonb(c.power) AS power
 			FROM persons p
 			JOIN characters c ON p.id = c.id
 			JOIN facts f ON c.id = f.id

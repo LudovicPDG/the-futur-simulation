@@ -67,7 +67,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 		const result = await db.query(`
 			SELECT 
 				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality,
-				to_jsonb(m.number_of_units) AS number_of_units, to_jsonb(m.financial_value) AS financial_value, m.power
+				to_jsonb(m.number_of_units) AS number_of_units, to_jsonb(m.financial_value) AS financial_value, to_jsonb(m.power) AS power
 			FROM material_resources m
 			JOIN facts f ON m.id = f.id
 		`);

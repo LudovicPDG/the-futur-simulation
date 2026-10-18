@@ -103,6 +103,18 @@ export async function createDatabase() {
 			END $$;
 		`);
 
+		// Type composite pour une valeur titrée d'une liste (capacité, volonté...) : le titre permet de la cibler
+		await client.query(`
+			DO $$ BEGIN
+				CREATE TYPE titled_item_t AS (
+					name translation_t,
+					description translation_t
+				);
+			EXCEPTION
+				WHEN duplicate_object THEN null;
+			END $$;
+		`);
+
 		// Type composite pour les paramètres de distribution Skew Normal (Asymétrique Normale)
 		await client.query(`
 			DO $$ BEGIN
@@ -329,7 +341,7 @@ export async function createDatabase() {
 			CREATE TABLE IF NOT EXISTS characters (
 				id UUID PRIMARY KEY DEFAULT gen_random_uuid() REFERENCES facts(id) ON DELETE CASCADE,
 				financial_resource evolution_t NOT NULL,
-				power translation_t[] NOT NULL DEFAULT '{}'
+				power titled_item_t[] NOT NULL DEFAULT '{}'
 			);
 		`);
 
@@ -352,7 +364,7 @@ export async function createDatabase() {
 		await client.query(`
 			CREATE TABLE IF NOT EXISTS interest_groups (
 				id UUID PRIMARY KEY DEFAULT gen_random_uuid() REFERENCES organizations(id) ON DELETE CASCADE,
-				willing translation_t[] NOT NULL DEFAULT '{}',
+				willing titled_item_t[] NOT NULL DEFAULT '{}',
 				satisfaction evolution_t NOT NULL
 			);
 		`);
@@ -406,9 +418,31 @@ export async function createDatabase() {
 				id UUID PRIMARY KEY DEFAULT gen_random_uuid() REFERENCES facts(id) ON DELETE CASCADE,
 				number_of_units evolution_t NOT NULL,
 				financial_value evolution_t NOT NULL,
-				power translation_t[] NOT NULL DEFAULT '{}'
+				power titled_item_t[] NOT NULL DEFAULT '{}'
 			);
 		`);
+
+		// Migration : les listes de traductions (power, willing) deviennent des listes de valeurs titrées
+		for (const [table, column] of [
+			['characters', 'power'],
+			['material_resources', 'power'],
+			['interest_groups', 'willing']
+		]) {
+			await client.query(`
+				DO $$ BEGIN
+					IF EXISTS (
+						SELECT 1 FROM information_schema.columns
+						WHERE table_name = '${table}' AND column_name = '${column}' AND udt_name = '_translation_t'
+					) THEN
+						ALTER TABLE ${table} ALTER COLUMN ${column} DROP DEFAULT;
+						ALTER TABLE ${table} ALTER COLUMN ${column} TYPE titled_item_t[] USING ARRAY(
+							SELECT ROW(entry, entry)::titled_item_t FROM unnest(${column}) AS entry
+						);
+						ALTER TABLE ${table} ALTER COLUMN ${column} SET DEFAULT '{}';
+					END IF;
+				END $$;
+			`);
+		}
 
 		// ==========================================
 		// 9. INDEXES

@@ -171,10 +171,21 @@
 		return items;
 	}
 
-	function listItems(value: unknown): string[] | null {
+	// The entries of a list. An entry with a title (capability, willingness...) is shown by its title, which is what
+	// relations and proofs target; its description comes next.
+	function listItems(value: unknown): { title: string; description: string }[] | null {
 		const raw = typeof value === 'string' ? parsePgArray(value) : Array.isArray(value) ? value : null;
 		if (!raw || raw.length === 0) return null;
-		return raw.map((item) => formatValue(item));
+		return raw.map((item) => {
+			if (typeof item === 'object' && item !== null && 'name' in item) {
+				const titled = item as { name: unknown; description?: unknown };
+				return {
+					title: formatValue(titled.name),
+					description: titled.description ? formatValue(titled.description) : ''
+				};
+			}
+			return { title: formatValue(item), description: '' };
+		});
 	}
 
 	function formatValue(value: unknown): string {
@@ -278,10 +289,13 @@
 	}
 
 	function formatRelationProperty(property: string, element: SimulationElementWithId | undefined) {
-		if (element && 'other' in element && Array.isArray(element.other)) {
-			const matchingProperty = element.other.find((item) => {
-				if (typeof item.name === 'string') return item.name === property;
-				return Object.values(item.name).some((translation) => translation === property);
+		// Entries with a title: the other data, the capabilities and the willingness
+		for (const list of ['other', 'power', 'willing']) {
+			const entries = element ? (element as Record<string, unknown>)[list] : undefined;
+			if (!Array.isArray(entries)) continue;
+			const matchingProperty = entries.find((item) => {
+				if (typeof item?.name === 'string') return item.name === property;
+				return Object.values(item?.name ?? {}).some((translation) => translation === property);
 			});
 			if (matchingProperty) return formatValue(matchingProperty.name);
 		}
@@ -662,9 +676,10 @@
 							<dd>
 								<ul class="value-list">
 									{#each listItems(value) ?? [] as item}
-										{@const itemInfluence = valueInfluence(key, true, item)}
+										{@const itemInfluence = valueInfluence(key, true, item.title)}
 										<li>
-											{item}
+											<strong>{item.title}</strong>
+											{#if item.description && item.description !== item.title}<span class="item-description">{item.description}</span>{/if}
 											{#if itemInfluence}<ValueParameters info={itemInfluence} format={formatValue} />{/if}
 										</li>
 									{/each}
@@ -995,6 +1010,11 @@
 		line-height: 1.5;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
+	}
+
+	.item-description {
+		display: block;
+		opacity: 0.75;
 	}
 
 	.value-list {

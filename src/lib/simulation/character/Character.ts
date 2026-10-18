@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { FactSchema, type SvgShapeOptions } from '../fact';
 import { EvolutionTypeSchema } from '../event/Evolution';
-import { TranslationSchema } from '../Translation';
+import { TitledItemSchema } from '../Translation';
 
 export const CharacterSchema = FactSchema.extend({
 	type: z.string().default('character').describe('The type of character'),
@@ -14,7 +14,9 @@ export const CharacterSchema = FactSchema.extend({
 	}).describe(
 		'The money the character owns or controls (personal wealth, treasury, budget, funds), as an amount of money over time, in a currency. It is NOT the influence, power, popularity or political weight of the character (that belongs to "power"). Estimate it from real-world knowledge for a real character (e.g. the net worth/assets of a person, the budget of an organization or state). The function must return a realistic amount in the currency, never a constant like 1 or a dimensionless index.'
 	),
-	power: z.array(TranslationSchema).describe('list of what this character can do')
+	power: z
+		.array(TitledItemSchema)
+		.describe('list of what this character can do, each capability having its own title')
 });
 
 export type CharacterData = z.infer<typeof CharacterSchema>;

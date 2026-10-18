@@ -24,7 +24,7 @@ const propertiesByType: Record<string, string[]> = {
 	fact: [],
 	person: ['financial_resource', 'power'],
 	organization: ['financial_resource', 'power', 'human_resource'],
-	interest_group: ['financial_resource', 'power', 'human_resource'],
+	interest_group: ['financial_resource', 'power', 'human_resource', 'willing', 'satisfaction'],
 	action: ['material_resource_used', 'fund_used', 'human_mobilized'],
 	event: [],
 	evolution: ['evolution', 'unit'],
@@ -32,6 +32,7 @@ const propertiesByType: Record<string, string[]> = {
 	material_resource: ['number_of_units', 'financial_value', 'power']
 };
 
+/** The titles of the entries of a list (other data, capabilities, willingness...): each one can be targeted by a relation. */
 function getAdditionalPropertyNames(other: unknown): string[] {
 	if (!Array.isArray(other)) return [];
 
@@ -91,9 +92,13 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 	): Promise<RelationData> {
 		const result = await db.query(
 			`
-			SELECT id, lower(type) AS type, (name).fr AS name_fr, (name).en AS name_en, to_jsonb(other) AS other
-			FROM facts
-			WHERE lower(type) = ANY($1::text[])
+			SELECT f.id, lower(f.type) AS type, (f.name).fr AS name_fr, (f.name).en AS name_en, to_jsonb(f.other) AS other,
+				to_jsonb(COALESCE(c.power, m.power)) AS power, to_jsonb(ig.willing) AS willing
+			FROM facts f
+			LEFT JOIN characters c ON c.id = f.id
+			LEFT JOIN material_resources m ON m.id = f.id
+			LEFT JOIN interest_groups ig ON ig.id = f.id
+			WHERE lower(f.type) = ANY($1::text[])
 		`,
 			[RelationElementTypeSchema.options]
 		);
@@ -104,7 +109,9 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			properties: [
 				...commonElementProperties,
 				...(propertiesByType[row.type] || []),
-				...getAdditionalPropertyNames(row.other)
+				...getAdditionalPropertyNames(row.other),
+				...getAdditionalPropertyNames(row.power),
+				...getAdditionalPropertyNames(row.willing)
 			]
 		}));
 		if (elements.length < 2) {

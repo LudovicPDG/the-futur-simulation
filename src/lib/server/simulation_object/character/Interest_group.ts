@@ -80,9 +80,9 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 		const result = await db.query(`
 			SELECT 
 				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality,
-				to_jsonb(c.financial_resource) AS financial_resource, c.power,
+				to_jsonb(c.financial_resource) AS financial_resource, to_jsonb(c.power) AS power,
 				to_jsonb(o.human_resource) AS human_resource,
-				ig.willing, to_jsonb(ig.satisfaction) AS satisfaction
+				to_jsonb(ig.willing) AS willing, to_jsonb(ig.satisfaction) AS satisfaction
 			FROM interest_groups ig
 			JOIN organizations o ON ig.id = o.id
 			JOIN characters c ON o.id = c.id

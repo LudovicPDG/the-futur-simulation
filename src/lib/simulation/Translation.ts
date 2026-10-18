@@ -9,6 +9,14 @@ export const TranslationSchema = z.object({
 
 export type TranslationData = z.infer<typeof TranslationSchema>;
 
+/** One value of a list (capability, willingness...): its title lets a relation or a proof target this very value. */
+export const TitledItemSchema = z.object({
+	name: TranslationSchema.describe('The short title of this item, unique in its list'),
+	description: TranslationSchema.describe('The description of this item')
+});
+
+export type TitledItemData = z.infer<typeof TitledItemSchema>;
+
 export function parseTranslation(value: unknown): TranslationData | undefined {
 	if (typeof value !== 'string') return undefined;
 
