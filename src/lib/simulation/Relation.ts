@@ -66,6 +66,35 @@ export const RelationSchema = z.object({
 
 export type RelationData = z.infer<typeof RelationSchema> & { id?: string };
 
+/**
+ * Every value of a relation that has its own value parameters (proofs, veracity, originality): the impact of each value
+ * to modify and the content of each value to add. "name" is the value_name that its proofs use.
+ */
+export function relationValues(
+	relation: Partial<RelationData>
+): { name: string; value: number | string | boolean }[] {
+	const sides = [
+		['element1_element2', relation.element1_element2_value_to_modify, relation.element1_element2_new_value],
+		['element2_element1', relation.element2_element1_value_to_modify, relation.element2_element1_new_value]
+	] as const;
+	return sides.flatMap(([direction, toModify, toAdd]) => [
+		...(toModify ?? []).map((c) => ({
+			name: relationValueName(direction, 'modify', c),
+			value: c.impact
+		})),
+		...(toAdd ?? []).map((c) => ({ name: relationValueName(direction, 'add', c), value: c.value }))
+	]);
+}
+
+/** The value_name of one value to modify or to add of a relation. */
+export function relationValueName(
+	direction: 'element1_element2' | 'element2_element1',
+	kind: 'modify' | 'add',
+	connexion: RelationConnexionData
+): string {
+	return `${direction}_${kind === 'modify' ? 'value_to_modify' : 'new_value'}: ${connexion.Element1Property} → ${connexion.Element2Property}`;
+}
+
 export interface RelationSvgShapeOptions extends SvgShapeOptions {
 	sourceX?: number;
 	sourceY?: number;

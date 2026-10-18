@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
 import { ProofSchema, valueKind, type ProofData } from '$lib/simulation/Proof';
+import { relationValues, type RelationData } from '$lib/simulation/Relation';
+import { RelationServer } from './Relation';
 import { convertToPg } from './Genie';
 import { db } from '../utils/database';
 
@@ -84,6 +86,14 @@ const NOT_A_VALUE = new Set([
 	'Element2Type'
 ]);
 
+/** The lists of a relation whose entries are values on their own (see relationValues). */
+const RELATION_VALUE_LISTS = new Set([
+	'element1_element2_value_to_modify',
+	'element1_element2_new_value',
+	'element2_element1_value_to_modify',
+	'element2_element1_new_value'
+]);
+
 /**
  * Every value of a freshly created element (its name, description, list items and "other" values), each of which
  * gets its own founding proof. Values that are neither a text, a number, a boolean nor an evolution (rankings...) are skipped.
@@ -97,8 +107,15 @@ function elementValues(
 		if (value_name && desired_value !== undefined) values.push({ value_name, desired_value });
 	};
 
+	// Each value to modify and each value to add of a relation has its own proof.
+	if (element.type === 'relation') {
+		for (const value of relationValues(element as Partial<RelationData>)) {
+			add(value.name, value.value);
+		}
+	}
+
 	for (const [key, raw] of Object.entries(element)) {
-		if (NOT_A_VALUE.has(key) || raw === null || raw === undefined) continue;
+		if (NOT_A_VALUE.has(key) || RELATION_VALUE_LISTS.has(key) || raw === null || raw === undefined) continue;
 		if (key === 'evolution' && Array.isArray(raw) && typeof element.unit === 'string') {
 			// An evolution element holds its functions and its unit side by side: they form one value.
 			add(key, { evolution: raw, unit: element.unit });
@@ -257,12 +274,17 @@ ${JSON.stringify(fact.rows[0].element)}`
 		);
 		if (relation.rows.length === 0) throw new Error('The debated relation does not exist');
 		const { element, ...endpoints } = relation.rows[0];
+		// Each value to modify and each value to add is a value of the relation: exposed like the "other" values of a fact.
+		const stored = (await RelationServer.get_all()).find((item) => item.id === target.relationId);
+		const values = stored
+			? relationValues(stored).map(({ name, value }) => ({ name, value }))
+			: [];
 		return {
-			element,
+			element: { ...element, other: values },
 			text: `
 
-This proof is about the following relation between two simulation elements:
-${JSON.stringify({ ...element, ...endpoints })}`
+This proof is about the following relation between two simulation elements. Its values are its name, its description and each value to modify (its value is the impact) or value to add (its value is the content), named in "values":
+${JSON.stringify({ ...element, ...endpoints, values })}`
 		};
 	}
 

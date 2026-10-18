@@ -2,7 +2,7 @@
 	import type { RelationData } from '$lib/simulation/Relation';
 	import type { SimulationElementWithId } from '$lib/stores/simulation';
 	import { renderSimulationElementSvg } from '$lib/simulation/renderSvg';
-	import { svg_shape as relation_svg_shape } from '$lib/simulation/Relation';
+	import { svg_shape as relation_svg_shape, relationValueName } from '$lib/simulation/Relation';
 	import { parseTranslation } from '$lib/simulation/Translation';
 	import { clickOutside } from '$lib/actions/clickOutside';
 	import { getLocale } from '$lib/paraglide/runtime';
@@ -695,6 +695,7 @@
 									<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(connexion.impact)}
 									</span>
+									{#each [valueInfluence(relationValueName('element1_element2', 'modify', connexion), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 						{/if}
@@ -711,6 +712,7 @@
 									<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(added.impact)}
 									</span>
+									{#each [valueInfluence(relationValueName('element1_element2', 'add', added), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 						{/if}
@@ -731,6 +733,7 @@
 									<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(connexion.impact)}
 									</span>
+									{#each [valueInfluence(relationValueName('element2_element1', 'modify', connexion), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 						{/if}
@@ -747,6 +750,7 @@
 									<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(added.impact)}
 									</span>
+									{#each [valueInfluence(relationValueName('element2_element1', 'add', added), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 						{/if}
