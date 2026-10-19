@@ -32,33 +32,39 @@ function valueNames(name: unknown): string[] {
 	return [];
 }
 
-/** Whether the element has the named value: a primary property or one of its "other" values. */
-function hasValue(name: unknown, element: Record<string, unknown>): boolean {
+/** The lists whose entries are values on their own: the "other" values, and the titled items (capabilities, willingness). */
+const VALUE_LISTS = [
+	['other', 'value'],
+	['power', 'description'],
+	['willing', 'description']
+] as const;
+
+/** The entries of the named value among the lists of the element: their title is the name of the value. */
+function findListEntry(name: unknown, element: Record<string, unknown>): { value: unknown } | undefined {
 	const names = valueNames(name);
-	if (names.some((candidate) => candidate in element)) return true;
-	const other = Array.isArray(element.other) ? element.other : [];
-	return other.some(
-		(item) =>
-			typeof item === 'object' &&
-			item !== null &&
-			valueNames((item as { name?: unknown }).name).some((candidate) => names.includes(candidate))
-	);
+	for (const [list, valueKey] of VALUE_LISTS) {
+		const entries = Array.isArray(element[list]) ? (element[list] as unknown[]) : [];
+		const match = entries.find(
+			(item) =>
+				typeof item === 'object' &&
+				item !== null &&
+				valueNames((item as { name?: unknown }).name).some((candidate) => names.includes(candidate))
+		);
+		if (match) return { value: (match as Record<string, unknown>)[valueKey] };
+	}
+	return undefined;
 }
 
-/** The current value of a primary property of the element or of one of its "other" values. */
-function findOriginalValue(name: unknown, element: Record<string, unknown>): unknown {
-	const names = valueNames(name);
-	const key = names.find((candidate) => candidate in element);
-	if (key) return element[key];
+/** Whether the element has the named value: a primary property, one of its "other" values or one of its titled items. */
+function hasValue(name: unknown, element: Record<string, unknown>): boolean {
+	return valueNames(name).some((candidate) => candidate in element) || findListEntry(name, element) !== undefined;
+}
 
-	const other = Array.isArray(element.other) ? element.other : [];
-	const match = other.find(
-		(item) =>
-			typeof item === 'object' &&
-			item !== null &&
-			valueNames((item as { name?: unknown }).name).some((candidate) => names.includes(candidate))
-	);
-	return match ? (match as { value?: unknown }).value : undefined;
+/** The current value of a primary property of the element, of one of its "other" values or of one of its titled items. */
+function findOriginalValue(name: unknown, element: Record<string, unknown>): unknown {
+	const key = valueNames(name).find((candidate) => candidate in element);
+	if (key) return element[key];
+	return findListEntry(name, element)?.value;
 }
 
 /** Describes why the value of a proof does not fit its element: an unknown value or a desired value of another type. */
@@ -121,6 +127,9 @@ function elementValues(
 			add(key, { evolution: raw, unit: element.unit });
 		} else if (key === 'other') {
 			if (Array.isArray(raw)) for (const item of raw) add(item?.name, item?.value);
+		} else if (key === 'power' || key === 'willing') {
+			// A titled item is a value named by its title, whose content is its description.
+			if (Array.isArray(raw)) for (const item of raw) add(item?.name, item?.description);
 		} else if (Array.isArray(raw)) {
 			for (const item of raw) add(key, item);
 		} else {

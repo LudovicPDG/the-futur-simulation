@@ -173,18 +173,19 @@
 
 	// The entries of a list. An entry with a title (capability, willingness...) is shown by its title, which is what
 	// relations and proofs target; its description comes next.
-	function listItems(value: unknown): { title: string; description: string }[] | null {
+	function listItems(value: unknown): { name: unknown; title: string; description: string }[] | null {
 		const raw = typeof value === 'string' ? parsePgArray(value) : Array.isArray(value) ? value : null;
 		if (!raw || raw.length === 0) return null;
 		return raw.map((item) => {
 			if (typeof item === 'object' && item !== null && 'name' in item) {
 				const titled = item as { name: unknown; description?: unknown };
 				return {
+					name: titled.name,
 					title: formatValue(titled.name),
 					description: titled.description ? formatValue(titled.description) : ''
 				};
 			}
-			return { title: formatValue(item), description: '' };
+			return { name: item, title: formatValue(item), description: '' };
 		});
 	}
 
@@ -676,7 +677,7 @@
 							<dd>
 								<ul class="value-list">
 									{#each listItems(value) ?? [] as item}
-										{@const itemInfluence = valueInfluence(key, true, item.title)}
+										{@const itemInfluence = valueInfluence(item.name, true)}
 										<li>
 											<strong>{item.title}</strong>
 											{#if item.description && item.description !== item.title}<span class="item-description">{item.description}</span>{/if}
