@@ -78,6 +78,20 @@ export async function createDatabase() {
 			END $$;
 		`);
 
+		// Type composite pour une ressource matérielle d'une action, avec un titre traduit (comme une capacité)
+		await client.query(`
+			DO $$ BEGIN
+				CREATE TYPE action_material_t AS (
+					name translation_t,
+					description translation_t,
+					quantity evolution_t,
+					level_of_wear evolution_t
+				);
+			EXCEPTION
+				WHEN duplicate_object THEN null;
+			END $$;
+		`);
+
 		// Type composite pour les éléments d'un classement (ranking)
 		await client.query(`
 			DO $$ BEGIN
@@ -242,8 +256,18 @@ export async function createDatabase() {
 			await client.query(`
 				ALTER TABLE ${table}
 					ADD COLUMN IF NOT EXISTS end_probability_distribution skew_normal_parameter_t[] NOT NULL DEFAULT '{}';
-				UPDATE ${table} SET end_probability_distribution = start_probability_distribution
-					WHERE end_probability_distribution = '{}' AND start_probability_distribution <> '{}';
+			`);
+			// The start distribution is dropped by a later step: only copy it while it still exists
+			await client.query(`
+				DO $$ BEGIN
+					IF EXISTS (
+						SELECT 1 FROM information_schema.columns
+						WHERE table_name = '${table}' AND column_name = 'start_probability_distribution'
+					) THEN
+						UPDATE ${table} SET end_probability_distribution = start_probability_distribution
+							WHERE end_probability_distribution = '{}' AND start_probability_distribution <> '{}';
+					END IF;
+				END $$;
 			`);
 		}
 
@@ -403,10 +427,44 @@ export async function createDatabase() {
 		await client.query(`
 			CREATE TABLE IF NOT EXISTS actions (
 				id UUID PRIMARY KEY DEFAULT gen_random_uuid() REFERENCES facts(id) ON DELETE CASCADE,
-				material_resource_used action_material_resource_t[] NOT NULL DEFAULT '{}',
+				material_resource_used action_material_t[] NOT NULL DEFAULT '{}',
 				fund_used evolution_t NOT NULL,
 				human_mobilized evolution_t NOT NULL
 			);
+		`);
+
+		// Migration : the material resources of an action get a translated title and a description (like a capability).
+		// The old name (a text) becomes the title in every language.
+		for (const column of ['material_resource_used', 'material_resource_necessary']) {
+			await client.query(`
+				DO $$ BEGIN
+					IF EXISTS (
+						SELECT 1 FROM information_schema.columns
+						WHERE table_name = 'actions' AND column_name = '${column}' AND udt_name = '_action_material_resource_t'
+					) THEN
+						ALTER TABLE actions RENAME COLUMN ${column} TO ${column}_old;
+						ALTER TABLE actions ADD COLUMN ${column} action_material_t[] NOT NULL DEFAULT '{}';
+						UPDATE actions SET ${column} = ARRAY(
+							SELECT ROW(
+								ROW((r).name, (r).name, (r).name, (r).name)::translation_t,
+								ROW((r).name, (r).name, (r).name, (r).name)::translation_t,
+								(r).quantity,
+								(r).level_of_wear
+							)::action_material_t
+							FROM unnest(${column}_old) AS r
+						);
+						ALTER TABLE actions DROP COLUMN ${column}_old;
+					END IF;
+				END $$;
+			`);
+		}
+
+		// Necessary resources of an action (in addition of the ones used)
+		await client.query(`
+			ALTER TABLE actions
+				ADD COLUMN IF NOT EXISTS material_resource_necessary action_material_t[] NOT NULL DEFAULT '{}',
+				ADD COLUMN IF NOT EXISTS fund_necessary evolution_t NOT NULL DEFAULT ROW('[{"function":"0","weight":1,"uncertainty":0}]'::jsonb, '')::evolution_t,
+				ADD COLUMN IF NOT EXISTS human_necessary evolution_t NOT NULL DEFAULT ROW('[{"function":"0","weight":1,"uncertainty":0}]'::jsonb, '')::evolution_t;
 		`);
 
 		// ==========================================

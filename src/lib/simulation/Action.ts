@@ -2,13 +2,21 @@ import { z } from 'zod';
 import { FactSchema, type SvgShapeOptions } from './fact';
 import { EvolutionTypeSchema } from './event/Evolution';
 import { existenceSchema } from './Existence';
+import { TranslationSchema } from './Translation';
 
+/** A material resource of an action: like a capability, it has its own title (so a relation or a proof can target it) and its parameters. */
 const ActionMaterialResourceSchema = z.object({
-	name: z.string().describe('The name of the material resource'),
-	quantity: EvolutionTypeSchema.describe('The quantity of the material resource'),
-	level_of_wear: EvolutionTypeSchema.describe('The level of wear of the material resource')
+	name: TranslationSchema.describe('The short title of the material resource, unique in its list'),
+	description: TranslationSchema.describe('The description of the material resource'),
+	quantity: EvolutionTypeSchema.describe(
+		'The quantity of the material resource, with its unit. Keep it simple: a single constant number (e.g. "5000"), NOT a formula depending on the time t.'
+	),
+	level_of_wear: EvolutionTypeSchema.describe(
+		'The level of wear of the material resource in %. Keep it simple: a single constant number (e.g. "10"), NOT a formula depending on the time t.'
+	)
 });
 
+// The "necessary" field comes just after the "used" one.
 export const ActionSchema = FactSchema.extend({
 	type: z.literal('action').default('action').describe('The type of action'),
 	existence: existenceSchema('action'),
@@ -16,8 +24,16 @@ export const ActionSchema = FactSchema.extend({
 		.array(ActionMaterialResourceSchema)
 		.default([])
 		.describe('Material resources used in the action'),
+	material_resource_necessary: z
+		.array(ActionMaterialResourceSchema)
+		.default([])
+		.describe(
+			'Material resources necessary to perform the action (the minimum required, whether or not they are currently used)'
+		),
 	fund_used: EvolutionTypeSchema.describe('Money used in the action'),
-	human_mobilized: EvolutionTypeSchema.describe('Number of human mobilized in the action')
+	fund_necessary: EvolutionTypeSchema.describe('Money necessary to perform the action'),
+	human_mobilized: EvolutionTypeSchema.describe('Number of human mobilized in the action'),
+	human_necessary: EvolutionTypeSchema.describe('Number of humans necessary to perform the action')
 });
 
 export type ActionData = z.infer<typeof ActionSchema>;

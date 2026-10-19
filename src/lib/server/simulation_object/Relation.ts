@@ -25,7 +25,14 @@ const propertiesByType: Record<string, string[]> = {
 	person: ['financial_resource', 'power'],
 	organization: ['financial_resource', 'power', 'human_resource'],
 	interest_group: ['financial_resource', 'power', 'human_resource', 'willing', 'satisfaction'],
-	action: ['material_resource_used', 'fund_used', 'human_mobilized'],
+	action: [
+		'material_resource_used',
+		'material_resource_necessary',
+		'fund_used',
+		'fund_necessary',
+		'human_mobilized',
+		'human_necessary'
+	],
 	event: [],
 	evolution: ['evolution', 'unit'],
 	ranking: ['rankings'],
@@ -93,8 +100,10 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		const result = await db.query(
 			`
 			SELECT f.id, lower(f.type) AS type, (f.name).fr AS name_fr, (f.name).en AS name_en, to_jsonb(f.other) AS other,
-				to_jsonb(COALESCE(c.power, m.power)) AS power, to_jsonb(ig.willing) AS willing
+				to_jsonb(COALESCE(c.power, m.power)) AS power, to_jsonb(ig.willing) AS willing,
+				to_jsonb(a.material_resource_used || a.material_resource_necessary) AS action_materials
 			FROM facts f
+			LEFT JOIN actions a ON a.id = f.id
 			LEFT JOIN characters c ON c.id = f.id
 			LEFT JOIN material_resources m ON m.id = f.id
 			LEFT JOIN interest_groups ig ON ig.id = f.id
@@ -111,7 +120,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				...(propertiesByType[row.type] || []),
 				...getAdditionalPropertyNames(row.other),
 				...getAdditionalPropertyNames(row.power),
-				...getAdditionalPropertyNames(row.willing)
+				...getAdditionalPropertyNames(row.willing),
+				...getAdditionalPropertyNames(row.action_materials)
 			]
 		}));
 		if (elements.length < 2) {

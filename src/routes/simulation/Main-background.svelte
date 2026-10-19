@@ -23,6 +23,8 @@
 	import { onMount } from 'svelte';
 	import { addValueTarget, debateTarget, type ValueListField } from '$lib/stores/debate';
 
+	type ItemParameter = { label: string; amount: string; uncertainty: string; unit: string };
+
 	let {
 		new_element,
 		simulation_data = []
@@ -174,19 +176,50 @@
 
 	// The entries of a list. An entry with a title (capability, willingness...) is shown by its title, which is what
 	// relations and proofs target; its description comes next.
-	function listItems(value: unknown): { name: unknown; title: string; description: string }[] | null {
+	// A parameter of a list entry (quantity, level of wear...) shown as its number now, its uncertainty and its unit
+	function entryParameter(key: string, raw: unknown): ItemParameter | null {
+		const parsed = parseEvolutionValue(raw);
+		if (!parsed) return null;
+		const score = buildEvolutionFunction(parsed.evolution)(currentYear());
+		const totalWeight = parsed.evolution.reduce((sum, item) => sum + item.weight, 0) || 1;
+		const uncertainty =
+			(parsed.evolution.reduce((sum, item) => sum + item.uncertainty * item.weight, 0) / totalWeight) * 100;
+		return {
+			label: formatLabel(key),
+			amount: Number.isFinite(score)
+				? new Intl.NumberFormat(currentLocale, { maximumFractionDigits: 2 }).format(score)
+				: '—',
+			uncertainty: uncertainty > 0 ? `±${Math.round(uncertainty * 10) / 10}%` : '',
+			unit: parsed.unit
+		};
+	}
+
+	function listItems(
+		value: unknown
+	): { name: unknown; title: string; description: string; parameters: ItemParameter[] }[] | null {
 		const raw = typeof value === 'string' ? parsePgArray(value) : Array.isArray(value) ? value : null;
 		if (!raw || raw.length === 0) return null;
 		return raw.map((item) => {
 			if (typeof item === 'object' && item !== null && 'name' in item) {
-				const titled = item as { name: unknown; description?: unknown };
+				const titled = item as {
+					name: unknown;
+					description?: unknown;
+					quantity?: unknown;
+					level_of_wear?: unknown;
+				};
+				// A material resource of an action has parameters (quantity, level of wear) after its description
+				const parameters = (['quantity', 'level_of_wear'] as const).flatMap((key) => {
+					const parameter = entryParameter(key, titled[key]);
+					return parameter ? [parameter] : [];
+				});
 				return {
 					name: titled.name,
 					title: formatValue(titled.name),
-					description: titled.description ? formatValue(titled.description) : ''
+					description: titled.description ? formatValue(titled.description) : '',
+					parameters
 				};
 			}
-			return { name: item, title: formatValue(item), description: '' };
+			return { name: item, title: formatValue(item), description: '', parameters: [] };
 		});
 	}
 
@@ -292,8 +325,11 @@
 			unit: m.simulation_field_unit,
 			rankings: m.simulation_field_rankings,
 			material_resource_used: m.simulation_field_material_resource_used,
+			material_resource_necessary: m.simulation_field_material_resource_necessary,
 			fund_used: m.simulation_field_fund_used,
+			fund_necessary: m.simulation_field_fund_necessary,
 			human_mobilized: m.simulation_field_human_mobilized,
+			human_necessary: m.simulation_field_human_necessary,
 			number_of_units: m.simulation_field_number_of_units,
 			financial_value: m.simulation_field_financial_value,
 			new_value: m.simulation_field_new_value,
@@ -744,6 +780,20 @@
 										<li>
 											<strong>{item.title}</strong>
 											{#if item.description && item.description !== item.title}<span class="item-description">{item.description}</span>{/if}
+											{#if item.parameters.length > 0}
+												<dl class="item-parameters">
+													{#each item.parameters as parameter}
+														<div>
+															<dt>{parameter.label}</dt>
+															<dd>
+																{parameter.amount}
+																{#if parameter.unit}<small>{parameter.unit}</small>{/if}
+																{#if parameter.uncertainty}<small class="item-uncertainty">{parameter.uncertainty}</small>{/if}
+															</dd>
+														</div>
+													{/each}
+												</dl>
+											{/if}
 											{#if itemInfluence}<ValueParameters info={itemInfluence} format={formatValue} />{/if}
 										</li>
 									{/each}
@@ -1103,6 +1153,38 @@
 	.item-description {
 		display: block;
 		opacity: 0.75;
+	}
+
+	.item-parameters {
+		margin: 4px 0 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 16px;
+	}
+
+	.item-parameters > div {
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+	}
+
+	.item-parameters dt {
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		opacity: 0.6;
+	}
+
+	.item-parameters dd {
+		margin: 0;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.item-parameters small {
+		margin-left: 3px;
+		font-weight: 400;
+		opacity: 0.7;
 	}
 
 	.ranking-list {

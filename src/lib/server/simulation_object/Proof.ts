@@ -37,6 +37,8 @@ const VALUE_LISTS = [
 	['other', 'value'],
 	['power', 'description'],
 	['willing', 'description'],
+	['material_resource_used', 'description'],
+	['material_resource_necessary', 'description'],
 	['rankings', 'value']
 ] as const;
 
@@ -128,7 +130,12 @@ function elementValues(
 			add(key, { evolution: raw, unit: element.unit });
 		} else if (key === 'other') {
 			if (Array.isArray(raw)) for (const item of raw) add(item?.name, item?.value);
-		} else if (key === 'power' || key === 'willing') {
+		} else if (
+			key === 'power' ||
+			key === 'willing' ||
+			key === 'material_resource_used' ||
+			key === 'material_resource_necessary'
+		) {
 			// A titled item is a value named by its title, whose content is its description.
 			if (Array.isArray(raw)) for (const item of raw) add(item?.name, item?.description);
 		} else if (key === 'rankings') {
@@ -254,6 +261,47 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 			}
 		}
 		return proofs;
+	}
+
+	/**
+	 * Gives a founding proof to every material resource of the existing actions that has none yet (the actions created
+	 * before the materials had their own title), so that each of them shows its veracity, uncertainty and originality.
+	 */
+	async backfillMaterialProofs(
+		model_name: string = 'openai/gpt-5.6-luna',
+		level_of_reasoning: string = 'low'
+	): Promise<{ actions: number; proofs: number }> {
+		const actions = await db.query(
+			`SELECT id, to_jsonb(material_resource_used) AS material_resource_used,
+				to_jsonb(material_resource_necessary) AS material_resource_necessary
+			FROM actions`
+		);
+		let updated = 0;
+		let created = 0;
+
+		for (const action of actions.rows) {
+			const existing = await db.query(`SELECT value_name FROM proofs WHERE fact_id = $1`, [action.id]);
+			const covered = new Set(existing.rows.flatMap((row) => valueNames(row.value_name)));
+			const missing = (entries: unknown) =>
+				(Array.isArray(entries) ? entries : []).filter(
+					(entry) => !valueNames(entry?.name).some((name) => covered.has(name))
+				);
+
+			const material_resource_used = missing(action.material_resource_used);
+			const material_resource_necessary = missing(action.material_resource_necessary);
+			if (material_resource_used.length + material_resource_necessary.length === 0) continue;
+
+			const proofs = await this.createInitialProof(
+				model_name,
+				level_of_reasoning,
+				'Give the founding proof of the material resources of this action.',
+				{ factId: action.id },
+				{ material_resource_used, material_resource_necessary }
+			);
+			updated++;
+			created += proofs.length;
+		}
+		return { actions: updated, proofs: created };
 	}
 
 	/** The element of the proof, as JSON for the prompt and as a record to check the value of the proof. */

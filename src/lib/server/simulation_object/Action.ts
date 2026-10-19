@@ -39,14 +39,20 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 				`INSERT INTO actions (
 					id,
 					material_resource_used,
+					material_resource_necessary,
 					fund_used,
-					human_mobilized
-				) VALUES ($1, $2, $3, $4)`,
+					fund_necessary,
+					human_mobilized,
+					human_necessary
+				) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 				[
 					id,
 					convertToPg(action.material_resource_used),
+					convertToPg(action.material_resource_necessary),
 					convertToPg(action.fund_used),
-					convertToPg(action.human_mobilized)
+					convertToPg(action.fund_necessary),
+					convertToPg(action.human_mobilized),
+					convertToPg(action.human_necessary)
 				]
 			);
 
@@ -64,7 +70,9 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 		const result = await db.query(`
 			SELECT 
 				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality,
-				to_jsonb(a.material_resource_used) AS material_resource_used, to_jsonb(a.fund_used) AS fund_used, to_jsonb(a.human_mobilized) AS human_mobilized
+				to_jsonb(a.material_resource_used) AS material_resource_used, to_jsonb(a.material_resource_necessary) AS material_resource_necessary,
+				to_jsonb(a.fund_used) AS fund_used, to_jsonb(a.fund_necessary) AS fund_necessary,
+				to_jsonb(a.human_mobilized) AS human_mobilized, to_jsonb(a.human_necessary) AS human_necessary
 			FROM actions a
 			JOIN facts f ON a.id = f.id
 		`);
@@ -78,8 +86,11 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 			existence: row.existence,
 			originality: Number(row.originality),
 			material_resource_used: row.material_resource_used || [],
+			material_resource_necessary: row.material_resource_necessary || [],
 			fund_used: row.fund_used,
-			human_mobilized: row.human_mobilized
+			fund_necessary: row.fund_necessary,
+			human_mobilized: row.human_mobilized,
+			human_necessary: row.human_necessary
 		}));
 	}
 
