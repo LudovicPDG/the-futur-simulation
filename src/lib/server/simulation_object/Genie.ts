@@ -24,6 +24,7 @@ import { Action } from './Action';
 import { MaterialResource } from './Material_resouce';
 import { Proof } from './Proof';
 import { Relation } from './Relation';
+import { Value, type ValueListField } from './Value';
 
 function escapePgQuotedValue(value: string): string {
 	return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -219,7 +220,10 @@ export class Genie {
 
 	async ask(
 		prompt: string,
-		options: { debateProofId?: string } = {}
+		options: {
+			debateProofId?: string;
+			addValue?: { factId: string; field: ValueListField };
+		} = {}
 	): Promise<WorldData | string> {
 		console.log('demande au genie :', prompt);
 
@@ -230,6 +234,17 @@ export class Genie {
 				this.level_of_reasoning,
 				prompt,
 				options.debateProofId
+			);
+		}
+
+		// The user chose a list of an element: the request is a new value of this list.
+		if (options.addValue) {
+			return Value.add(
+				this.model_name,
+				this.level_of_reasoning,
+				prompt,
+				options.addValue.factId,
+				options.addValue.field
 			);
 		}
 

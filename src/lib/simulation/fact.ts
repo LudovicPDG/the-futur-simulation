@@ -2,14 +2,14 @@ import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import { existenceSchema } from './Existence';
 
-const otherSchema = z.array(
-	z.object({
-		name: TranslationSchema.describe('The name of one other data of the fact'),
-		value: z
-			.union([TranslationSchema, z.number(), z.boolean()])
-			.describe('The value of one other data of the fact')
-	})
-);
+export const OtherValueSchema = z.object({
+	name: TranslationSchema.describe('The name of one other data of the fact'),
+	value: z
+		.union([TranslationSchema, z.number(), z.boolean()])
+		.describe('The value of one other data of the fact')
+});
+
+const otherSchema = z.array(OtherValueSchema);
 
 export const FactSchema = z.object({
 	name: TranslationSchema.describe('The name of the fact'),

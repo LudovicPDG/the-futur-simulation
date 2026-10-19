@@ -21,6 +21,7 @@
 	} from '$lib/simulation/event/EvolutionFunction';
 	import type { ProofData } from '$lib/simulation/Proof';
 	import { onMount } from 'svelte';
+	import { addValueTarget, debateTarget, type ValueListField } from '$lib/stores/debate';
 
 	let {
 		new_element,
@@ -186,6 +187,18 @@
 				};
 			}
 			return { name: item, title: formatValue(item), description: '' };
+		});
+	}
+
+	// "Add a value" on a list of the active element: the next prompt asks the genie to add a value to this list.
+	function startAddValue(field: ValueListField) {
+		if (!activeElement) return;
+		const list = field === 'other' ? m.simulation_section_other_information() : formatLabel(field);
+		debateTarget.set(null);
+		addValueTarget.set({
+			factId: activeElement.id as string,
+			field,
+			name: `${list} — ${formatValue(activeElement.name)}`
 		});
 	}
 
@@ -689,6 +702,11 @@
 						{:else}
 							<dd>{formatValue(value)}</dd>
 						{/if}
+						{#if (key === 'power' || key === 'willing') && !activeRelation}
+							<button type="button" class="add-value" onclick={() => startAddValue(key as ValueListField)}>
+								+ {m.value_add()}
+							</button>
+						{/if}
 						{#if influence && !listItems(value)}<ValueParameters info={influence} format={formatValue} />{/if}
 					</div>
 				{/each}
@@ -773,7 +791,7 @@
 					{/if}
 				</section>
 			{/if}
-			{#if activeOther.length > 0}
+			{#if activeOther.length > 0 || (activeElement && 'other' in activeElement)}
 				<section class="other-details">
 					<h3>{m.simulation_section_other_information()}</h3>
 					<dl>
@@ -786,6 +804,9 @@
 							</div>
 						{/each}
 					</dl>
+					<button type="button" class="add-value" onclick={() => startAddValue('other')}>
+						+ {m.value_add()}
+					</button>
 				</section>
 			{/if}
 			{#if activeParameters.length > 0 || activeExistence}
@@ -1011,6 +1032,22 @@
 		line-height: 1.5;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
+	}
+
+	.add-value {
+		margin-top: 6px;
+		padding: 3px 10px;
+		color: inherit;
+		background: transparent;
+		border: 1px dashed currentColor;
+		border-radius: 8px;
+		font-size: 12px;
+		opacity: 0.8;
+		cursor: pointer;
+	}
+
+	.add-value:hover {
+		opacity: 1;
 	}
 
 	.item-description {

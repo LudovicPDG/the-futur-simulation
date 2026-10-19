@@ -1,6 +1,7 @@
 import type { Actions } from './$types';
 import { Genie } from '$lib/server/simulation_object/Genie';
 import { fail } from '@sveltejs/kit';
+import { isValueListField } from '$lib/server/simulation_object/Value';
 
 export const actions: Actions = {
 	askGenie: async ({ request }) => {
@@ -13,8 +14,15 @@ export const actions: Actions = {
 
 		const debateProofId = data.get('debate_proof_id')?.toString() || undefined;
 
+		const addValueFactId = data.get('add_value_fact_id')?.toString();
+		const addValueField = data.get('add_value_field')?.toString();
+		const addValue =
+			addValueFactId && isValueListField(addValueField)
+				? { factId: addValueFactId, field: addValueField }
+				: undefined;
+
 		const genie = new Genie();
-		const result = await genie.ask(prompt, { debateProofId });
+		const result = await genie.ask(prompt, { debateProofId, addValue });
 		return { success: true, result };
 	}
 };

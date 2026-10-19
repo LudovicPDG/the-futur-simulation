@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { navbarVisible } from '$lib/stores/navbar';
 	import { simulationStore } from '$lib/stores/simulation';
-	import { debateTarget } from '$lib/stores/debate';
+	import { addValueTarget, debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
 	import CrystalBall from '../Crystal-ball.svelte';
 	import MainBackground from './Main-background.svelte';
@@ -195,6 +195,7 @@
 			const submittedPrompt = prompt;
 			prompt = '';
 			debateTarget.set(null);
+			addValueTarget.set(null);
 			return async ({ update }) => {
 				await update({ reset: false });
 			};
@@ -211,6 +212,22 @@
 					class="debate-remove"
 					aria-label={m.proof_debate_remove()}
 					onclick={() => debateTarget.set(null)}
+				>
+					×
+				</button>
+			</div>
+		{/if}
+		{#if $addValueTarget}
+			<input type="hidden" name="add_value_fact_id" value={$addValueTarget.factId} />
+			<input type="hidden" name="add_value_field" value={$addValueTarget.field} />
+			<div class="debate-chip add-value-chip" title={$addValueTarget.name}>
+				<span aria-hidden="true">➕</span>
+				<span class="debate-label">{m.value_add_chip()} « {$addValueTarget.name} »</span>
+				<button
+					type="button"
+					class="debate-remove"
+					aria-label={m.value_add_remove()}
+					onclick={() => addValueTarget.set(null)}
 				>
 					×
 				</button>
@@ -299,6 +316,12 @@
 		border-radius: 12px;
 		font-size: 13px;
 		font-weight: 600;
+	}
+
+	.add-value-chip {
+		color: #065f46;
+		background: #d1fae5;
+		border-color: #6ee7b7;
 	}
 
 	.debate-label {
