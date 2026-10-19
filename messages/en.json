@@ -100,7 +100,7 @@
 	"simulation_evolution_uncertainty": "Uncertainty",
 	"simulation_evolution_legend_curve": "Evolution",
 	"simulation_evolution_legend_cloud": "Uncertainty cloud (width proportional to the uncertainty parameter)",
-	"simulation_field_rankings": "Ranking entries",
+	"simulation_field_rankings": "Rankings",
 	"simulation_field_material_resource_used": "Materials used",
 	"simulation_field_fund_used": "Funds used",
 	"simulation_field_human_mobilized": "People mobilized",

@@ -36,7 +36,8 @@ function valueNames(name: unknown): string[] {
 const VALUE_LISTS = [
 	['other', 'value'],
 	['power', 'description'],
-	['willing', 'description']
+	['willing', 'description'],
+	['rankings', 'value']
 ] as const;
 
 /** The entries of the named value among the lists of the element: their title is the name of the value. */
@@ -130,6 +131,9 @@ function elementValues(
 		} else if (key === 'power' || key === 'willing') {
 			// A titled item is a value named by its title, whose content is its description.
 			if (Array.isArray(raw)) for (const item of raw) add(item?.name, item?.description);
+		} else if (key === 'rankings') {
+			// A ranked entry is a value named by the entity, whose content is its evolution.
+			if (Array.isArray(raw)) for (const item of raw) add(item?.name, item?.value);
 		} else if (Array.isArray(raw)) {
 			for (const item of raw) add(key, item);
 		} else {

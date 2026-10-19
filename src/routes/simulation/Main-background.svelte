@@ -221,6 +221,29 @@
 		return String(value);
 	}
 
+	// The entries of a ranking, ordered by their value now (highest first), each with its rank, number and unit.
+	function rankingEntries(value: unknown) {
+		if (!Array.isArray(value)) return [];
+		const t = currentYear();
+		return value
+			.map((item) => {
+				const record = (item ?? {}) as Record<string, unknown>;
+				const evolution = parseEvolutionValue(record.value);
+				const score = evolution ? buildEvolutionFunction(evolution.evolution)(t) : NaN;
+				return {
+					name: record.name,
+					title: formatValue(record.name),
+					description: record.description ? formatValue(record.description) : '',
+					score,
+					amount: Number.isFinite(score)
+						? new Intl.NumberFormat(currentLocale, { maximumFractionDigits: 2 }).format(score)
+						: '—',
+					unit: evolution?.unit ?? ''
+				};
+			})
+			.sort((a, b) => (Number.isFinite(b.score) ? b.score : -Infinity) - (Number.isFinite(a.score) ? a.score : -Infinity));
+	}
+
 	// Text summary of an evolution, for the places where its chart does not fit (lists...)
 	function formatEvolution({ evolution, unit }: EvolutionValue): string {
 		const mix = evolution
@@ -686,6 +709,33 @@
 									existence={activeExistence?.evolution}
 								/>
 							</dd>
+						{:else if key === 'rankings' && rankingEntries(value).length > 0}
+							<dd>
+								<ol class="ranking-list">
+									{#each rankingEntries(value) as entry, i}
+										{@const entryInfluence = valueInfluence(entry.name, false)}
+										<li class="ranking-entry rank-{i < 3 ? i + 1 : 'other'}">
+											{#if i < 3}
+												<svg class="rank-medal" viewBox="0 0 28 36" aria-label={`#${i + 1}`}>
+													<path d="M6 0h6l4 12h-6z" fill="var(--rank-ribbon)" />
+													<path d="M22 0h-6l-4 12h6z" fill="var(--rank-ribbon)" fill-opacity="0.75" />
+													<circle cx="14" cy="23" r="12" fill="var(--rank-color)" stroke="var(--rank-edge)" stroke-width="2" />
+													<circle cx="14" cy="23" r="8.5" fill="none" stroke="var(--rank-edge)" stroke-opacity="0.45" stroke-width="1" />
+													<text x="14" y="28" text-anchor="middle" font-size="13" font-weight="800" fill="#1f2937">{i + 1}</text>
+												</svg>
+											{:else}
+												<span class="rank-number">{i + 1}</span>
+											{/if}
+											<div class="rank-body">
+												<strong>{entry.title}</strong>
+												{#if entry.description && entry.description !== entry.title}<span class="item-description">{entry.description}</span>{/if}
+											</div>
+											<span class="rank-score">{entry.amount}{#if entry.unit}<small>{entry.unit}</small>{/if}</span>
+											{#if entryInfluence}<div class="rank-parameters"><ValueParameters info={entryInfluence} format={formatValue} /></div>{/if}
+										</li>
+									{/each}
+								</ol>
+							</dd>
 						{:else if listItems(value)}
 							<dd>
 								<ul class="value-list">
@@ -1053,6 +1103,83 @@
 	.item-description {
 		display: block;
 		opacity: 0.75;
+	}
+
+	.ranking-list {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: grid;
+		gap: 6px;
+	}
+
+	.ranking-entry {
+		display: grid;
+		grid-template-columns: 30px 1fr auto;
+		align-items: center;
+		gap: 4px 10px;
+		padding: 4px 8px;
+	}
+
+	.ranking-entry:not(.rank-other) {
+		padding: 6px 8px;
+		border-radius: 8px;
+		border-left: 3px solid var(--rank-edge);
+		background: color-mix(in srgb, var(--rank-color) 18%, transparent);
+	}
+
+	.ranking-entry.rank-other {
+		border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+	}
+
+	.ranking-entry.rank-1 {
+		--rank-color: #facc15;
+		--rank-edge: #a16207;
+		--rank-ribbon: #dc2626;
+	}
+
+	.ranking-entry.rank-2 {
+		--rank-color: #cbd5e1;
+		--rank-edge: #64748b;
+		--rank-ribbon: #2563eb;
+	}
+
+	.ranking-entry.rank-3 {
+		--rank-color: #cd7f32;
+		--rank-edge: #7c4a14;
+		--rank-ribbon: #16a34a;
+	}
+
+	.rank-medal {
+		width: 26px;
+		height: 34px;
+		justify-self: center;
+	}
+
+	.rank-number {
+		text-align: center;
+		opacity: 0.6;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.rank-body {
+		min-width: 0;
+	}
+
+	.rank-score {
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
+	.rank-score small {
+		margin-left: 3px;
+		font-weight: 400;
+		opacity: 0.7;
+	}
+
+	.rank-parameters {
+		grid-column: 1 / -1;
 	}
 
 	.value-list {
