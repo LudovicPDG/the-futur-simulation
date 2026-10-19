@@ -707,7 +707,7 @@
 								+ {m.value_add()}
 							</button>
 						{/if}
-						{#if influence && !listItems(value)}<ValueParameters info={influence} format={formatValue} />{/if}
+						{#if influence && (evolutionOfField(key, value) || !listItems(value))}<ValueParameters info={influence} format={formatValue} />{/if}
 					</div>
 				{/each}
 			</dl>
