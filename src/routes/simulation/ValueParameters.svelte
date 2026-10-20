@@ -23,6 +23,9 @@
 		allProofs: (ProofData & { id: string })[];
 		proofs: (ProofData & { id: string })[];
 		relations: { relation: RelationData; entries: RelationInfluenceEntry[] }[];
+		/** Ask the genie for a new proof / a new relation of this value. */
+		addProof?: () => void;
+		addRelation?: () => void;
 	}
 
 	let { info, format }: { info: ValueInfluence; format: (value: unknown) => string } = $props();
@@ -53,17 +56,16 @@
 	</dl>
 
 	<h5>{m.simulation_influence()}</h5>
-	{#if info.proofs.length === 0 && info.relations.length === 0}
-		<p class="influence-empty">{m.simulation_influence_none()}</p>
-	{/if}
-
+	<h6>{m.simulation_influence_proofs()}</h6>
 	{#if info.proofs.length > 0}
-		<h6>{m.simulation_influence_proofs()}</h6>
 		<ProofList proofs={info.allProofs} roots={info.proofs} {format} />
+	{:else}
+		<p class="influence-empty">—</p>
 	{/if}
+	<button type="button" class="influence-add" onclick={info.addProof}>+ {m.proof_add()}</button>
 
+	<h6>{m.simulation_influence_relations()}</h6>
 	{#if info.relations.length > 0}
-		<h6>{m.simulation_influence_relations()}</h6>
 		<ul class="influence-list">
 			{#each info.relations as { relation, entries }}
 				<li>
@@ -86,7 +88,11 @@
 				</li>
 			{/each}
 		</ul>
+	{:else}
+		<p class="influence-empty">—</p>
 	{/if}
+
+	<button type="button" class="influence-add" onclick={info.addRelation}>+ {m.relation_add()}</button>
 </details>
 
 <style>
@@ -193,6 +199,23 @@
 	.influence-empty {
 		margin: 0;
 		color: #94a3b8;
+	}
+
+	.influence-add {
+		display: block;
+		margin: 6px 0 10px;
+		padding: 3px 10px;
+		color: inherit;
+		background: transparent;
+		border: 1px dashed currentColor;
+		border-radius: 8px;
+		font-size: 12px;
+		opacity: 0.8;
+		cursor: pointer;
+	}
+
+	.influence-add:hover {
+		opacity: 1;
 	}
 
 	.influence-list {

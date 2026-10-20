@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { navbarVisible } from '$lib/stores/navbar';
 	import { simulationStore } from '$lib/stores/simulation';
-	import { addValueTarget, debateTarget } from '$lib/stores/debate';
+	import { addProofTarget, addRelationTarget, addValueTarget, debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
 	import CrystalBall from '../Crystal-ball.svelte';
 	import MainBackground from './Main-background.svelte';
@@ -228,6 +228,39 @@
 					class="debate-remove"
 					aria-label={m.value_add_remove()}
 					onclick={() => addValueTarget.set(null)}
+				>
+					×
+				</button>
+			</div>
+		{/if}
+		{#if $addProofTarget}
+			<input type="hidden" name="add_proof_id" value={$addProofTarget.id} />
+			<input type="hidden" name="add_proof_kind" value={$addProofTarget.kind} />
+			<input type="hidden" name="add_proof_value_name" value={JSON.stringify($addProofTarget.valueName)} />
+			<div class="debate-chip add-value-chip" title={$addProofTarget.name}>
+				<span aria-hidden="true">📎</span>
+				<span class="debate-label">{m.proof_add_chip()} « {$addProofTarget.name} »</span>
+				<button
+					type="button"
+					class="debate-remove"
+					aria-label={m.proof_add_remove()}
+					onclick={() => addProofTarget.set(null)}
+				>
+					×
+				</button>
+			</div>
+		{/if}
+		{#if $addRelationTarget}
+			<input type="hidden" name="add_relation_element_id" value={$addRelationTarget.elementId} />
+			<input type="hidden" name="add_relation_value_name" value={JSON.stringify($addRelationTarget.valueName)} />
+			<div class="debate-chip add-value-chip" title={$addRelationTarget.name}>
+				<span aria-hidden="true">🔗</span>
+				<span class="debate-label">{m.relation_add_chip()} « {$addRelationTarget.name} »</span>
+				<button
+					type="button"
+					class="debate-remove"
+					aria-label={m.relation_add_remove()}
+					onclick={() => addRelationTarget.set(null)}
 				>
 					×
 				</button>

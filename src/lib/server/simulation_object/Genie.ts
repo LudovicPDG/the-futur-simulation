@@ -223,6 +223,8 @@ export class Genie {
 		options: {
 			debateProofId?: string;
 			addValue?: { factId: string; field: ValueListField };
+			addProof?: { id: string; kind: 'fact' | 'relation'; valueName: unknown };
+			addRelation?: { elementId: string; valueName?: unknown };
 		} = {}
 	): Promise<WorldData | string> {
 		console.log('demande au genie :', prompt);
@@ -245,6 +247,33 @@ export class Genie {
 				prompt,
 				options.addValue.factId,
 				options.addValue.field
+			);
+		}
+
+		// The user chose a value: the request is a new proof of this value.
+		if (options.addProof) {
+			return Proof.createForValue(
+				this.model_name,
+				this.level_of_reasoning,
+				prompt,
+				options.addProof.kind === 'relation'
+					? { relationId: options.addProof.id }
+					: { factId: options.addProof.id },
+				options.addProof.valueName as ProofData['value_name']
+			);
+		}
+
+		// The user chose an element (and maybe one of its values): the request is a new relation involving it.
+		if (options.addRelation) {
+			const { elementId, valueName } = options.addRelation;
+			const about =
+				valueName === undefined
+					? ''
+					: ` The relation must concern its value ${JSON.stringify(valueName)}.`;
+			return Relation.create(
+				this.model_name,
+				this.level_of_reasoning,
+				`${prompt}\n\nThe relation must involve the existing simulation element whose ID is ${elementId} (use it as Element1 or Element2).${about}`
 			);
 		}
 

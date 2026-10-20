@@ -21,7 +21,13 @@
 	} from '$lib/simulation/event/EvolutionFunction';
 	import type { ProofData } from '$lib/simulation/Proof';
 	import { onMount } from 'svelte';
-	import { addValueTarget, debateTarget, type ValueListField } from '$lib/stores/debate';
+	import {
+		addProofTarget,
+		addRelationTarget,
+		addValueTarget,
+		debateTarget,
+		type ValueListField
+	} from '$lib/stores/debate';
 
 	type ItemParameter = { label: string; amount: string; uncertainty: string; unit: string };
 
@@ -235,10 +241,40 @@
 						? m.simulation_field_new_value()
 						: formatLabel(field);
 		debateTarget.set(null);
+		addProofTarget.set(null);
+		addRelationTarget.set(null);
 		addValueTarget.set({
 			factId: activeElement.id as string,
 			field,
 			name: `${list} — ${formatValue(activeElement.name)}`
+		});
+	}
+
+	// "Add a proof" on a value of the active element (or of the active relation).
+	function startAddProof(valueName: unknown) {
+		if (!activeElement) return;
+		debateTarget.set(null);
+		addValueTarget.set(null);
+		addRelationTarget.set(null);
+		addProofTarget.set({
+			id: activeElement.id as string,
+			kind: activeRelation ? 'relation' : 'fact',
+			valueName,
+			name: `${formatValue(valueName)} — ${formatValue(activeElement.name)}`
+		});
+	}
+
+	// "Add a relation" on a value of the active element: the next prompt asks the genie for a relation about it.
+	// A relation has no relation of its own: the new one is about the first element it connects.
+	function startAddRelation(valueName: unknown) {
+		if (!activeElement) return;
+		debateTarget.set(null);
+		addValueTarget.set(null);
+		addProofTarget.set(null);
+		addRelationTarget.set({
+			elementId: (activeRelation ? activeRelation.Element1ID : activeElement.id) as string,
+			valueName,
+			name: `${formatValue(valueName)} — ${formatValue(activeElement.name)}`
 		});
 	}
 
@@ -531,6 +567,22 @@
 				)
 			: []
 	);
+	// The lists an element of each type has: shown even when empty, so that a value can be added to them
+	const LISTS_OF_TYPE: Record<string, string[]> = {
+		person: ['power'],
+		organization: ['power'],
+		interest_group: ['power', 'willing'],
+		material_resource: ['power'],
+		ranking: ['rankings']
+	};
+	const ENTRY_LISTS = ['power', 'willing', 'rankings'];
+	const displayedFields = $derived.by((): [string, unknown][] => {
+		if (!activeElement) return [];
+		const missing = (LISTS_OF_TYPE[activeElement.type ?? ''] ?? []).filter(
+			(list) => !activeFields.some(([key]) => key === list)
+		);
+		return [...activeFields, ...missing.map((list): [string, unknown] => [list, []])];
+	});
 	const activeParameters = $derived(
 		activeElement
 			? Object.entries(activeElement as Record<string, unknown>).filter(([key]) =>
@@ -671,7 +723,9 @@
 			originality: inArray && latest ? `${Math.round(latest.originality)}%` : null,
 			allProofs,
 			proofs,
-			relations
+			relations,
+			addProof: () => startAddProof(name),
+			addRelation: () => startAddRelation(name)
 		};
 	}
 	$effect(() => {
@@ -738,7 +792,7 @@
 				</button>
 			</header>
 			<dl>
-				{#each activeFields as [key, value]}
+				{#each displayedFields as [key, value]}
 					{@const influence = valueInfluence(key, false)}
 					<div class="detail-row">
 						<dt>{formatLabel(key)}</dt>
@@ -814,7 +868,7 @@
 								+ {m.value_add()}
 							</button>
 						{/if}
-						{#if influence && (evolutionOfField(key, value) || !listItems(value))}<ValueParameters info={influence} format={formatValue} />{/if}
+						{#if influence && !ENTRY_LISTS.includes(key) && (evolutionOfField(key, value) || !listItems(value))}<ValueParameters info={influence} format={formatValue} />{/if}
 					</div>
 				{/each}
 			</dl>
@@ -841,7 +895,7 @@
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element1_element2_value_to_modify')}>
-								+ {m.value_add()}
+								+ {m.relation_add()}
 							</button>
 						{/if}
 						{#if true}
@@ -862,7 +916,7 @@
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element1_element2_new_value')}>
-								+ {m.value_add()}
+								+ {m.relation_add()}
 							</button>
 						{/if}
 					{/if}
@@ -887,7 +941,7 @@
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element2_element1_value_to_modify')}>
-								+ {m.value_add()}
+								+ {m.relation_add()}
 							</button>
 						{/if}
 						{#if true}
@@ -908,15 +962,16 @@
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element2_element1_new_value')}>
-								+ {m.value_add()}
+								+ {m.relation_add()}
 							</button>
 						{/if}
 					{/if}
 				</section>
 			{/if}
-			{#if activeOther.length > 0 || (activeElement && 'other' in activeElement)}
+			{#if !activeRelation}
 				<section class="other-details">
 					<h3>{m.simulation_section_other_information()}</h3>
+					{#if activeOther.length === 0}<p class="relation-empty">—</p>{/if}
 					<dl>
 						{#each activeOther as item}
 							{@const influence = valueInfluence(item.name, true)}

@@ -216,6 +216,21 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		return data;
 	}
 
+	/** A new top-level proof of an existing value of an element. */
+	async createForValue(
+		model_name: string,
+		level_of_reasoning: string,
+		prompt: string,
+		target: ProofTarget,
+		valueName: ProofData['value_name']
+	): Promise<ProofData> {
+		const data = await this.generateForTarget(model_name, level_of_reasoning, prompt, target, {
+			valueName
+		});
+		await this.insert_in_db(data);
+		return data;
+	}
+
 	/**
 	 * Founding proofs of a freshly created fact or relation: one per value of the element, each generated on its own
 	 * so that every value has its own sources, veracity, uncertainty and originality.
@@ -491,6 +506,16 @@ A proof is about ONE value of the element: value_name is this existing value and
 			prompt,
 			parentProofId
 		);
+	}
+
+	static async createForValue(
+		model_name: string = 'openai/gpt-5.6-luna',
+		level_of_reasoning: string = 'low',
+		prompt: string,
+		target: ProofTarget,
+		valueName: ProofData['value_name']
+	): Promise<ProofData> {
+		return ProofServer.instance.createForValue(model_name, level_of_reasoning, prompt, target, valueName);
 	}
 
 	static async get_all(): Promise<ProofData[]> {

@@ -21,8 +21,31 @@ export const actions: Actions = {
 				? { factId: addValueFactId, field: addValueField }
 				: undefined;
 
+		const parseJson = (raw: string | undefined) => {
+			try {
+				return raw ? JSON.parse(raw) : undefined;
+			} catch {
+				return undefined;
+			}
+		};
+		const addProofId = data.get('add_proof_id')?.toString();
+		const addProofKind = data.get('add_proof_kind')?.toString();
+		const addProofValueName = parseJson(data.get('add_proof_value_name')?.toString());
+		const addProof =
+			addProofId && (addProofKind === 'fact' || addProofKind === 'relation') && addProofValueName
+				? { id: addProofId, kind: addProofKind as 'fact' | 'relation', valueName: addProofValueName }
+				: undefined;
+
+		const addRelationElementId = data.get('add_relation_element_id')?.toString();
+		const addRelation = addRelationElementId
+			? {
+					elementId: addRelationElementId,
+					valueName: parseJson(data.get('add_relation_value_name')?.toString())
+				}
+			: undefined;
+
 		const genie = new Genie();
-		const result = await genie.ask(prompt, { debateProofId, addValue });
+		const result = await genie.ask(prompt, { debateProofId, addValue, addProof, addRelation });
 		return { success: true, result };
 	}
 };

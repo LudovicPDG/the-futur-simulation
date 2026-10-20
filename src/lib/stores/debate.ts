@@ -26,3 +26,24 @@ export interface AddValueTarget {
 
 /** The list the user wants to add a value to; shown as a chip next to the prompt bar. */
 export const addValueTarget = writable<AddValueTarget | null>(null);
+
+export interface AddProofTarget {
+	/** The fact, or the relation, the proof is about. */
+	id: string;
+	kind: 'fact' | 'relation';
+	/** The value the proof is about: a key, or a title translated in every language. */
+	valueName: unknown;
+	name: string;
+}
+
+/** The value the user wants to add a proof to; shown as a chip next to the prompt bar. */
+export const addProofTarget = writable<AddProofTarget | null>(null);
+
+export interface AddRelationTarget {
+	elementId: string;
+	valueName: unknown;
+	name: string;
+}
+
+/** The value the user wants to add a relation to; shown as a chip next to the prompt bar. */
+export const addRelationTarget = writable<AddRelationTarget | null>(null);

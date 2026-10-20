@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { ProofData } from '$lib/simulation/Proof';
-	import { addValueTarget, debateTarget } from '$lib/stores/debate';
+	import { addProofTarget, addRelationTarget, addValueTarget, debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
 	import {
 		parseEvolutionValue,
@@ -74,6 +74,8 @@
 
 	function debate(proof: StoredProof) {
 		addValueTarget.set(null);
+		addProofTarget.set(null);
+		addRelationTarget.set(null);
 		debateTarget.set({ id: proof.id, name: format(proof.name) });
 	}
 </script>
