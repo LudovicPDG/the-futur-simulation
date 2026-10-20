@@ -5,6 +5,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import CrystalBall from '../Crystal-ball.svelte';
 	import MainBackground from './Main-background.svelte';
+	import TimeMachine from './TimeMachine.svelte';
 	import { enhance } from '$app/forms';
 	import type { ActionData, PageData } from './$types';
 
@@ -34,6 +35,8 @@
 			(e.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
 		}
 	}
+
+	let simulationDate = $state(new Date());
 
 	let agitation_level = $state(4);
 	let ballSize = $state(100);
@@ -184,6 +187,8 @@
 	>
 		<CrystalBall {agitation_level} />
 	</button>
+
+	<TimeMachine bind:date={simulationDate} />
 
 	<MainBackground new_element={form?.result} simulation_data={$simulationStore.all_elements} />
 
