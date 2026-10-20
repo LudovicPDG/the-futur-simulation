@@ -5,7 +5,7 @@ import { TranslationSchema } from '../Translation';
 import { occurrenceSchema } from '../Existence';
 import type { SvgShapeOptions } from '../fact';
 
-const RankingElementSchema = z.object({
+export const RankingElementSchema =z.object({
 	name: TranslationSchema.describe('The name of the entity that is ranked'),
 	description: TranslationSchema.describe('The description of the entity that is ranked'),
 	value: EvolutionTypeSchema.describe('The value of the entity that is ranked')

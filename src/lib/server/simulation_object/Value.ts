@@ -4,9 +4,10 @@ import { convertToPg } from './Genie';
 import { db } from '../utils/database';
 import { TitledItemSchema } from '$lib/simulation/Translation';
 import { OtherValueSchema, type FactData } from '$lib/simulation/fact';
+import { RankingElementSchema } from '$lib/simulation/event/Ranking';
 
 /** The lists of a fact to which the user can ask the genie to add a value. */
-export const VALUE_LIST_FIELDS = ['power', 'willing', 'other'] as const;
+export const VALUE_LIST_FIELDS = ['power', 'willing', 'other', 'rankings'] as const;
 export type ValueListField = (typeof VALUE_LIST_FIELDS)[number];
 
 export function isValueListField(field: unknown): field is ValueListField {
@@ -28,6 +29,13 @@ const LISTS = {
 		schema: TitledItemSchema,
 		description:
 			'one new willingness: a short title (different from the existing ones) and its description'
+	},
+	rankings: {
+		tables: ['rankings'],
+		type: 'ranking_element_t',
+		schema: RankingElementSchema,
+		description:
+			'one new ranked entity: its name (different from the existing ones), its description and its value (an evolution over time, with the same unit as the existing ones)'
 	},
 	other: {
 		tables: ['facts'],

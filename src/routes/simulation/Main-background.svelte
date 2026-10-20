@@ -802,7 +802,7 @@
 						{:else}
 							<dd>{formatValue(value)}</dd>
 						{/if}
-						{#if (key === 'power' || key === 'willing') && !activeRelation}
+						{#if (key === 'power' || key === 'willing' || key === 'rankings') &&!activeRelation}
 							<button type="button" class="add-value" onclick={() => startAddValue(key as ValueListField)}>
 								+ {m.value_add()}
 							</button>

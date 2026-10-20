@@ -9,7 +9,7 @@ export interface DebateTarget {
 export const debateTarget = writable<DebateTarget | null>(null);
 
 /** The lists of a fact whose entries the user can ask the genie to extend. */
-export type ValueListField = 'power' | 'willing' | 'other';
+export type ValueListField = 'power' | 'willing' | 'other' | 'rankings';
 
 export interface AddValueTarget {
 	factId: string;
