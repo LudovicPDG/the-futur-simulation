@@ -226,7 +226,14 @@
 	// "Add a value" on a list of the active element: the next prompt asks the genie to add a value to this list.
 	function startAddValue(field: ValueListField) {
 		if (!activeElement) return;
-		const list = field === 'other' ? m.simulation_section_other_information() : formatLabel(field);
+		const list =
+			field === 'other'
+				? m.simulation_section_other_information()
+				: field.endsWith('value_to_modify')
+					? m.simulation_field_value_to_modify()
+					: field.endsWith('new_value')
+						? m.simulation_field_new_value()
+						: formatLabel(field);
 		debateTarget.set(null);
 		addValueTarget.set({
 			factId: activeElement.id as string,
@@ -813,14 +820,15 @@
 			</dl>
 			{#if activeRelation}
 				<section class="relation-details">
-					{#if activeRelation.element1_element2_value_to_modify.length > 0 || activeRelation.element1_element2_new_value.length > 0}
+					{#if true}
 						<h3>
 							{formatValue(relationElement1?.name) || m.simulation_field_element1_name()}
 							{m.simulation_relation_to()}
 							{formatValue(relationElement2?.name) || m.simulation_field_element2_name()}
 						</h3>
-						{#if activeRelation.element1_element2_value_to_modify.length > 0}
+						{#if true}
 							<h4>{m.simulation_field_value_to_modify()}</h4>
+							{#if activeRelation.element1_element2_value_to_modify.length === 0}<p class="relation-empty">—</p>{/if}
 							{#each activeRelation.element1_element2_value_to_modify as connexion}
 								<div class="relation-connexion">
 									<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
@@ -832,9 +840,13 @@
 									{#each [valueInfluence(relationValueName('element1_element2', 'modify', connexion), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
+							<button type="button" class="add-value" onclick={() => startAddValue('element1_element2_value_to_modify')}>
+								+ {m.value_add()}
+							</button>
 						{/if}
-						{#if activeRelation.element1_element2_new_value.length > 0}
+						{#if true}
 							<h4>{m.simulation_field_new_value()}</h4>
+							{#if activeRelation.element1_element2_new_value.length === 0}<p class="relation-empty">—</p>{/if}
 							{#each activeRelation.element1_element2_new_value as added}
 								<div class="relation-connexion">
 									<span>{formatRelationProperty(added.Element1Property, relationElement1)}</span>
@@ -849,16 +861,20 @@
 									{#each [valueInfluence(relationValueName('element1_element2', 'add', added), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
+							<button type="button" class="add-value" onclick={() => startAddValue('element1_element2_new_value')}>
+								+ {m.value_add()}
+							</button>
 						{/if}
 					{/if}
-					{#if activeRelation.element2_element1_value_to_modify.length > 0 || activeRelation.element2_element1_new_value.length > 0}
+					{#if true}
 						<h3>
 							{formatValue(relationElement2?.name) || m.simulation_field_element2_name()}
 							{m.simulation_relation_to()}
 							{formatValue(relationElement1?.name) || m.simulation_field_element1_name()}
 						</h3>
-						{#if activeRelation.element2_element1_value_to_modify.length > 0}
+						{#if true}
 							<h4>{m.simulation_field_value_to_modify()}</h4>
+							{#if activeRelation.element2_element1_value_to_modify.length === 0}<p class="relation-empty">—</p>{/if}
 							{#each activeRelation.element2_element1_value_to_modify as connexion}
 								<div class="relation-connexion">
 									<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
@@ -870,9 +886,13 @@
 									{#each [valueInfluence(relationValueName('element2_element1', 'modify', connexion), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
+							<button type="button" class="add-value" onclick={() => startAddValue('element2_element1_value_to_modify')}>
+								+ {m.value_add()}
+							</button>
 						{/if}
-						{#if activeRelation.element2_element1_new_value.length > 0}
+						{#if true}
 							<h4>{m.simulation_field_new_value()}</h4>
+							{#if activeRelation.element2_element1_new_value.length === 0}<p class="relation-empty">—</p>{/if}
 							{#each activeRelation.element2_element1_new_value as added}
 								<div class="relation-connexion">
 									<span>{formatRelationProperty(added.Element2Property, relationElement2)}</span>
@@ -887,6 +907,9 @@
 									{#each [valueInfluence(relationValueName('element2_element1', 'add', added), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
+							<button type="button" class="add-value" onclick={() => startAddValue('element2_element1_new_value')}>
+								+ {m.value_add()}
+							</button>
 						{/if}
 					{/if}
 				</section>
@@ -1289,10 +1312,14 @@
 	}
 
 	.relation-details h3 {
-		margin: 0 0 6px;
+		margin: 24px 0 8px;
 		color: #7dd3fc;
-		font-size: 12px;
+		font-size: 16px;
 		font-weight: 700;
+	}
+
+	.relation-details h3:first-child {
+		margin-top: 0;
 	}
 
 	:global(body.light) .relation-details {
@@ -1316,6 +1343,11 @@
 
 	.relation-connexion > :last-child {
 		text-align: right;
+	}
+
+	.relation-empty {
+		margin: 0.25rem 0;
+		opacity: 0.6;
 	}
 
 	.relation-impact {

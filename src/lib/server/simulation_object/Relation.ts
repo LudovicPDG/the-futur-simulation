@@ -8,6 +8,7 @@ import {
 import { convertToPg } from './Genie';
 import { db } from '../utils/database';
 import { z } from 'zod';
+import type { RelationListField } from '$lib/simulation/Relation';
 
 const commonElementProperties = [
 	'name',
@@ -86,6 +87,37 @@ function mapDatabaseConnexions(
 	});
 }
 
+/** Every element a relation can link, with the names of the properties a relation can target. */
+async function loadElements(ids?: string[]) {
+	const result = await db.query(
+		`
+		SELECT f.id, lower(f.type) AS type, (f.name).fr AS name_fr, (f.name).en AS name_en, to_jsonb(f.other) AS other,
+			to_jsonb(COALESCE(c.power, m.power)) AS power, to_jsonb(ig.willing) AS willing,
+			to_jsonb(a.material_resource_used || a.material_resource_necessary) AS action_materials
+		FROM facts f
+		LEFT JOIN actions a ON a.id = f.id
+		LEFT JOIN characters c ON c.id = f.id
+		LEFT JOIN material_resources m ON m.id = f.id
+		LEFT JOIN interest_groups ig ON ig.id = f.id
+		WHERE lower(f.type) = ANY($1::text[]) AND ($2::uuid[] IS NULL OR f.id = ANY($2::uuid[]))
+	`,
+		[RelationElementTypeSchema.options, ids ?? null]
+	);
+	return result.rows.map((row) => ({
+		id: row.id as string,
+		type: row.type as string,
+		name: { fr: row.name_fr, en: row.name_en },
+		properties: [
+			...commonElementProperties,
+			...(propertiesByType[row.type] || []),
+			...getAdditionalPropertyNames(row.other),
+			...getAdditionalPropertyNames(row.power),
+			...getAdditionalPropertyNames(row.willing),
+			...getAdditionalPropertyNames(row.action_materials)
+		]
+	}));
+}
+
 export class RelationServer extends BaseSimulationObject<RelationData> {
 	protected schema = RelationSchema;
 	protected typeName = 'relation';
@@ -97,33 +129,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		level_of_reasoning: string,
 		prompt: string
 	): Promise<RelationData> {
-		const result = await db.query(
-			`
-			SELECT f.id, lower(f.type) AS type, (f.name).fr AS name_fr, (f.name).en AS name_en, to_jsonb(f.other) AS other,
-				to_jsonb(COALESCE(c.power, m.power)) AS power, to_jsonb(ig.willing) AS willing,
-				to_jsonb(a.material_resource_used || a.material_resource_necessary) AS action_materials
-			FROM facts f
-			LEFT JOIN actions a ON a.id = f.id
-			LEFT JOIN characters c ON c.id = f.id
-			LEFT JOIN material_resources m ON m.id = f.id
-			LEFT JOIN interest_groups ig ON ig.id = f.id
-			WHERE lower(f.type) = ANY($1::text[])
-		`,
-			[RelationElementTypeSchema.options]
-		);
-		const elements = result.rows.map((row) => ({
-			id: row.id,
-			type: row.type,
-			name: { fr: row.name_fr, en: row.name_en },
-			properties: [
-				...commonElementProperties,
-				...(propertiesByType[row.type] || []),
-				...getAdditionalPropertyNames(row.other),
-				...getAdditionalPropertyNames(row.power),
-				...getAdditionalPropertyNames(row.willing),
-				...getAdditionalPropertyNames(row.action_materials)
-			]
-		}));
+		const elements = await loadElements();
 		if (elements.length < 2) {
 			throw new Error('At least two simulation elements are required to create a relation');
 		}
@@ -251,6 +257,87 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		}));
 	}
 
+	/** Generates one new value to modify or to add of the relation, saves it and gives it a founding proof. */
+	async addEntry(
+		model_name: string,
+		level_of_reasoning: string,
+		prompt: string,
+		relationId: string,
+		field: RelationListField
+	): Promise<RelationData> {
+		const relation = (await this.get_all()).find((item) => item.id === relationId);
+		if (!relation) throw new Error('The relation to add a value to does not exist');
+
+		const [element1, element2] = await Promise.all(
+			[relation.Element1ID, relation.Element2ID].map(async (id) => (await loadElements([id]))[0])
+		);
+		if (!element1 || !element2) throw new Error('The elements of this relation do not exist');
+
+		const reversed = field.startsWith('element2_element1');
+		const source = reversed ? element2 : element1;
+		const target = reversed ? element1 : element2;
+		const isNew = field.endsWith('new_value');
+		const connexionSchema = z.object({
+			Element1Property: propertyEnum(element1.properties),
+			Element2Property: propertyEnum(element2.properties),
+			impact: z.number()
+		});
+		const valueSchema = z.union([z.string(), z.number(), z.boolean()]);
+		const schema = isNew ? connexionSchema.extend({ value: valueSchema }) : connexionSchema;
+
+		const generated = await this.generateWithSchema(
+			model_name,
+			level_of_reasoning,
+			`${prompt}\n\nThe user wants to add one entry to "${field}" of a relation between:\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nThe current entries of "${field}" are: ${JSON.stringify(relation[field])}\n\nCreate one new entry that does not repeat an existing one. ${
+				isNew
+					? `It is a value that ${JSON.stringify(source.name)} adds to ${JSON.stringify(target.name)}: the property of the source is an existing property, the property of the target is the name of the new value (it may be a new name), value is the created value and impact its strength.`
+					: `It is an existing value of ${JSON.stringify(target.name)} that ${JSON.stringify(source.name)} modifies: one property of each element and the impact of that relation.`
+			} Element1Property always belongs to element 1 and Element2Property to element 2.`,
+			schema
+		);
+
+		const entries = [...relation[field], generated];
+		const column = {
+			element1_element2_value_to_modify: 'element1_element2_connexions',
+			element2_element1_value_to_modify: 'element2_element1_connexions',
+			element1_element2_new_value: 'element1_element2_new_value',
+			element2_element1_new_value: 'element2_element1_new_value'
+		}[field];
+		const value = isNew
+			? JSON.stringify(entries)
+			: convertToPg(
+					entries.map((connexion) =>
+						reversed
+							? {
+									Element2Property: connexion.Element2Property,
+									Element1Property: connexion.Element1Property,
+									impact: connexion.impact
+								}
+							: {
+									SourceProperty: connexion.Element1Property,
+									TargetProperty: connexion.Element2Property,
+									impact: connexion.impact
+								}
+					)
+				);
+		await db.query(`UPDATE relations SET ${column} = $1 WHERE id = $2`, [value, relationId]);
+
+		try {
+			const { ProofServer } = await import('./Proof');
+			await ProofServer.instance.createInitialProof(
+				model_name,
+				level_of_reasoning,
+				prompt,
+				{ relationId },
+				{ type: 'relation', [field]: [generated] }
+			);
+		} catch (error) {
+			console.error('Could not create the founding proof of the new relation value:', error);
+		}
+
+		return { ...relation, [field]: entries };
+	}
+
 	static instance = new RelationServer();
 
 	static async create(
@@ -259,6 +346,22 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		prompt: string
 	): Promise<RelationData> {
 		return RelationServer.instance.create(model_name, level_of_reasoning, prompt);
+	}
+
+	static async addEntry(
+		model_name: string,
+		level_of_reasoning: string,
+		prompt: string,
+		relationId: string,
+		field: RelationListField
+	): Promise<RelationData> {
+		return RelationServer.instance.addEntry(
+			model_name,
+			level_of_reasoning,
+			prompt,
+			relationId,
+			field
+		);
 	}
 
 	static async get_all(): Promise<RelationData[]> {

@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import type { RelationListField } from '$lib/simulation/Relation';
 
 export interface DebateTarget {
 	id: string;
@@ -9,7 +10,12 @@ export interface DebateTarget {
 export const debateTarget = writable<DebateTarget | null>(null);
 
 /** The lists of a fact whose entries the user can ask the genie to extend. */
-export type ValueListField = 'power' | 'willing' | 'other' | 'rankings';
+export type ValueListField =
+	| 'power'
+	| 'willing'
+	| 'other'
+	| 'rankings'
+	| RelationListField;
 
 export interface AddValueTarget {
 	factId: string;

@@ -64,6 +64,15 @@ export const RelationSchema = z.object({
 		)
 });
 
+/** The lists of a relation to which the user can ask the genie to add an entry. */
+export const RELATION_LIST_FIELDS = [
+	'element1_element2_value_to_modify',
+	'element1_element2_new_value',
+	'element2_element1_value_to_modify',
+	'element2_element1_new_value'
+] as const;
+export type RelationListField = (typeof RELATION_LIST_FIELDS)[number];
+
 export type RelationData = z.infer<typeof RelationSchema> & { id?: string };
 
 /**

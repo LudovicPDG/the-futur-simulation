@@ -4,11 +4,22 @@ import { convertToPg } from './Genie';
 import { db } from '../utils/database';
 import { TitledItemSchema } from '$lib/simulation/Translation';
 import { OtherValueSchema, type FactData } from '$lib/simulation/fact';
+import { RELATION_LIST_FIELDS, type RelationListField } from '$lib/simulation/Relation';
 import { RankingElementSchema } from '$lib/simulation/event/Ranking';
 
 /** The lists of a fact to which the user can ask the genie to add a value. */
-export const VALUE_LIST_FIELDS = ['power', 'willing', 'other', 'rankings'] as const;
+export const VALUE_LIST_FIELDS = [
+	'power',
+	'willing',
+	'other',
+	'rankings',
+	...RELATION_LIST_FIELDS
+] as const;
 export type ValueListField = (typeof VALUE_LIST_FIELDS)[number];
+
+function isRelationListField(field: ValueListField): field is RelationListField {
+	return RELATION_LIST_FIELDS.includes(field as RelationListField);
+}
 
 export function isValueListField(field: unknown): field is ValueListField {
 	return VALUE_LIST_FIELDS.includes(field as ValueListField);
@@ -68,6 +79,17 @@ export class ValueServer extends BaseSimulationObject<FactData> {
 		factId: string,
 		field: ValueListField
 	): Promise<FactData> {
+		// The entries of a relation are stored in the relation, not in a fact.
+		if (isRelationListField(field)) {
+			const { RelationServer } = await import('./Relation');
+			return (await RelationServer.addEntry(
+				model_name,
+				level_of_reasoning,
+				prompt,
+				factId,
+				field
+			)) as unknown as FactData;
+		}
 		const list = LISTS[field];
 		const fact = await db.query(`SELECT to_jsonb(facts) AS element FROM facts WHERE id = $1`, [
 			factId
