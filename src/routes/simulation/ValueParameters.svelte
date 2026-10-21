@@ -72,35 +72,37 @@
 	{/if}
 	<button type="button" class="influence-add" onclick={info.addProof}>+ {m.proof_add()}</button>
 
-	<h6>{m.simulation_influence_relations()}</h6>
-	{#if info.relations.length > 0}
-		<ul class="influence-list">
-			{#each info.relations as { relation, entries }}
-				<li>
-					<strong>{format(relation.name)}</strong>
-					<p>{format(relation.description)}</p>
-					{#each entries as entry}
-						<div class="relation-entry">
-							<span class="relation-kind">
-								{entry.added ? m.simulation_field_new_value() : m.simulation_field_value_to_modify()}
-							</span>
-							<span>{entry.from} → {entry.to}</span>
-							{#if entry.added}
-								<span class="relation-value">{format(entry.value)}</span>
-							{/if}
-							<span class="relation-impact">
-								{m.simulation_field_impact()}: <strong>{format(entry.impact)}</strong>
-							</span>
-						</div>
-					{/each}
-				</li>
-			{/each}
-		</ul>
-	{:else}
-		<p class="influence-empty">—</p>
-	{/if}
+	{#if info.addRelation}
+		<h6>{m.simulation_influence_relations()}</h6>
+		{#if info.relations.length > 0}
+			<ul class="influence-list">
+				{#each info.relations as { relation, entries }}
+					<li>
+						<strong>{format(relation.name)}</strong>
+						<p>{format(relation.description)}</p>
+						{#each entries as entry}
+							<div class="relation-entry">
+								<span class="relation-kind">
+									{entry.added ? m.simulation_field_new_value() : m.simulation_field_value_to_modify()}
+								</span>
+								<span>{entry.from} → {entry.to}</span>
+								{#if entry.added}
+									<span class="relation-value">{format(entry.value)}</span>
+								{/if}
+								<span class="relation-impact">
+									{m.simulation_field_impact()}: <strong>{format(entry.impact)}</strong>
+								</span>
+							</div>
+						{/each}
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<p class="influence-empty">—</p>
+		{/if}
 
-	<button type="button" class="influence-add" onclick={info.addRelation}>+ {m.relation_add()}</button>
+		<button type="button" class="influence-add" onclick={info.addRelation}>+ {m.relation_add()}</button>
+	{/if}
 </details>
 
 <style>

@@ -736,7 +736,7 @@
 			proofs,
 			relations,
 			addProof: () => startAddProof(name),
-			addRelation: () => startAddRelation(name)
+			addRelation: activeRelation ? undefined : () => startAddRelation(name)
 		};
 	}
 	$effect(() => {
