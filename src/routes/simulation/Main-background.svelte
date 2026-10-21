@@ -656,7 +656,12 @@
 	// Value parameters of a value of the active element: its veracity and uncertainty (from its latest proof),
 	// its originality (only for the values of an array, such as the other data) and the proofs and relations
 	// that influence it.
-	function valueInfluence(name: unknown, inArray: boolean, item?: string): ValueInfluence | null {
+	function valueInfluence(
+		name: unknown,
+		inArray: boolean,
+		item?: string,
+		relationImpact?: number
+	): ValueInfluence | null {
 		if (!activeElement) return null;
 		const id = activeElement.id;
 		const own = allProofs.filter((proof) =>
@@ -720,6 +725,12 @@
 		return {
 			veracity: now ? `${Math.round(now.veracity)}%` : null,
 			uncertainty: now ? `±${Math.round(now.uncertainty * 10) / 10}%` : null,
+			impact:
+				relationImpact !== undefined
+					? formatValue(relationImpact)
+					: latest && Number.isFinite(latest.impact)
+						? formatValue(latest.impact)
+						: null,
 			originality: inArray && latest ? `${Math.round(latest.originality)}%` : null,
 			allProofs,
 			proofs,
@@ -891,7 +902,7 @@
 									<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(connexion.impact)}
 									</span>
-									{#each [valueInfluence(relationValueName('element1_element2', 'modify', connexion), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+									{#each [valueInfluence(relationValueName('element1_element2', 'modify', connexion), false, undefined, connexion.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element1_element2_value_to_modify')}>
@@ -912,7 +923,7 @@
 									<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(added.impact)}
 									</span>
-									{#each [valueInfluence(relationValueName('element1_element2', 'add', added), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+									{#each [valueInfluence(relationValueName('element1_element2', 'add', added), false, undefined, added.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element1_element2_new_value')}>
@@ -937,7 +948,7 @@
 									<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(connexion.impact)}
 									</span>
-									{#each [valueInfluence(relationValueName('element2_element1', 'modify', connexion), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+									{#each [valueInfluence(relationValueName('element2_element1', 'modify', connexion), false, undefined, connexion.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element2_element1_value_to_modify')}>
@@ -958,7 +969,7 @@
 									<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(added.impact)}
 									</span>
-									{#each [valueInfluence(relationValueName('element2_element1', 'add', added), false)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+									{#each [valueInfluence(relationValueName('element2_element1', 'add', added), false, undefined, added.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element2_element1_new_value')}>

@@ -42,6 +42,11 @@ export const ProofSchema = z.object({
 	veracity: PercentageEvolutionSchema.describe(
 		'Evolution of the veracity of the proof, in percent (0 = certainly false, 100 = certainly true), depending on the time t: it can change when new information is found or when the proof is debated. Use a constant (e.g. "80") when the veracity does not change.'
 	),
+	impact: z
+		.number()
+		.describe(
+			'The impact of the proof on its value: how strongly it moves the value toward the desired value, as a number between 0 (no effect) and 100 (it fully sets the desired value). Use the whole scale.'
+		),
 	originality: z
 		.number()
 		.min(0)

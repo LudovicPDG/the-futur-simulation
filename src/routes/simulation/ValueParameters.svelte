@@ -19,6 +19,8 @@
 		uncertainty: string | null;
 		/** Only for the values of an array (such as the other data). */
 		originality: string | null;
+		/** Impact of the value: the one of its relation, or of its latest proof. */
+		impact?: string | null;
 		/** Every proof, to find the sub-proofs, and the top-level proofs of this value (newest first). */
 		allProofs: (ProofData & { id: string })[];
 		proofs: (ProofData & { id: string })[];
@@ -47,6 +49,12 @@
 			<dt>{m.simulation_uncertainty_label()}</dt>
 			<dd>{info.uncertainty ?? '—'}</dd>
 		</div>
+		{#if info.impact}
+			<div>
+				<dt>{m.simulation_field_impact()}</dt>
+				<dd>{info.impact}</dd>
+			</div>
+		{/if}
 		{#if info.originality}
 			<div>
 				<dt>{m.simulation_originality_label()}</dt>

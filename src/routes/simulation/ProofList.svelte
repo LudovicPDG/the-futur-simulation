@@ -159,6 +159,10 @@
 						<dd>{format(proof.originality)}%</dd>
 					</div>
 					<div class="param-row">
+						<dt>{m.simulation_field_impact()}</dt>
+						<dd>{format(proof.impact)}</dd>
+					</div>
+					<div class="param-row">
 						<dt>{m.proof_veracity()}</dt>
 						<dd>{scores?.veracity ?? '—'}</dd>
 					</div>

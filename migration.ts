@@ -280,6 +280,12 @@ export async function createDatabase() {
 				ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 		`);
 
+		// Impact: force avec laquelle la preuve fait évoluer sa valeur vers la valeur désirée
+		await client.query(`
+			ALTER TABLE proofs
+				ADD COLUMN IF NOT EXISTS impact NUMERIC NOT NULL DEFAULT 0.0;
+		`);
+
 		// Veracity: remplace les distributions de début / fin et les impossibilités des preuves
 		await client.query(`
 			ALTER TABLE proofs
