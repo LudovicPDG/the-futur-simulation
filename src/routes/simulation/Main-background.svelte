@@ -721,6 +721,13 @@
 		// Scores: the latest proof of the value (the founding proof when it has not been debated yet).
 		const latest = proofs.find((proof) => veracityNow(proof.veracity));
 		const now = veracityNow(latest?.veracity);
+		// Originality: the one of the relation for a value of a relation, else the one of the latest proof.
+		const originalityNow =
+			relationImpact !== undefined && activeRelation
+				? Number(activeRelation.originality)
+				: latest
+					? Number(latest.originality)
+					: NaN;
 
 		return {
 			veracity: now ? `${Math.round(now.veracity)}%` : null,
@@ -731,7 +738,7 @@
 					: latest && Number.isFinite(latest.impact)
 						? formatValue(latest.impact)
 						: null,
-			originality: inArray && latest ? `${Math.round(latest.originality)}%` : null,
+			originality: Number.isFinite(originalityNow) ? `${Math.round(originalityNow as number)}%` : null,
 			allProofs,
 			proofs,
 			relations,

@@ -17,7 +17,7 @@
 		/** Veracity now and its uncertainty, already formatted. */
 		veracity: string | null;
 		uncertainty: string | null;
-		/** Only for the values of an array (such as the other data). */
+		/** Originality of the relation (for its values) or of the latest proof of the value. */
 		originality: string | null;
 		/** Impact of the value: the one of its relation, or of its latest proof. */
 		impact?: string | null;
