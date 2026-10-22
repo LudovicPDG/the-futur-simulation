@@ -286,6 +286,15 @@ export async function createDatabase() {
 				ADD COLUMN IF NOT EXISTS impact NUMERIC NOT NULL DEFAULT 0.0;
 		`);
 
+		// Scores souhaités: veracity, uncertainty, originality et impact que la preuve veut donner à la valeur (ou à la preuve débattue)
+		await client.query(`
+			ALTER TABLE proofs
+				ADD COLUMN IF NOT EXISTS desired_veracity NUMERIC NOT NULL DEFAULT 50.0,
+				ADD COLUMN IF NOT EXISTS desired_uncertainty NUMERIC NOT NULL DEFAULT 50.0,
+				ADD COLUMN IF NOT EXISTS desired_originality NUMERIC NOT NULL DEFAULT 50.0,
+				ADD COLUMN IF NOT EXISTS desired_impact NUMERIC NOT NULL DEFAULT 50.0;
+		`);
+
 		// Veracity: remplace les distributions de début / fin et les impossibilités des preuves
 		await client.query(`
 			ALTER TABLE proofs

@@ -148,6 +148,7 @@
 	"proof_no_sub": "Aucune sous-preuve.",
 	"proof_show_params": "Afficher les paramètres",
 	"proof_desired_value": "Valeur souhaitée",
+	"proof_desired_scores": "Scores souhaités",
 	"proof_veracity": "Véracité",
 	"proof_hide_params": "Masquer les paramètres",
 	"simulation_existence_title_fact": "Évolution de la certitude de l'existence du fait",

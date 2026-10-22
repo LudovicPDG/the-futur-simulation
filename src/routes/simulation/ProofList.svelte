@@ -94,6 +94,12 @@
 			<div class="desired-value">
 				<span class="desired-label">{m.proof_desired_value()}</span>
 				<span class="desired-content">{format(proof.desired_value)}</span>
+				<dl class="desired-scores">
+					<div><dt>{m.simulation_veracity_label()}</dt><dd>{Math.round(proof.desired_veracity)}%</dd></div>
+					<div><dt>{m.simulation_uncertainty_label()}</dt><dd>±{Math.round(proof.desired_uncertainty)}%</dd></div>
+					<div><dt>{m.simulation_originality_label()}</dt><dd>{Math.round(proof.desired_originality)}%</dd></div>
+					<div><dt>{m.simulation_field_impact()}</dt><dd>{Math.round(proof.desired_impact)}</dd></div>
+				</dl>
 			</div>
 			<div class="proof-actions">
 				<button
@@ -270,6 +276,37 @@
 		font-size: 13px;
 		font-weight: 600;
 		white-space: pre-wrap;
+	}
+
+	.desired-scores {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+		gap: 6px 12px;
+		margin: 6px 0 0;
+		padding-top: 6px;
+		border-top: 1px solid rgb(148 163 184 / 20%);
+	}
+
+	.desired-scores dt {
+		color: #94a3b8;
+		font-size: 10px;
+		font-weight: 600;
+	}
+
+	.desired-scores dd {
+		margin: 0;
+		color: #f1f5f9;
+		font-size: 13px;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+	}
+
+	:global(body.light) .desired-scores dt {
+		color: #64748b;
+	}
+
+	:global(body.light) .desired-scores dd {
+		color: #0f172a;
 	}
 
 	:global(body.light) .desired-value {

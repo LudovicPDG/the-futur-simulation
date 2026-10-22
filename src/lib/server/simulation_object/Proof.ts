@@ -437,10 +437,14 @@ A proof is about ONE value of the element: value_name is this existing value and
 				veracity,
 				impact,
 				originality,
+				desired_veracity,
+				desired_uncertainty,
+				desired_originality,
+				desired_impact,
 				fact_id,
 				relation_id,
 				parent_proof_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
 			[
 				proof.id ?? randomUUID(),
 				convertToPg(proof.name),
@@ -453,6 +457,10 @@ A proof is about ONE value of the element: value_name is this existing value and
 				convertToPg(proof.veracity),
 				proof.impact,
 				proof.originality,
+				proof.desired_veracity,
+				proof.desired_uncertainty,
+				proof.desired_originality,
+				proof.desired_impact,
 				proof.fact_id ?? null,
 				proof.relation_id ?? null,
 				proof.parent_proof_id ?? null
@@ -481,6 +489,10 @@ A proof is about ONE value of the element: value_name is this existing value and
 			veracity: row.veracity_json,
 			impact: Number(row.impact),
 			originality: Number(row.originality),
+			desired_veracity: Number(row.desired_veracity),
+			desired_uncertainty: Number(row.desired_uncertainty),
+			desired_originality: Number(row.desired_originality),
+			desired_impact: Number(row.desired_impact),
 			fact_id: row.fact_id,
 			relation_id: row.relation_id,
 			parent_proof_id: row.parent_proof_id

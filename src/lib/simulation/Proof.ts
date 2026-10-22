@@ -53,6 +53,34 @@ export const ProofSchema = z.object({
 		.max(100)
 		.describe(
 			'Originality of the proof compared with other proofs, as a percentage from 0 to 100 (NOT a ratio between 0 and 1): 0 = a copy of something that already exists, 50 = moderately original, 100 = completely new. Use the whole scale, e.g. 35 or 80, never 0.35 or 0.8. It avoids that people spam the same thing and increase the probability of certain things.'
+		),
+	desired_veracity: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe(
+			'The veracity (in percent, 0 to 100) this proof wants the value (or the proof it debates) to have. It is NOT the veracity of this proof.'
+		),
+	desired_uncertainty: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe(
+			'The uncertainty (in percent, 0 to 100) this proof wants the value (or the proof it debates) to have. It is NOT the uncertainty of this proof.'
+		),
+	desired_originality: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe(
+			'The originality (in percent, 0 to 100) this proof wants the value (or the proof it debates) to have. It is NOT the originality of this proof.'
+		),
+	desired_impact: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe(
+			'The impact (0 to 100) this proof wants the value (or the proof it debates) to have. It is NOT the impact of this proof.'
 		)
 });
 
