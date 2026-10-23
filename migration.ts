@@ -286,6 +286,14 @@ export async function createDatabase() {
 				ADD COLUMN IF NOT EXISTS impact NUMERIC NOT NULL DEFAULT 0.0;
 		`);
 
+		// Impact: effet du fait (ou de la relation) sur la simulation
+		await client.query(`
+			ALTER TABLE facts
+				ADD COLUMN IF NOT EXISTS impact NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (impact >= 0 AND impact <= 100);
+			ALTER TABLE relations
+				ADD COLUMN IF NOT EXISTS impact NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (impact >= 0 AND impact <= 100);
+		`);
+
 		// Scores souhaités: veracity, uncertainty, originality et impact que la preuve veut donner à la valeur (ou à la preuve débattue)
 		await client.query(`
 			ALTER TABLE proofs

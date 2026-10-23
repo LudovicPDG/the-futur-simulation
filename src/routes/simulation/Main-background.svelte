@@ -563,7 +563,7 @@
 								'element2_element1_connexions'
 							].includes(key)
 						) &&
-						!['existence', 'originality'].includes(key)
+						!['existence', 'originality', 'impact'].includes(key)
 				)
 			: []
 	);
@@ -586,7 +586,7 @@
 	const activeParameters = $derived(
 		activeElement
 			? Object.entries(activeElement as Record<string, unknown>).filter(([key]) =>
-					['originality'].includes(key)
+					['originality', 'impact'].includes(key)
 				)
 			: []
 	);
@@ -721,13 +721,18 @@
 		// Scores: the latest proof of the value (the founding proof when it has not been debated yet).
 		const latest = proofs.find((proof) => veracityNow(proof.veracity));
 		const now = veracityNow(latest?.veracity);
+		// Only the values of an array and the values of a relation have an originality and an impact.
+		const hasValueScores = inArray || relationImpact !== undefined;
 		// Originality: the one of the relation for a value of a relation, else the one of the latest proof.
-		const originalityNow =
-			relationImpact !== undefined && activeRelation
-				? Number(activeRelation.originality)
-				: latest
-					? Number(latest.originality)
-					: NaN;
+		let originalityNow = NaN;
+		if (hasValueScores) {
+			originalityNow =
+				relationImpact !== undefined && activeRelation
+					? Number(activeRelation.originality)
+					: latest
+						? Number(latest.originality)
+						: NaN;
+		}
 
 		return {
 			veracity: now ? `${Math.round(now.veracity)}%` : null,
@@ -735,7 +740,7 @@
 			impact:
 				relationImpact !== undefined
 					? formatValue(relationImpact)
-					: latest && Number.isFinite(latest.impact)
+					: hasValueScores && latest && Number.isFinite(latest.impact)
 						? formatValue(latest.impact)
 						: null,
 			originality: Number.isFinite(originalityNow) ? `${Math.round(originalityNow as number)}%` : null,
@@ -828,7 +833,7 @@
 							<dd>
 								<ol class="ranking-list">
 									{#each rankingEntries(value) as entry, i}
-										{@const entryInfluence = valueInfluence(entry.name, false)}
+										{@const entryInfluence = valueInfluence(entry.name, true)}
 										<li class="ranking-entry rank-{i < 3 ? i + 1 : 'other'}">
 											{#if i < 3}
 												<svg class="rank-medal" viewBox="0 0 28 36" aria-label={`#${i + 1}`}>

@@ -20,8 +20,9 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 					description,
 					other,
 					existence,
-					originality
-				) VALUES ($1, $2, $3, $4, $5, $6)
+					originality,
+					impact
+				) VALUES ($1, $2, $3, $4, $5, $6, $7)
 				RETURNING id`,
 				[
 					convertToPg(ranking.name),
@@ -29,7 +30,8 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 					convertToPg(ranking.description),
 					convertToPgNullable(ranking.other),
 					convertToPg(ranking.existence),
-					ranking.originality
+					ranking.originality,
+					ranking.impact
 				]
 			);
 			const id = factRes.rows[0].id;
@@ -59,7 +61,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 	async get_all(): Promise<RankingData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, f.impact,
 				to_jsonb(r.rankings) AS rankings
 			FROM rankings r
 			JOIN events e ON r.id = e.id
@@ -74,6 +76,7 @@ export class RankingServer extends BaseSimulationObject<RankingData> {
 			other: row.other,
 			existence: row.existence,
 			originality: Number(row.originality),
+			impact: Number(row.impact),
 			rankings: row.rankings || []
 		}));
 	}

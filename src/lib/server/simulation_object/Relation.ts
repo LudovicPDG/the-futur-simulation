@@ -198,8 +198,9 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				element1_element2_new_value,
 				element2_element1_new_value,
 				existence,
-				originality
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+				originality,
+				impact
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
 			[
 				convertToPg(relation.name),
 				convertToPg(relation.description),
@@ -224,7 +225,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				JSON.stringify(relation.element1_element2_new_value ?? []),
 				JSON.stringify(relation.element2_element1_new_value ?? []),
 				convertToPg(relation.existence),
-				relation.originality
+				relation.originality,
+				relation.impact
 			]
 		);
 		return result.rows[0].id;
@@ -253,7 +255,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			element1_element2_new_value: row.element1_element2_new_value ?? [],
 			element2_element1_new_value: row.element2_element1_new_value ?? [],
 			existence: row.existence_json,
-			originality: Number(row.originality)
+			originality: Number(row.originality),
+			impact: Number(row.impact)
 		}));
 	}
 

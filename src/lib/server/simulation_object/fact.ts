@@ -16,8 +16,9 @@ export class FactServer extends BaseSimulationObject<FactData> {
 				description,
 				other,
 				existence,
-				originality
-			) VALUES ($1, $2, $3, $4, $5, $6)
+				originality,
+				impact
+			) VALUES ($1, $2, $3, $4, $5, $6, $7)
 			RETURNING id`,
 			[
 				convertToPg(fact.name),
@@ -25,7 +26,8 @@ export class FactServer extends BaseSimulationObject<FactData> {
 				convertToPg(fact.description),
 				convertToPgNullable(fact.other),
 				convertToPg(fact.existence),
-				fact.originality
+				fact.originality,
+				fact.impact
 			]
 		);
 		return result.rows[0].id;
@@ -45,7 +47,8 @@ export class FactServer extends BaseSimulationObject<FactData> {
 			description: row.description,
 			other: row.other_json,
 			existence: row.existence_json,
-			originality: Number(row.originality)
+			originality: Number(row.originality),
+			impact: Number(row.impact)
 		}));
 	}
 

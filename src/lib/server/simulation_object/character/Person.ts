@@ -20,8 +20,9 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 					description,
 					other,
 					existence,
-					originality
-				) VALUES ($1, $2, $3, $4, $5, $6)
+					originality,
+					impact
+				) VALUES ($1, $2, $3, $4, $5, $6, $7)
 				RETURNING id`,
 				[
 					convertToPg(person.name),
@@ -29,7 +30,8 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 					convertToPg(person.description),
 					convertToPgNullable(person.other),
 					convertToPg(person.existence),
-					person.originality
+					person.originality,
+					person.impact
 				]
 			);
 			const id = factRes.rows[0].id;
@@ -60,7 +62,7 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 	async get_all(): Promise<PersonData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, f.impact,
 				to_jsonb(c.financial_resource) AS financial_resource, to_jsonb(c.power) AS power
 			FROM persons p
 			JOIN characters c ON p.id = c.id
@@ -75,6 +77,7 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 			other: row.other,
 			existence: row.existence,
 			originality: Number(row.originality),
+			impact: Number(row.impact),
 			financial_resource: row.financial_resource,
 			power: row.power || []
 		}));

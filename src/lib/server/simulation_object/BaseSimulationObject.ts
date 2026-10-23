@@ -11,6 +11,7 @@ export abstract class BaseSimulationObject<
 		other?: any;
 		existence?: any;
 		originality?: number;
+		impact?: number;
 	}
 > {
 	protected abstract schema: z.ZodType<T>;
