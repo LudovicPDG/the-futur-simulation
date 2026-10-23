@@ -37,6 +37,10 @@ export async function resetDatabase() {
 		await client.query(`
 			DROP TYPE IF EXISTS
 				action_material_resource_t,
+				action_material_t,
+				titled_item_t,
+				skew_normal_parameter_t,
+				other_fact_t_translation,
 				ranking_element_t,
 				other_fact_t,
 				relation_connexion_t,
