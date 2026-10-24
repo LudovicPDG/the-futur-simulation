@@ -103,17 +103,20 @@ const RELATION_VALUE_LISTS = new Set([
 	'element2_element1_new_value'
 ]);
 
+/** A value of an element, and whether it is an entry of a list (only those have an originality and an impact). */
+type ElementValue = Pick<ProofData, 'value_name' | 'desired_value'> & { inList: boolean };
+
 /**
  * Every value of a freshly created element (its name, description, list items and "other" values), each of which
  * gets its own founding proof. Values that are neither a text, a number, a boolean nor an evolution (rankings...) are skipped.
  */
 function elementValues(
 	element: Record<string, unknown>
-): Pick<ProofData, 'value_name' | 'desired_value'>[] {
-	const values: Pick<ProofData, 'value_name' | 'desired_value'>[] = [];
-	const add = (value_name: ProofData['value_name'], raw: unknown) => {
+): ElementValue[] {
+	const values: ElementValue[] = [];
+	const add = (value_name: ProofData['value_name'], raw: unknown, inList = true) => {
 		const desired_value = toProofValue(raw);
-		if (value_name && desired_value !== undefined) values.push({ value_name, desired_value });
+		if (value_name && desired_value !== undefined) values.push({ value_name, desired_value, inList });
 	};
 
 	// Each value to modify and each value to add of a relation has its own proof.
@@ -127,7 +130,7 @@ function elementValues(
 		if (NOT_A_VALUE.has(key) || RELATION_VALUE_LISTS.has(key) || raw === null || raw === undefined) continue;
 		if (key === 'evolution' && Array.isArray(raw) && typeof element.unit === 'string') {
 			// An evolution element holds its functions and its unit side by side: they form one value.
-			add(key, { evolution: raw, unit: element.unit });
+			add(key, { evolution: raw, unit: element.unit }, false);
 		} else if (key === 'other') {
 			if (Array.isArray(raw)) for (const item of raw) add(item?.name, item?.value);
 		} else if (
@@ -144,7 +147,8 @@ function elementValues(
 		} else if (Array.isArray(raw)) {
 			for (const item of raw) add(key, item);
 		} else {
-			add(key, raw);
+			// A primary property is not an entry of a list: it has no originality and no impact.
+			add(key, raw, false);
 		}
 	}
 	return values;
@@ -249,7 +253,7 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		for (let i = 0; i < values.length; i += FOUNDING_PROOF_CONCURRENCY) {
 			const batch = values.slice(i, i + FOUNDING_PROOF_CONCURRENCY);
 			const results = await Promise.allSettled(
-				batch.map(async (value) => {
+				batch.map(async ({ inList, ...value }) => {
 					const generated = await this.generateWithSchema(
 						model_name,
 						level_of_reasoning,
@@ -261,6 +265,7 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 					const proof: ProofData = {
 						...generated,
 						...value,
+						...(inList ? {} : { desired_originality: null, desired_impact: null }),
 						id: randomUUID(),
 						fact_id: 'factId' in target ? target.factId : null,
 						relation_id: 'relationId' in target ? target.relationId : null,
@@ -414,8 +419,12 @@ A proof is about ONE value of the element: value_name is this existing value and
 			if (secondError) throw new Error(secondError);
 		}
 
+		// Only an entry of a list has an originality and an impact to desire.
+		const inList = findListEntry(proof.value_name, element) !== undefined;
+
 		return {
 			...proof,
+			...(inList ? {} : { desired_originality: null, desired_impact: null }),
 			id: randomUUID(),
 			fact_id: 'factId' in target ? target.factId : null,
 			relation_id: 'relationId' in target ? target.relationId : null,
@@ -491,8 +500,8 @@ A proof is about ONE value of the element: value_name is this existing value and
 			originality: Number(row.originality),
 			desired_veracity: Number(row.desired_veracity),
 			desired_uncertainty: Number(row.desired_uncertainty),
-			desired_originality: Number(row.desired_originality),
-			desired_impact: Number(row.desired_impact),
+			desired_originality: row.desired_originality === null ? null : Number(row.desired_originality),
+			desired_impact: row.desired_impact === null ? null : Number(row.desired_impact),
 			fact_id: row.fact_id,
 			relation_id: row.relation_id,
 			parent_proof_id: row.parent_proof_id

@@ -97,8 +97,12 @@
 				<dl class="desired-scores">
 					<div><dt>{m.simulation_veracity_label()}</dt><dd>{Math.round(proof.desired_veracity)}%</dd></div>
 					<div><dt>{m.simulation_uncertainty_label()}</dt><dd>±{Math.round(proof.desired_uncertainty)}%</dd></div>
-					<div><dt>{m.simulation_originality_label()}</dt><dd>{Math.round(proof.desired_originality)}%</dd></div>
-					<div><dt>{m.simulation_field_impact()}</dt><dd>{Math.round(proof.desired_impact)}</dd></div>
+					{#if proof.desired_originality !== null}
+						<div><dt>{m.simulation_originality_label()}</dt><dd>{Math.round(proof.desired_originality)}%</dd></div>
+					{/if}
+					{#if proof.desired_impact !== null}
+						<div><dt>{m.simulation_field_impact()}</dt><dd>{Math.round(proof.desired_impact)}</dd></div>
+					{/if}
 				</dl>
 			</div>
 			<div class="proof-actions">
