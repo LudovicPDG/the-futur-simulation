@@ -16,6 +16,24 @@ const FOUNDING_PROOF_CONCURRENCY = 4;
 /** The content of a founding proof: the same for every value of the element, which are added afterwards. */
 const FoundingProofSchema = ProofSchema.omit({ value_name: true, desired_value: true });
 
+/** A sub-proof always desires an originality and an impact: those of the proof it debates. */
+const SubProofSchema = ProofSchema.extend({
+	desired_originality: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe(
+			'The originality (in percent, 0 to 100) this sub-proof wants the debated proof to have. It is NOT the originality of this sub-proof.'
+		),
+	desired_impact: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe(
+			'The impact (0 to 100) this sub-proof wants the debated proof to have. It is NOT the impact of this sub-proof.'
+		)
+});
+
 /** Values saved as a plain string (before texts had to be translated) are repeated in every language. */
 function toProofValue(value: unknown): ProofData['desired_value'] | undefined {
 	if (typeof value === 'number' || typeof value === 'boolean') return value;
@@ -386,7 +404,7 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 					value_name, desired_value,
 					(verification_method).fr AS verification_method_fr,
 					(falsifiability_method).fr AS falsifiability_method_fr,
-					source
+					source, impact, originality
 				FROM proofs WHERE id = $1`,
 				[parentProofId]
 			);
@@ -407,7 +425,7 @@ A proof is about ONE value of the element: value_name is this existing value and
 				model_name,
 				level_of_reasoning,
 				basePrompt + extra,
-				ProofSchema
+				parentProofId ? SubProofSchema : ProofSchema
 			);
 			return valueName !== undefined ? { ...proof, value_name: valueName } : proof;
 		};
@@ -419,12 +437,12 @@ A proof is about ONE value of the element: value_name is this existing value and
 			if (secondError) throw new Error(secondError);
 		}
 
-		// Only an entry of a list has an originality and an impact to desire.
-		const inList = findListEntry(proof.value_name, element) !== undefined;
+		// Only an entry of a list, or a proof debated by a sub-proof, has an originality and an impact to desire.
+		const hasScores = parentProofId !== undefined || findListEntry(proof.value_name, element) !== undefined;
 
 		return {
 			...proof,
-			...(inList ? {} : { desired_originality: null, desired_impact: null }),
+			...(hasScores ? {} : { desired_originality: null, desired_impact: null }),
 			id: randomUUID(),
 			fact_id: 'factId' in target ? target.factId : null,
 			relation_id: 'relationId' in target ? target.relationId : null,

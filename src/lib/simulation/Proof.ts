@@ -74,7 +74,7 @@ export const ProofSchema = z.object({
 		.max(100)
 		.nullable()
 		.describe(
-			'Only when the value is an entry of a list (an "other information", a power, a willingness, a material resource, a ranking, a value of a relation): the originality (in percent, 0 to 100) this proof wants the value to have. It is NOT the originality of this proof. null for any other value (name, description, existence...), which has no originality.'
+			'Only when this proof is a sub-proof (it debates another proof: then the originality it wants that proof to have) or when the value is an entry of a list (an "other information", a power, a willingness, a material resource, a ranking, a value of a relation): the originality (in percent, 0 to 100) this proof wants the value to have. It is NOT the originality of this proof. null for any other value (name, description, existence...), which has no originality.'
 		),
 	desired_impact: z
 		.number()
@@ -82,7 +82,7 @@ export const ProofSchema = z.object({
 		.max(100)
 		.nullable()
 		.describe(
-			'Only when the value is an entry of a list (an "other information", a power, a willingness, a material resource, a ranking, a value of a relation): the impact (0 to 100) this proof wants the value to have. It is NOT the impact of this proof. null for any other value (name, description, existence...), which has no impact.'
+			'Only when this proof is a sub-proof (it debates another proof: then the impact it wants that proof to have) or when the value is an entry of a list (an "other information", a power, a willingness, a material resource, a ranking, a value of a relation): the impact (0 to 100) this proof wants the value to have. It is NOT the impact of this proof. null for any other value (name, description, existence...), which has no impact.'
 		)
 });
 
