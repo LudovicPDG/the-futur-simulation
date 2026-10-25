@@ -16,7 +16,6 @@
 		parseEvolutionFunction,
 		parseEvolutionValue,
 		buildEvolutionFunction,
-		buildEvolutionUncertainty,
 		type EvolutionValue
 	} from '$lib/simulation/event/EvolutionFunction';
 	import type { ProofData } from '$lib/simulation/Proof';
@@ -635,19 +634,6 @@
 		const year = new Date().getUTCFullYear();
 		return year + (Date.now() - Date.UTC(year, 0, 1)) / 31_557_600_000;
 	}
-	// Veracity of a proof value now (0-100) and its uncertainty (in percentage points)
-	function veracityNow(raw: unknown): { veracity: number; uncertainty: number } | null {
-		const parsed = parseEvolutionValue(raw);
-		if (!parsed) return null;
-		const t = currentYear();
-		const veracity = buildEvolutionFunction(parsed.evolution)(t);
-		if (!Number.isFinite(veracity)) return null;
-		const uncertainty = buildEvolutionUncertainty(parsed.evolution)(t);
-		return {
-			veracity: Math.min(100, Math.max(0, veracity)),
-			uncertainty: Number.isFinite(uncertainty) ? uncertainty : 0
-		};
-	}
 	const allRelations = $derived(
 		simulation_data.filter((element): element is SimulationElementWithId & RelationData =>
 			isRelationElement(element)
@@ -719,8 +705,7 @@
 				});
 
 		// Scores: the latest proof of the value (the founding proof when it has not been debated yet).
-		const latest = proofs.find((proof) => veracityNow(proof.veracity));
-		const now = veracityNow(latest?.veracity);
+		const latest = proofs.find((proof) => Number.isFinite(proof.veracity));
 		// Only the values of an array and the values of a relation have an originality and an impact.
 		const hasValueScores = inArray || relationImpact !== undefined;
 		// Originality: the one of the relation for a value of a relation, else the one of the latest proof.
@@ -735,8 +720,8 @@
 		}
 
 		return {
-			veracity: now ? `${Math.round(now.veracity)}%` : null,
-			uncertainty: now ? `±${Math.round(now.uncertainty * 10) / 10}%` : null,
+			veracity: latest ? `${Math.round(latest.veracity)}%` : null,
+			uncertainty: latest && Number.isFinite(latest.uncertainty) ? `±${Math.round(latest.uncertainty)}%` : null,
 			impact:
 				relationImpact !== undefined
 					? formatValue(relationImpact)

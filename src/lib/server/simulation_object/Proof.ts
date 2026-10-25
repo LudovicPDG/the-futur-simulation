@@ -16,27 +16,6 @@ const FOUNDING_PROOF_CONCURRENCY = 4;
 /** The content of a founding proof: the same for every value of the element, which are added afterwards. */
 const FoundingProofSchema = ProofSchema.omit({ value_name: true, desired_value: true });
 
-/**
- * A sub-proof has no desired value: it only desires the veracity, uncertainty, originality and impact of the
- * proof it debates (its value_name is the one of that proof).
- */
-const SubProofSchema = ProofSchema.omit({ desired_value: true }).extend({
-	desired_originality: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe(
-			'The originality (in percent, 0 to 100) this sub-proof wants the debated proof to have. It is NOT the originality of this sub-proof.'
-		),
-	desired_impact: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe(
-			'The impact (0 to 100) this sub-proof wants the debated proof to have. It is NOT the impact of this sub-proof.'
-		)
-});
-
 /** Values saved as a plain string (before texts had to be translated) are repeated in every language. */
 function toProofValue(value: unknown): NonNullable<ProofData['desired_value']> | undefined {
 	if (typeof value === 'number' || typeof value === 'boolean') return value;
@@ -124,8 +103,8 @@ const RELATION_VALUE_LISTS = new Set([
 	'element2_element1_new_value'
 ]);
 
-/** A value of an element, and whether it is an entry of a list (only those have an originality and an impact). */
-type ElementValue = Pick<ProofData, 'value_name' | 'desired_value'> & { inList: boolean };
+/** A value of an element. */
+type ElementValue = Pick<ProofData, 'value_name' | 'desired_value'>;
 
 /**
  * Every value of a freshly created element (its name, description, list items and "other" values), each of which
@@ -135,9 +114,9 @@ function elementValues(
 	element: Record<string, unknown>
 ): ElementValue[] {
 	const values: ElementValue[] = [];
-	const add = (value_name: ProofData['value_name'], raw: unknown, inList = true) => {
+	const add = (value_name: ProofData['value_name'], raw: unknown) => {
 		const desired_value = toProofValue(raw);
-		if (value_name && desired_value !== undefined) values.push({ value_name, desired_value, inList });
+		if (value_name && desired_value !== undefined) values.push({ value_name, desired_value });
 	};
 
 	// Each value to modify and each value to add of a relation has its own proof.
@@ -151,7 +130,7 @@ function elementValues(
 		if (NOT_A_VALUE.has(key) || RELATION_VALUE_LISTS.has(key) || raw === null || raw === undefined) continue;
 		if (key === 'evolution' && Array.isArray(raw) && typeof element.unit === 'string') {
 			// An evolution element holds its functions and its unit side by side: they form one value.
-			add(key, { evolution: raw, unit: element.unit }, false);
+			add(key, { evolution: raw, unit: element.unit });
 		} else if (key === 'other') {
 			if (Array.isArray(raw)) for (const item of raw) add(item?.name, item?.value);
 		} else if (
@@ -168,8 +147,7 @@ function elementValues(
 		} else if (Array.isArray(raw)) {
 			for (const item of raw) add(key, item);
 		} else {
-			// A primary property is not an entry of a list: it has no originality and no impact.
-			add(key, raw, false);
+			add(key, raw);
 		}
 	}
 	return values;
@@ -274,7 +252,7 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		for (let i = 0; i < values.length; i += FOUNDING_PROOF_CONCURRENCY) {
 			const batch = values.slice(i, i + FOUNDING_PROOF_CONCURRENCY);
 			const results = await Promise.allSettled(
-				batch.map(async ({ inList, ...value }) => {
+				batch.map(async (value) => {
 					const generated = await this.generateWithSchema(
 						model_name,
 						level_of_reasoning,
@@ -286,7 +264,6 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 					const proof: ProofData = {
 						...generated,
 						...value,
-						...(inList ? {} : { desired_originality: null, desired_impact: null }),
 						id: randomUUID(),
 						fact_id: 'factId' in target ? target.factId : null,
 						relation_id: 'relationId' in target ? target.relationId : null,
@@ -407,7 +384,7 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 					value_name, desired_value,
 					(verification_method).fr AS verification_method_fr,
 					(falsifiability_method).fr AS falsifiability_method_fr,
-					source, impact, originality
+					source, veracity, uncertainty, impact, originality
 				FROM proofs WHERE id = $1`,
 				[parentProofId]
 			);
@@ -418,26 +395,13 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 			context += `\n\nThis proof is about the value ${JSON.stringify(valueName)} of the element: use exactly this value_name.`;
 		}
 
-		const basePrompt = parentProofId
-			? `${prompt}${context}
+		const basePrompt = `${prompt}${context}
 
-A sub-proof has no desired value: it only gives the veracity, uncertainty, originality and impact it wants the debated proof to have.`
-			: `${prompt}${context}
-
-A proof is about ONE value of the element: value_name is this existing value and desired_value is the value the proof wants it to have.`;
-
-		if (parentProofId) {
-			const proof = await this.generateWithSchema(model_name, level_of_reasoning, basePrompt, SubProofSchema);
-			return {
-				...proof,
-				...(valueName !== undefined ? { value_name: valueName } : {}),
-				desired_value: null,
-				id: randomUUID(),
-				fact_id: 'factId' in target ? target.factId : null,
-				relation_id: 'relationId' in target ? target.relationId : null,
-				parent_proof_id: parentProofId
-			};
-		}
+A proof is about ONE value of the element: value_name is this existing value and desired_value is the value the proof wants it to have.${
+			parentProofId
+				? ' A sub-proof also gives the desired value it defends for this value: the one of the debated proof if it supports it, another one if it questions or refutes it.'
+				: ''
+		}`;
 
 		// The value must exist and the desired value must keep its type: retry once with the error.
 		const generate = async (extra = '') => {
@@ -457,16 +421,12 @@ A proof is about ONE value of the element: value_name is this existing value and
 			if (secondError) throw new Error(secondError);
 		}
 
-		// Only an entry of a list has an originality and an impact to desire (a sub-proof always has them, see above).
-		const hasScores = findListEntry(proof.value_name, element) !== undefined;
-
 		return {
 			...proof,
-			...(hasScores ? {} : { desired_originality: null, desired_impact: null }),
 			id: randomUUID(),
 			fact_id: 'factId' in target ? target.factId : null,
 			relation_id: 'relationId' in target ? target.relationId : null,
-			parent_proof_id: null
+			parent_proof_id: parentProofId ?? null
 		};
 	}
 
@@ -482,32 +442,26 @@ A proof is about ONE value of the element: value_name is this existing value and
 				falsifiability_method,
 				source,
 				veracity,
+				uncertainty,
 				impact,
 				originality,
-				desired_veracity,
-				desired_uncertainty,
-				desired_originality,
-				desired_impact,
 				fact_id,
 				relation_id,
 				parent_proof_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 			[
 				proof.id ?? randomUUID(),
 				convertToPg(proof.name),
 				convertToPg(proof.description),
 				JSON.stringify(proof.value_name),
-				proof.desired_value === null ? null : JSON.stringify(proof.desired_value),
+				JSON.stringify(proof.desired_value),
 				convertToPg(proof.verification_method),
 				convertToPg(proof.falsifiability_method),
 				convertToPg(proof.source || []),
-				convertToPg(proof.veracity),
+				proof.veracity,
+				proof.uncertainty,
 				proof.impact,
 				proof.originality,
-				proof.desired_veracity,
-				proof.desired_uncertainty,
-				proof.desired_originality,
-				proof.desired_impact,
 				proof.fact_id ?? null,
 				proof.relation_id ?? null,
 				proof.parent_proof_id ?? null
@@ -517,7 +471,7 @@ A proof is about ONE value of the element: value_name is this existing value and
 
 	async get_all(): Promise<ProofData[]> {
 		const result = await db.query(`
-			SELECT *, to_jsonb(veracity) AS veracity_json
+			SELECT *
 			FROM proofs
 			WHERE value_name IS NOT NULL
 			ORDER BY created_at DESC
@@ -533,13 +487,10 @@ A proof is about ONE value of the element: value_name is this existing value and
 			verification_method: row.verification_method,
 			falsifiability_method: row.falsifiability_method,
 			source: row.source || [],
-			veracity: row.veracity_json,
+			veracity: Number(row.veracity),
+			uncertainty: Number(row.uncertainty),
 			impact: Number(row.impact),
 			originality: Number(row.originality),
-			desired_veracity: Number(row.desired_veracity),
-			desired_uncertainty: Number(row.desired_uncertainty),
-			desired_originality: row.desired_originality === null ? null : Number(row.desired_originality),
-			desired_impact: row.desired_impact === null ? null : Number(row.desired_impact),
 			fact_id: row.fact_id,
 			relation_id: row.relation_id,
 			parent_proof_id: row.parent_proof_id

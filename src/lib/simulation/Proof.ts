@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
-import { PercentageEvolutionSchema } from './Existence';
 import { EvolutionTypeSchema } from './event/EvolutionType';
 
 export type ProofValueKind = 'translation' | 'number' | 'boolean' | 'evolution';
@@ -39,13 +38,24 @@ export const ProofSchema = z.object({
 	verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
 	falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),
 	source: z.array(z.string()).default([]).describe('Sources for the proof'),
-	veracity: PercentageEvolutionSchema.describe(
-		'Evolution of the veracity of the proof, in percent (0 = certainly false, 100 = certainly true), depending on the time t: it can change when new information is found or when the proof is debated. Use a constant (e.g. "80") when the veracity does not change.'
-	),
+	veracity: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe(
+			'The veracity of the proof, as a percentage from 0 to 100 (0 = certainly false, 100 = certainly true). Use the whole scale.'
+		),
+	uncertainty: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe(
+			'The uncertainty of the veracity of the proof, as a percentage from 0 to 100: 5 = the veracity is known within about +-5 points, 40 = a rough estimate.'
+		),
 	impact: z
 		.number()
 		.describe(
-			'The impact of the proof on its value: how strongly it moves the value toward the desired value, as a number between 0 (no effect) and 100 (it fully sets the desired value). Use the whole scale.'
+			'The impact of the proof on its value: how strongly it moves the value toward the desired value. Any number: positive when it pushes the value toward the desired value, negative when it pushes it away, 0 for no effect. Its magnitude is not limited.'
 		),
 	originality: z
 		.number()
@@ -53,46 +63,15 @@ export const ProofSchema = z.object({
 		.max(100)
 		.describe(
 			'Originality of the proof compared with other proofs, as a percentage from 0 to 100 (NOT a ratio between 0 and 1): 0 = a copy of something that already exists, 50 = moderately original, 100 = completely new. Use the whole scale, e.g. 35 or 80, never 0.35 or 0.8. It avoids that people spam the same thing and increase the probability of certain things.'
-		),
-	desired_veracity: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe(
-			'The veracity (in percent, 0 to 100) this proof wants the value (or the proof it debates) to have. It is NOT the veracity of this proof.'
-		),
-	desired_uncertainty: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe(
-			'The uncertainty (in percent, 0 to 100) this proof wants the value (or the proof it debates) to have. It is NOT the uncertainty of this proof.'
-		),
-	desired_originality: z
-		.number()
-		.min(0)
-		.max(100)
-		.nullable()
-		.describe(
-			'Only when this proof is a sub-proof (it debates another proof: then the originality it wants that proof to have) or when the value is an entry of a list (an "other information", a power, a willingness, a material resource, a ranking, a value of a relation): the originality (in percent, 0 to 100) this proof wants the value to have. It is NOT the originality of this proof. null for any other value (name, description, existence...), which has no originality.'
-		),
-	desired_impact: z
-		.number()
-		.min(0)
-		.max(100)
-		.nullable()
-		.describe(
-			'Only when this proof is a sub-proof (it debates another proof: then the impact it wants that proof to have) or when the value is an entry of a list (an "other information", a power, a willingness, a material resource, a ranking, a value of a relation): the impact (0 to 100) this proof wants the value to have. It is NOT the impact of this proof. null for any other value (name, description, existence...), which has no impact.'
 		)
 });
 
 /**
  * A proof as stored: the generated content plus the links set by the server
  * (the element of the value and, for a sub-proof, the proof it debates).
- * A sub-proof has no desired value: it only desires the veracity, uncertainty, originality and impact of the proof it debates.
+ * Every proof, sub-proofs included, has a desired value for its value.
  */
-export type ProofData = Omit<z.infer<typeof ProofSchema>, 'desired_value'> & {
-	desired_value: z.infer<typeof ProofSchema>['desired_value'] | null;
+export type ProofData = z.infer<typeof ProofSchema> & {
 	id?: string;
 	fact_id?: string | null;
 	relation_id?: string | null;

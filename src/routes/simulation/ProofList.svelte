@@ -2,11 +2,6 @@
 	import type { ProofData } from '$lib/simulation/Proof';
 	import { addProofTarget, addRelationTarget, addValueTarget, debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
-	import {
-		parseEvolutionValue,
-		buildEvolutionFunction,
-		buildEvolutionUncertainty
-	} from '$lib/simulation/event/EvolutionFunction';
 	import ProofList from './ProofList.svelte';
 
 	const PAGE_SIZE = 5;
@@ -42,21 +37,6 @@
 		return proofs.filter((proof) => proof.parent_proof_id === proofId).length;
 	}
 
-	// Veracity and uncertainty of a proof now (the date as a decimal year)
-	function scoresNow(raw: unknown) {
-		const parsed = parseEvolutionValue(raw);
-		if (!parsed) return null;
-		const year = new Date().getUTCFullYear();
-		const t = year + (Date.now() - Date.UTC(year, 0, 1)) / 31_557_600_000;
-		const veracity = buildEvolutionFunction(parsed.evolution)(t);
-		if (!Number.isFinite(veracity)) return null;
-		const uncertainty = buildEvolutionUncertainty(parsed.evolution)(t);
-		return {
-			veracity: `${Math.round(Math.min(100, Math.max(0, veracity)))}%`,
-			uncertainty: `±${Math.round((Number.isFinite(uncertainty) ? uncertainty : 0) * 10) / 10}%`
-		};
-	}
-
 	const URL_PATTERN = /(https?:\/\/[^\s<>"')\]]+|www\.[^\s<>"')\]]+)/gi;
 
 	/** Splits a source string into plain text and clickable link parts. */
@@ -83,7 +63,6 @@
 <ul class="proof-list" class:nested={parentId !== null}>
 	{#each visible as proof (proof.id)}
 		{@const count = subProofCount(proof.id)}
-		{@const hasDesiredValue = !proof.parent_proof_id && proof.desired_value !== null}
 		<li class="proof-item">
 			<h4>
 				{format(proof.name)}
@@ -93,22 +72,8 @@
 			</h4>
 			<p class="proof-description">{format(proof.description)}</p>
 			<div class="desired-value">
-				{#if hasDesiredValue}
-					<span class="desired-label">{m.proof_desired_value()}</span>
-					<span class="desired-content">{format(proof.desired_value)}</span>
-				{:else}
-					<span class="desired-label">{m.proof_desired_params()}</span>
-				{/if}
-				<dl class="desired-scores" class:alone={!hasDesiredValue}>
-					<div><dt>{m.simulation_veracity_label()}</dt><dd>{Math.round(proof.desired_veracity)}%</dd></div>
-					<div><dt>{m.simulation_uncertainty_label()}</dt><dd>±{Math.round(proof.desired_uncertainty)}%</dd></div>
-					{#if proof.desired_originality !== null}
-						<div><dt>{m.simulation_originality_label()}</dt><dd>{Math.round(proof.desired_originality)}%</dd></div>
-					{/if}
-					{#if proof.desired_impact !== null}
-						<div><dt>{m.simulation_field_impact()}</dt><dd>{Math.round(proof.desired_impact)}</dd></div>
-					{/if}
-				</dl>
+				<span class="desired-label">{m.proof_desired_value()}</span>
+				<span class="desired-content">{format(proof.desired_value)}</span>
 			</div>
 			<div class="proof-actions">
 				<button
@@ -137,7 +102,6 @@
 				</button>
 			</div>
 			{#if paramsShown[proof.id]}
-				{@const scores = scoresNow(proof.veracity)}
 				<dl class="proof-params">
 					<div class="param-row verification">
 						<dt>{m.simulation_field_verification_method()}</dt>
@@ -179,11 +143,11 @@
 					</div>
 					<div class="param-row">
 						<dt>{m.proof_veracity()}</dt>
-						<dd>{scores?.veracity ?? '—'}</dd>
+						<dd>{Number.isFinite(proof.veracity) ? `${Math.round(proof.veracity)}%` : '—'}</dd>
 					</div>
 					<div class="param-row">
 						<dt>{m.simulation_evolution_uncertainty()}</dt>
-						<dd>{scores?.uncertainty ?? '—'}</dd>
+						<dd>{Number.isFinite(proof.uncertainty) ? `±${Math.round(proof.uncertainty)}%` : '—'}</dd>
 					</div>
 				</dl>
 			{/if}
@@ -285,44 +249,6 @@
 		font-size: 13px;
 		font-weight: 600;
 		white-space: pre-wrap;
-	}
-
-	.desired-scores {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-		gap: 6px 12px;
-		margin: 6px 0 0;
-		padding-top: 6px;
-		border-top: 1px solid rgb(148 163 184 / 20%);
-	}
-
-	/* A sub-proof has no desired value above its scores: no separator. */
-	.desired-scores.alone {
-		margin-top: 2px;
-		padding-top: 0;
-		border-top: none;
-	}
-
-	.desired-scores dt {
-		color: #94a3b8;
-		font-size: 10px;
-		font-weight: 600;
-	}
-
-	.desired-scores dd {
-		margin: 0;
-		color: #f1f5f9;
-		font-size: 13px;
-		font-weight: 600;
-		font-variant-numeric: tabular-nums;
-	}
-
-	:global(body.light) .desired-scores dt {
-		color: #64748b;
-	}
-
-	:global(body.light) .desired-scores dd {
-		color: #0f172a;
 	}
 
 	:global(body.light) .desired-value {

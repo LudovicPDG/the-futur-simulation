@@ -148,7 +148,6 @@
 	"proof_no_sub": "No sub-proof.",
 	"proof_show_params": "Show parameters",
 	"proof_desired_value": "Desired value",
-	"proof_desired_params": "Desired parameter values",
 	"proof_desired_scores": "Desired scores",
 	"proof_veracity": "Veracity",
 	"proof_hide_params": "Hide parameters",

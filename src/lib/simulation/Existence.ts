@@ -4,7 +4,7 @@ import { isPercentageFunction } from './event/EvolutionFunction';
 
 /**
  * An evolution that only accepts values between 0 and 100 (a percentage), over the time t.
- * It is used for the existence of the facts (and the occurrence of the events) and for the veracity of the proofs.
+ * It is used for the existence of the facts (and the occurrence of the events).
  */
 export const PercentageEvolutionSchema = z.object({
 	evolution: z

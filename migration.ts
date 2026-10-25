@@ -12,7 +12,6 @@ export const db = new Pool({
 
 const DEFAULT_EXISTENCE = `ROW('[{"function":"100","weight":1,"uncertainty":0}]'::jsonb, '%')::evolution_t`;
 const DEFAULT_ZERO_EVOLUTION = `ROW('[{"function":"0","weight":1,"uncertainty":0}]'::jsonb, '')::evolution_t`;
-const DEFAULT_VERACITY = `ROW('[{"function":"50","weight":1,"uncertainty":0}]'::jsonb, '%')::evolution_t`;
 
 /**
  * Creates the whole schema from scratch (the database is expected to be empty).
@@ -144,15 +143,12 @@ export async function createDatabase() {
 				verification_method translation_t NOT NULL,
 				falsifiability_method translation_t NOT NULL,
 				source TEXT[] NOT NULL DEFAULT '{}',
-				veracity evolution_t NOT NULL DEFAULT ${DEFAULT_VERACITY},
+				veracity NUMERIC NOT NULL DEFAULT 50.0 CHECK (veracity >= 0 AND veracity <= 100),
+				uncertainty NUMERIC NOT NULL DEFAULT 50.0 CHECK (uncertainty >= 0 AND uncertainty <= 100),
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100),
 				impact NUMERIC NOT NULL DEFAULT 0.0,
-				desired_veracity NUMERIC NOT NULL DEFAULT 50.0,
-				desired_uncertainty NUMERIC NOT NULL DEFAULT 50.0,
-				desired_originality NUMERIC,
-				desired_impact NUMERIC,
 				value_name JSONB,
-				desired_value JSONB,
+				desired_value JSONB NOT NULL,
 				fact_id UUID REFERENCES facts(id) ON DELETE CASCADE,
 				relation_id UUID REFERENCES relations(id) ON DELETE CASCADE,
 				parent_proof_id UUID REFERENCES proofs(id) ON DELETE CASCADE,
