@@ -16,8 +16,11 @@ const FOUNDING_PROOF_CONCURRENCY = 4;
 /** The content of a founding proof: the same for every value of the element, which are added afterwards. */
 const FoundingProofSchema = ProofSchema.omit({ value_name: true, desired_value: true });
 
-/** A sub-proof always desires an originality and an impact: those of the proof it debates. */
-const SubProofSchema = ProofSchema.extend({
+/**
+ * A sub-proof has no desired value: it only desires the veracity, uncertainty, originality and impact of the
+ * proof it debates (its value_name is the one of that proof).
+ */
+const SubProofSchema = ProofSchema.omit({ desired_value: true }).extend({
 	desired_originality: z
 		.number()
 		.min(0)
@@ -35,10 +38,10 @@ const SubProofSchema = ProofSchema.extend({
 });
 
 /** Values saved as a plain string (before texts had to be translated) are repeated in every language. */
-function toProofValue(value: unknown): ProofData['desired_value'] | undefined {
+function toProofValue(value: unknown): NonNullable<ProofData['desired_value']> | undefined {
 	if (typeof value === 'number' || typeof value === 'boolean') return value;
 	if (typeof value === 'string') return { fr: value, en: value, de: value, es: value };
-	return valueKind(value) ? (value as ProofData['desired_value']) : undefined;
+	return valueKind(value) ? (value as NonNullable<ProofData['desired_value']>) : undefined;
 }
 
 /** Every language-keyed name of a value ("description" or {fr, en, de, es}). */
@@ -415,9 +418,26 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 			context += `\n\nThis proof is about the value ${JSON.stringify(valueName)} of the element: use exactly this value_name.`;
 		}
 
-		const basePrompt = `${prompt}${context}
+		const basePrompt = parentProofId
+			? `${prompt}${context}
+
+A sub-proof has no desired value: it only gives the veracity, uncertainty, originality and impact it wants the debated proof to have.`
+			: `${prompt}${context}
 
 A proof is about ONE value of the element: value_name is this existing value and desired_value is the value the proof wants it to have.`;
+
+		if (parentProofId) {
+			const proof = await this.generateWithSchema(model_name, level_of_reasoning, basePrompt, SubProofSchema);
+			return {
+				...proof,
+				...(valueName !== undefined ? { value_name: valueName } : {}),
+				desired_value: null,
+				id: randomUUID(),
+				fact_id: 'factId' in target ? target.factId : null,
+				relation_id: 'relationId' in target ? target.relationId : null,
+				parent_proof_id: parentProofId
+			};
+		}
 
 		// The value must exist and the desired value must keep its type: retry once with the error.
 		const generate = async (extra = '') => {
@@ -425,7 +445,7 @@ A proof is about ONE value of the element: value_name is this existing value and
 				model_name,
 				level_of_reasoning,
 				basePrompt + extra,
-				parentProofId ? SubProofSchema : ProofSchema
+				ProofSchema
 			);
 			return valueName !== undefined ? { ...proof, value_name: valueName } : proof;
 		};
@@ -437,8 +457,8 @@ A proof is about ONE value of the element: value_name is this existing value and
 			if (secondError) throw new Error(secondError);
 		}
 
-		// Only an entry of a list, or a proof debated by a sub-proof, has an originality and an impact to desire.
-		const hasScores = parentProofId !== undefined || findListEntry(proof.value_name, element) !== undefined;
+		// Only an entry of a list has an originality and an impact to desire (a sub-proof always has them, see above).
+		const hasScores = findListEntry(proof.value_name, element) !== undefined;
 
 		return {
 			...proof,
@@ -446,7 +466,7 @@ A proof is about ONE value of the element: value_name is this existing value and
 			id: randomUUID(),
 			fact_id: 'factId' in target ? target.factId : null,
 			relation_id: 'relationId' in target ? target.relationId : null,
-			parent_proof_id: parentProofId ?? null
+			parent_proof_id: null
 		};
 	}
 
@@ -477,7 +497,7 @@ A proof is about ONE value of the element: value_name is this existing value and
 				convertToPg(proof.name),
 				convertToPg(proof.description),
 				JSON.stringify(proof.value_name),
-				JSON.stringify(proof.desired_value),
+				proof.desired_value === null ? null : JSON.stringify(proof.desired_value),
 				convertToPg(proof.verification_method),
 				convertToPg(proof.falsifiability_method),
 				convertToPg(proof.source || []),

@@ -148,6 +148,7 @@
 	"proof_no_sub": "Ninguna subprueba.",
 	"proof_show_params": "Mostrar parámetros",
 	"proof_desired_value": "Valor deseado",
+	"proof_desired_params": "Valores de parámetros deseados",
 	"proof_desired_scores": "Puntuaciones deseadas",
 	"proof_veracity": "Veracidad",
 	"proof_hide_params": "Ocultar parámetros",

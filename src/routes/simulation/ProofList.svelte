@@ -83,6 +83,7 @@
 <ul class="proof-list" class:nested={parentId !== null}>
 	{#each visible as proof (proof.id)}
 		{@const count = subProofCount(proof.id)}
+		{@const hasDesiredValue = !proof.parent_proof_id && proof.desired_value !== null}
 		<li class="proof-item">
 			<h4>
 				{format(proof.name)}
@@ -92,9 +93,13 @@
 			</h4>
 			<p class="proof-description">{format(proof.description)}</p>
 			<div class="desired-value">
-				<span class="desired-label">{m.proof_desired_value()}</span>
-				<span class="desired-content">{format(proof.desired_value)}</span>
-				<dl class="desired-scores">
+				{#if hasDesiredValue}
+					<span class="desired-label">{m.proof_desired_value()}</span>
+					<span class="desired-content">{format(proof.desired_value)}</span>
+				{:else}
+					<span class="desired-label">{m.proof_desired_params()}</span>
+				{/if}
+				<dl class="desired-scores" class:alone={!hasDesiredValue}>
 					<div><dt>{m.simulation_veracity_label()}</dt><dd>{Math.round(proof.desired_veracity)}%</dd></div>
 					<div><dt>{m.simulation_uncertainty_label()}</dt><dd>±{Math.round(proof.desired_uncertainty)}%</dd></div>
 					{#if proof.desired_originality !== null}
@@ -289,6 +294,13 @@
 		margin: 6px 0 0;
 		padding-top: 6px;
 		border-top: 1px solid rgb(148 163 184 / 20%);
+	}
+
+	/* A sub-proof has no desired value above its scores: no separator. */
+	.desired-scores.alone {
+		margin-top: 2px;
+		padding-top: 0;
+		border-top: none;
 	}
 
 	.desired-scores dt {

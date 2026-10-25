@@ -89,8 +89,10 @@ export const ProofSchema = z.object({
 /**
  * A proof as stored: the generated content plus the links set by the server
  * (the element of the value and, for a sub-proof, the proof it debates).
+ * A sub-proof has no desired value: it only desires the veracity, uncertainty, originality and impact of the proof it debates.
  */
-export type ProofData = z.infer<typeof ProofSchema> & {
+export type ProofData = Omit<z.infer<typeof ProofSchema>, 'desired_value'> & {
+	desired_value: z.infer<typeof ProofSchema>['desired_value'] | null;
 	id?: string;
 	fact_id?: string | null;
 	relation_id?: string | null;
