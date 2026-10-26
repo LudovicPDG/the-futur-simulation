@@ -68,6 +68,8 @@
 				{format(proof.name)}
 				{#if proof.id === foundingId}
 					<span class="founding-badge" title={m.proof_founding_hint()}>✦ {m.proof_founding()}</span>
+				{:else if proof.original_proof_id}
+					<span class="founding-badge" title={m.proof_original_hint()}>✦ {m.proof_original()}</span>
 				{/if}
 			</h4>
 			<p class="proof-description">{format(proof.description)}</p>
@@ -84,22 +86,25 @@
 				>
 					{paramsShown[proof.id] ? m.proof_hide_params() : m.proof_show_params()}
 				</button>
-				<button
-					type="button"
-					class="proof-button"
-					aria-expanded={!!expanded[proof.id]}
-					onclick={() => (expanded[proof.id] = !expanded[proof.id])}
-				>
-					{expanded[proof.id] ? m.proof_hide_sub() : m.proof_show_sub()} ({count})
-				</button>
-				<button
-					type="button"
-					class="proof-button debate"
-					class:active={$debateTarget?.id === proof.id}
-					onclick={() => debate(proof)}
-				>
-					{m.proof_debate()}
-				</button>
+				<!-- The original proof is only a copy of the debated proof: it is not debated itself. -->
+				{#if !proof.original_proof_id}
+					<button
+						type="button"
+						class="proof-button"
+						aria-expanded={!!expanded[proof.id]}
+						onclick={() => (expanded[proof.id] = !expanded[proof.id])}
+					>
+						{expanded[proof.id] ? m.proof_hide_sub() : m.proof_show_sub()} ({count})
+					</button>
+					<button
+						type="button"
+						class="proof-button debate"
+						class:active={$debateTarget?.id === proof.id}
+						onclick={() => debate(proof)}
+					>
+						{m.proof_debate()}
+					</button>
+				{/if}
 			</div>
 			{#if paramsShown[proof.id]}
 				<dl class="proof-params">

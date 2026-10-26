@@ -79,6 +79,8 @@
 	"simulation_influence_none": "Aucune preuve ni relation n'influence cette valeur",
 	"proof_founding": "Preuve fondatrice",
 	"proof_founding_hint": "Première preuve créée à la création de cet élément : elle établit cette valeur",
+	"proof_original": "Preuve originelle",
+	"proof_original_hint": "Copie de la preuve débattue : elle se tient parmi les sous-preuves qui la soutiennent, la questionnent ou la réfutent",
 	"simulation_field_veracity": "Évolution de la véracité de la preuve",
 	"simulation_field_originality": "Originalité",
 	"simulation_field_name": "Nom",

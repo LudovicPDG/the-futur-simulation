@@ -152,6 +152,8 @@ export async function createDatabase() {
 				fact_id UUID REFERENCES facts(id) ON DELETE CASCADE,
 				relation_id UUID REFERENCES relations(id) ON DELETE CASCADE,
 				parent_proof_id UUID REFERENCES proofs(id) ON DELETE CASCADE,
+				-- Copie de la preuve parente, ajoutée en tête de ses sous-preuves quand le débat commence
+				original_proof_id UUID REFERENCES proofs(id) ON DELETE CASCADE,
 				created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 			);
 		`);

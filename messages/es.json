@@ -79,6 +79,8 @@
 	"simulation_influence_none": "Ninguna prueba ni relación influye en este valor",
 	"proof_founding": "Prueba fundadora",
 	"proof_founding_hint": "Primera prueba creada al crear este elemento: establece este valor",
+	"proof_original": "Prueba original",
+	"proof_original_hint": "Copia de la prueba debatida: figura entre las subpruebas que la apoyan, cuestionan o refutan",
 	"simulation_field_veracity": "Evolución de la veracidad de la prueba",
 	"simulation_field_originality": "Originalidad",
 	"simulation_field_name": "Nombre",

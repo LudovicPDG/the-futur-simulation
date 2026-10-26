@@ -199,9 +199,12 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		parentProofId: string
 	): Promise<ProofData> {
 		const parent = await db.query(
-			`SELECT fact_id, relation_id, value_name FROM proofs WHERE id = $1`,
+			`SELECT fact_id, relation_id, value_name, original_proof_id FROM proofs WHERE id = $1`,
 			[parentProofId]
 		);
+		if (parent.rows[0]?.original_proof_id) {
+			throw new Error('The original proof is a copy of the debated proof: it cannot be debated');
+		}
 		const target: ProofTarget | undefined = parent.rows[0]?.fact_id
 			? { factId: parent.rows[0].fact_id }
 			: parent.rows[0]?.relation_id
@@ -215,8 +218,28 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			parentProofId,
 			valueName: parent.rows[0].value_name ?? undefined
 		});
+		await this.copyOriginalProof(parentProofId);
 		await this.insert_in_db(data);
 		return data;
+	}
+
+	/**
+	 * When the debate of a proof starts, a copy of it becomes its first sub-proof (the original proof), so that it
+	 * stands among the sub-proofs that support, question or refute it. Done only once per proof.
+	 */
+	private async copyOriginalProof(proofId: string): Promise<void> {
+		await db.query(
+			`INSERT INTO proofs (
+				id, name, description, value_name, desired_value, verification_method, falsifiability_method,
+				source, veracity, uncertainty, impact, originality, fact_id, relation_id, parent_proof_id,
+				original_proof_id
+			)
+			SELECT $2, name, description, value_name, desired_value, verification_method, falsifiability_method,
+				source, veracity, uncertainty, impact, originality, fact_id, relation_id, id, id
+			FROM proofs
+			WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM proofs WHERE original_proof_id = $1)`,
+			[proofId, randomUUID()]
+		);
 	}
 
 	/** A new top-level proof of an existing value of an element. */
@@ -493,7 +516,8 @@ A proof is about ONE value of the element: value_name is this existing value and
 			originality: Number(row.originality),
 			fact_id: row.fact_id,
 			relation_id: row.relation_id,
-			parent_proof_id: row.parent_proof_id
+			parent_proof_id: row.parent_proof_id,
+			original_proof_id: row.original_proof_id ?? null
 		}));
 	}
 

@@ -79,6 +79,8 @@
 	"simulation_influence_none": "Kein Beweis und keine Beziehung beeinflusst diesen Wert",
 	"proof_founding": "Gründungsbeleg",
 	"proof_founding_hint": "Erster Beleg, der bei der Erstellung dieses Elements erzeugt wurde: er begründet diesen Wert",
+	"proof_original": "Ursprünglicher Beleg",
+	"proof_original_hint": "Kopie des diskutierten Belegs: er steht unter den Unterbelegen, die ihn stützen, hinterfragen oder widerlegen",
 	"simulation_field_veracity": "Entwicklung der Wahrhaftigkeit des Beweises",
 	"simulation_field_originality": "Originalität",
 	"simulation_field_name": "Name",

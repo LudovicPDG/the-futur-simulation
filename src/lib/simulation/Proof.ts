@@ -76,6 +76,8 @@ export type ProofData = z.infer<typeof ProofSchema> & {
 	fact_id?: string | null;
 	relation_id?: string | null;
 	parent_proof_id?: string | null;
+	/** Set on the copy of a debated proof, shown among its sub-proofs: the id of the proof it copies. */
+	original_proof_id?: string | null;
 };
 
 /**

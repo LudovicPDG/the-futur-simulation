@@ -79,6 +79,8 @@
 	"simulation_influence_none": "No proof or relation influences this value",
 	"proof_founding": "Founding proof",
 	"proof_founding_hint": "First proof created when this element was created: it establishes this value",
+	"proof_original": "Original proof",
+	"proof_original_hint": "Copy of the debated proof: it stands among the sub-proofs that support, question or refute it",
 	"simulation_field_veracity": "Evolution of the veracity of the proof",
 	"simulation_field_originality": "Originality",
 	"simulation_field_name": "Name",
