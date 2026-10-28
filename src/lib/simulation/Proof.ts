@@ -54,8 +54,10 @@ export const ProofSchema = z.object({
 		),
 	impact: z
 		.number()
+		.min(0)
+		.max(100)
 		.describe(
-			'The impact of the proof on its value: how strongly it moves the value toward the desired value. Any number: positive when it pushes the value toward the desired value, negative when it pushes it away, 0 for no effect. Its magnitude is not limited.'
+			'The impact of the proof on its value: how strongly it moves the value toward the desired value, as a number from 0 (no effect) to 100 (it decides the value). Use the whole scale, e.g. 35 or 80.'
 		),
 	originality: z
 		.number()
