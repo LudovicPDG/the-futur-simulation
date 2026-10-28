@@ -663,9 +663,13 @@
 				? nameKeys(value).includes(itemKey)
 				: String(value).trim().toLowerCase() === itemKey);
 
-		// The top-level proofs of this value (newest first); for one item of a list, those whose desired value is this item.
+		// The top-level proofs of this value (newest first); for one item of a list, those whose desired content is this item.
 		const proofs = own.filter(
-			(proof) => !proof.parent_proof_id && matches(proof.value_name) && isItem(proof.desired_value)
+			(proof) =>
+				!proof.parent_proof_id &&
+				matches(proof.value_name) &&
+				'value' in proof.desired_value &&
+				isItem(proof.desired_value.value)
 		);
 
 		// A relation influences the value when it modifies (or adds) it on the side of the active element.
@@ -704,29 +708,38 @@
 					return kept.length > 0 ? [{ relation, entries: kept }] : [];
 				});
 
-		// Scores: the latest proof of the value (the founding proof when it has not been debated yet).
+		// Scores: each one is the latest desired by a proof of the value (the founding proof adds all of them). Proofs
+		// saved before they held their edits only have their own scores.
 		const latest = proofs.find((proof) => Number.isFinite(proof.veracity));
+		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'originality'): number => {
+			for (const proof of proofs) {
+				const desired = (proof.desired_value as Record<string, unknown>)[key];
+				if (typeof desired === 'number' && Number.isFinite(desired)) return desired;
+			}
+			return latest ? Number(latest[key]) : NaN;
+		};
+		const veracityNow = score('veracity');
+		const uncertaintyNow = score('uncertainty');
+		const impactNow = score('impact');
 		// Only the values of an array and the values of a relation have an originality and an impact.
 		const hasValueScores = inArray || relationImpact !== undefined;
-		// Originality: the one of the relation for a value of a relation, else the one of the latest proof.
+		// Originality: the one of the relation for a value of a relation, else the latest desired one.
 		let originalityNow = NaN;
 		if (hasValueScores) {
 			originalityNow =
 				relationImpact !== undefined && activeRelation
 					? Number(activeRelation.originality)
-					: latest
-						? Number(latest.originality)
-						: NaN;
+					: score('originality');
 		}
 
 		return {
-			veracity: latest ? `${Math.round(latest.veracity)}%` : null,
-			uncertainty: latest && Number.isFinite(latest.uncertainty) ? `±${Math.round(latest.uncertainty)}%` : null,
+			veracity: Number.isFinite(veracityNow) ? `${Math.round(veracityNow)}%` : null,
+			uncertainty: Number.isFinite(uncertaintyNow) ? `±${Math.round(uncertaintyNow)}%` : null,
 			impact:
 				relationImpact !== undefined
 					? formatValue(relationImpact)
-					: hasValueScores && latest && Number.isFinite(latest.impact)
-						? formatValue(latest.impact)
+					: hasValueScores && Number.isFinite(impactNow)
+						? formatValue(impactNow)
 						: null,
 			originality: Number.isFinite(originalityNow) ? `${Math.round(originalityNow as number)}%` : null,
 			allProofs,

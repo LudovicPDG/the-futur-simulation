@@ -1,7 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
-import { ProofSchema, valueKind, type ProofData } from '$lib/simulation/Proof';
+import {
+	ProofSchema,
+	SubProofSchema,
+	ValueScoresSchema,
+	valueKind,
+	type ProofData,
+	type ProofEdit,
+	type ValueEdit
+} from '$lib/simulation/Proof';
 import { relationValues, type RelationData } from '$lib/simulation/Relation';
 import { RelationServer } from './Relation';
 import { convertToPg } from './Genie';
@@ -13,14 +21,50 @@ type ProofTarget = { factId: string } | { relationId: string };
 /** How many founding proofs are generated at the same time. */
 const FOUNDING_PROOF_CONCURRENCY = 4;
 
-/** The content of a founding proof: the same for every value of the element, which are added afterwards. */
-const FoundingProofSchema = ProofSchema.omit({ value_name: true, desired_value: true });
+/**
+ * The content of a founding proof: the value itself is added afterwards, the proof gives the scores it adds with it.
+ */
+const FoundingProofSchema = ProofSchema.omit({ value_name: true, desired_value: true }).extend({
+	desired_value: ValueScoresSchema.describe('The scores this founding proof adds to its value.')
+});
+
+type ProofValue = NonNullable<ValueEdit['value']>;
 
 /** Values saved as a plain string (before texts had to be translated) are repeated in every language. */
-function toProofValue(value: unknown): NonNullable<ProofData['desired_value']> | undefined {
+function toProofValue(value: unknown): ProofValue | undefined {
 	if (typeof value === 'number' || typeof value === 'boolean') return value;
 	if (typeof value === 'string') return { fr: value, en: value, de: value, es: value };
-	return valueKind(value) ? (value as NonNullable<ProofData['desired_value']>) : undefined;
+	return valueKind(value) ? (value as ProofValue) : undefined;
+}
+
+const EMPTY_PROOF_EDIT: ProofEdit = {
+	name: null,
+	description: null,
+	verification_method: null,
+	falsifiability_method: null,
+	source: null,
+	veracity: null,
+	uncertainty: null,
+	impact: null,
+	originality: null
+};
+
+/**
+ * The stored desired value as edits. A desired value saved before it held edits was the content alone: it becomes
+ * the content edited by a top-level proof, and nothing for a sub-proof (it could not edit the debated proof).
+ */
+function toDesiredValue(stored: unknown, isSubProof: boolean): ProofData['desired_value'] {
+	if (typeof stored === 'object' && stored !== null && 'veracity' in stored) {
+		return stored as ProofData['desired_value'];
+	}
+	if (isSubProof) return EMPTY_PROOF_EDIT;
+	return {
+		value: toProofValue(stored) ?? null,
+		veracity: null,
+		uncertainty: null,
+		impact: null,
+		originality: null
+	};
 }
 
 /** Every language-keyed name of a value ("description" or {fr, en, de, es}). */
@@ -70,14 +114,19 @@ function findOriginalValue(name: unknown, element: Record<string, unknown>): unk
 	return findListEntry(name, element)?.value;
 }
 
-/** Describes why the value of a proof does not fit its element: an unknown value or a desired value of another type. */
-function findDesiredValueError(proof: ProofData, element: Record<string, unknown>): string | undefined {
+/** Describes why the value of a proof does not fit its element: an unknown value or a desired content of another type. */
+function findDesiredValueError(
+	proof: Pick<ProofData, 'value_name' | 'desired_value'>,
+	element: Record<string, unknown>
+): string | undefined {
 	const label = valueNames(proof.value_name)[0];
 	if (!hasValue(proof.value_name, element)) {
 		return `the value "${label}" does not exist in the element. A proof is about ONE existing value: use the exact key of a primary property or the exact name of an "other information".`;
 	}
+	// A sub-proof edits the debated proof, not the content of the value.
+	if (!('value' in proof.desired_value) || proof.desired_value.value === null) return undefined;
 	const originalKind = valueKind(findOriginalValue(proof.value_name, element));
-	const desiredKind = valueKind(proof.desired_value);
+	const desiredKind = valueKind(proof.desired_value.value);
 	if (originalKind && originalKind !== desiredKind) {
 		return `the value "${label}" is a ${originalKind}, but you gave a ${desiredKind ?? 'value of another type'}. The desired value must keep the type of the current value (a text stays a text translated in every language).`;
 	}
@@ -103,8 +152,8 @@ const RELATION_VALUE_LISTS = new Set([
 	'element2_element1_new_value'
 ]);
 
-/** A value of an element. */
-type ElementValue = Pick<ProofData, 'value_name' | 'desired_value'>;
+/** A value of an element: its name and its content. */
+type ElementValue = { value_name: ProofData['value_name']; value: ProofValue };
 
 /**
  * Every value of a freshly created element (its name, description, list items and "other" values), each of which
@@ -115,8 +164,8 @@ function elementValues(
 ): ElementValue[] {
 	const values: ElementValue[] = [];
 	const add = (value_name: ProofData['value_name'], raw: unknown) => {
-		const desired_value = toProofValue(raw);
-		if (value_name && desired_value !== undefined) values.push({ value_name, desired_value });
+		const value = toProofValue(raw);
+		if (value_name && value !== undefined) values.push({ value_name, value });
 	};
 
 	// Each value to modify and each value to add of a relation has its own proof.
@@ -281,12 +330,13 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 						level_of_reasoning,
 						`${prompt}${context.text}
 
-Create the founding proof of ONE value of this element: the value ${JSON.stringify(value.value_name)}, whose content is ${JSON.stringify(value.desired_value)}. Give the source and the information this value is based on (documents, data, statements, observations). The sources must be real and verifiable. The veracity and the originality must be those of THIS value alone, not of the whole element: they differ from one value to another. This proof will be the starting point of the debate about this value.`,
+Create the founding proof of ONE value of this element: the value ${JSON.stringify(value.value_name)}, whose content is ${JSON.stringify(value.value)}. Give the source and the information this value is based on (documents, data, statements, observations). The sources must be real and verifiable. The founding proof adds this value: its desired value gives the veracity, uncertainty, impact and originality of THIS value alone, not of the whole element: they differ from one value to another. This proof will be the starting point of the debate about this value.`,
 						FoundingProofSchema
 					);
 					const proof: ProofData = {
 						...generated,
-						...value,
+						value_name: value.value_name,
+						desired_value: { value: value.value, ...generated.desired_value },
 						id: randomUUID(),
 						fact_id: 'factId' in target ? target.factId : null,
 						relation_id: 'relationId' in target ? target.relationId : null,
@@ -420,19 +470,19 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 
 		const basePrompt = `${prompt}${context}
 
-A proof is about ONE value of the element: value_name is this existing value and desired_value is the value the proof wants it to have.${
+${
 			parentProofId
-				? ' A sub-proof also gives the desired value it defends for this value: the one of the debated proof if it supports it, another one if it questions or refutes it.'
-				: ''
+				? 'A sub-proof debates the proof above: its desired_value holds every field of the debated proof it decides to edit (name, description, verification and falsifiability methods, sources, veracity, uncertainty, impact, originality), null for the fields it keeps. It cannot edit the desired value of the debated proof. A sub-proof that supports the debated proof may raise its veracity, one that questions or refutes it lowers its veracity or corrects its other fields.'
+				: 'A proof is about ONE value of the element: value_name is this existing value and desired_value holds every part of it the proof decides to edit (its content and its veracity, uncertainty, impact and originality), null for the parts it keeps.'
 		}`;
 
-		// The value must exist and the desired value must keep its type: retry once with the error.
+		// The value must exist and the desired content must keep its type: retry once with the error.
 		const generate = async (extra = '') => {
-			const proof = await this.generateWithSchema(
+			const proof: z.infer<typeof ProofSchema | typeof SubProofSchema> = await this.generateWithSchema(
 				model_name,
 				level_of_reasoning,
 				basePrompt + extra,
-				ProofSchema
+				parentProofId ? SubProofSchema : ProofSchema
 			);
 			return valueName !== undefined ? { ...proof, value_name: valueName } : proof;
 		};
@@ -506,7 +556,7 @@ A proof is about ONE value of the element: value_name is this existing value and
 			name: row.name,
 			description: row.description,
 			value_name: row.value_name,
-			desired_value: toProofValue(row.desired_value) ?? row.desired_value,
+			desired_value: toDesiredValue(row.desired_value, row.parent_proof_id !== null),
 			verification_method: row.verification_method,
 			falsifiability_method: row.falsifiability_method,
 			source: row.source || [],

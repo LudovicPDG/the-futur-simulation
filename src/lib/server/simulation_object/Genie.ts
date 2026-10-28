@@ -198,8 +198,9 @@ export class Genie {
 
 	Every proof is about **one single value** of the element it targets:
 	- **value_name**: the existing value the proof is about (the key of a primary property, or the name of an "other information").
-	- **desired_value**: the value the proof wants this value to have.
-	A value is either a number, a boolean or a text. **A text never exists alone in the simulation: it is always translated in every language (fr, en, de, es)**, as one single value, never one entry per language. The desired value must keep the exact type of the current value.
+	- **desired_value**: everything the proof decides to edit in this value: its content and its veracity, uncertainty, impact and originality (null for what it keeps). A founding proof adds all of them.
+	A value is either a number, a boolean or a text. **A text never exists alone in the simulation: it is always translated in every language (fr, en, de, es)**, as one single value, never one entry per language. The desired content must keep the exact type of the current value.
+	A sub-proof debates a proof (and a sub-sub-proof debates a sub-proof): its desired_value holds every field of the debated proof it edits (name, description, verification and falsifiability methods, sources, veracity, uncertainty, impact, originality), but never the desired value of the debated proof.
 	There is no deletion: to remove something, give it another desired value instead.
 
 	When a proof leads to a change in one of a fact's properties, this change may propagate to other elements that depend on or are connected to that property.

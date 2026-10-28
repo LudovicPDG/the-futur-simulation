@@ -133,7 +133,9 @@ export async function createDatabase() {
 		// ==========================================
 		// 4. PREUVES (PROOFS)
 		// ==========================================
-		// Une preuve porte sur une seule valeur (value_name) et donne sa valeur souhaitée (desired_value).
+		// Une preuve porte sur une seule valeur (value_name) ; sa valeur souhaitée (desired_value) contient tout ce qu'elle
+		// modifie : le contenu et les scores de la valeur, ou, pour une sous-preuve, les champs de la preuve débattue
+		// (sauf sa valeur souhaitée).
 		// Elle est liée au fait / à la relation débattu(e) et à sa preuve parente (sous-preuves / débat).
 		await client.query(`
 			CREATE TABLE proofs (

@@ -16,28 +16,7 @@ export function valueKind(value: unknown): ProofValueKind | undefined {
 	return undefined;
 }
 
-/**
- * A proof is about ONE value of an element: "value_name" names this value and "desired_value" is the value the
- * proof wants it to have. A text never exists alone in the simulation: it is always translated in every language.
- */
-export const ProofSchema = z.object({
-	type: z.literal('proof').default('proof').describe('The type of proof'),
-	name: TranslationSchema.describe('The name of the proof'),
-	description: TranslationSchema.describe('The description of the proof'),
-	value_name: z
-		.union([TranslationSchema, z.string()])
-		.describe(
-			'The ONE existing value of the element this proof is about. For a primary property of the element, the exact property key as a plain string (e.g. "description"). For an "other information", its name translated in every language, exactly as in the element.'
-		),
-	// Not z.any(): its JSON schema has no "type", which strict structured outputs reject.
-	desired_value: z
-		.union([TranslationSchema, z.number(), z.boolean()])
-		.describe(
-			'The value this proof wants the value to have. A text is translated in every language (never a plain string). It MUST have the same type as the current value: a number replaces a number, a boolean a boolean, a translated text a translated text, an evolution (a mathjs function of the time t and its unit) an evolution. For the existence of the element, the evolution is a percentage between 0 and 100 with the unit "%".'
-		),
-	verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
-	falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),
-	source: z.array(z.string()).default([]).describe('Sources for the proof'),
+const scores = {
 	veracity: z
 		.number()
 		.min(0)
@@ -66,14 +45,106 @@ export const ProofSchema = z.object({
 		.describe(
 			'Originality of the proof compared with other proofs, as a percentage from 0 to 100 (NOT a ratio between 0 and 1): 0 = a copy of something that already exists, 50 = moderately original, 100 = completely new. Use the whole scale, e.g. 35 or 80, never 0.35 or 0.8. It avoids that people spam the same thing and increase the probability of certain things.'
 		)
+};
+
+/** The scores of a value of an element: what a founding proof adds next to the content of the value. */
+export const ValueScoresSchema = z.object({
+	veracity: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe('The veracity of the value, as a percentage from 0 (certainly false) to 100 (certainly true).'),
+	uncertainty: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe('The uncertainty of the veracity of the value, as a percentage from 0 to 100 (5 = known within about +-5 points).'),
+	impact: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe('The impact of the value, from 0 (no effect) to 100 (decisive).'),
+	originality: z
+		.number()
+		.min(0)
+		.max(100)
+		.describe('The originality of the value, as a percentage from 0 (a copy of an existing one) to 100 (completely new).')
+});
+
+/**
+ * What a top-level proof edits in its value of the element: its content and its scores.
+ * Null means the proof leaves it unchanged; a founding proof gives all of them.
+ */
+export const ValueEditSchema = z.object({
+	// Not z.any(): its JSON schema has no "type", which strict structured outputs reject.
+	value: z
+		.union([TranslationSchema, z.number(), z.boolean()])
+		.nullable()
+		.describe(
+			'The content this proof wants the value to have, or null to keep it. A text is translated in every language (never a plain string). It MUST have the same type as the current value: a number replaces a number, a boolean a boolean, a translated text a translated text, an evolution (a mathjs function of the time t and its unit) an evolution. For the existence of the element, the evolution is a percentage between 0 and 100 with the unit "%".'
+		),
+	veracity: ValueScoresSchema.shape.veracity.nullable().describe('The veracity this proof wants for the value, or null to keep it.'),
+	uncertainty: ValueScoresSchema.shape.uncertainty.nullable().describe('The uncertainty this proof wants for the value, or null to keep it.'),
+	impact: ValueScoresSchema.shape.impact.nullable().describe('The impact this proof wants for the value, or null to keep it.'),
+	originality: ValueScoresSchema.shape.originality.nullable().describe('The originality this proof wants for the value, or null to keep it.')
+});
+
+/**
+ * What a sub-proof edits in the proof it debates: every field of it except its desired value.
+ * Null means the sub-proof leaves it unchanged.
+ */
+export const ProofEditSchema = z.object({
+	name: TranslationSchema.nullable().describe('The new name of the debated proof, or null to keep it.'),
+	description: TranslationSchema.nullable().describe('The new description of the debated proof, or null to keep it.'),
+	verification_method: TranslationSchema.nullable().describe('The new verification method of the debated proof, or null to keep it.'),
+	falsifiability_method: TranslationSchema.nullable().describe('The new falsifiability method of the debated proof, or null to keep it.'),
+	source: z.array(z.string()).nullable().describe('The new sources of the debated proof (the whole list), or null to keep them.'),
+	veracity: scores.veracity.nullable().describe('The veracity this sub-proof wants for the debated proof, or null to keep it.'),
+	uncertainty: scores.uncertainty.nullable().describe('The uncertainty this sub-proof wants for the debated proof, or null to keep it.'),
+	impact: scores.impact.nullable().describe('The impact this sub-proof wants for the debated proof, or null to keep it.'),
+	originality: scores.originality.nullable().describe('The originality this sub-proof wants for the debated proof, or null to keep it.')
+});
+
+export type ValueEdit = z.infer<typeof ValueEditSchema>;
+export type ProofEdit = z.infer<typeof ProofEditSchema>;
+
+/**
+ * A top-level proof is about ONE value of an element: "value_name" names this value and "desired_value" holds every
+ * part of it that the proof edits (its content and its scores). A text never exists alone in the simulation: it is
+ * always translated in every language.
+ */
+export const ProofSchema = z.object({
+	type: z.literal('proof').default('proof').describe('The type of proof'),
+	name: TranslationSchema.describe('The name of the proof'),
+	description: TranslationSchema.describe('The description of the proof'),
+	value_name: z
+		.union([TranslationSchema, z.string()])
+		.describe(
+			'The ONE existing value of the element this proof is about. For a primary property of the element, the exact property key as a plain string (e.g. "description"). For an "other information", its name translated in every language, exactly as in the element.'
+		),
+	desired_value: ValueEditSchema.describe(
+		'Everything this proof edits in its value: its content and its scores. Give only what the proof decides to change, null for the rest.'
+	),
+	verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
+	falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),
+	source: z.array(z.string()).default([]).describe('Sources for the proof'),
+	...scores
+});
+
+/** A sub-proof debates a proof: its desired value holds every field of the debated proof it edits. */
+export const SubProofSchema = ProofSchema.extend({
+	desired_value: ProofEditSchema.describe(
+		'Everything this sub-proof edits in the debated proof (never its desired value). Give only what the sub-proof decides to change, null for the rest.'
+	)
 });
 
 /**
  * A proof as stored: the generated content plus the links set by the server
  * (the element of the value and, for a sub-proof, the proof it debates).
- * Every proof, sub-proofs included, has a desired value for its value.
+ * The desired value of a top-level proof edits its value, the one of a sub-proof edits the debated proof.
  */
-export type ProofData = z.infer<typeof ProofSchema> & {
+export type ProofData = Omit<z.infer<typeof ProofSchema>, 'desired_value'> & {
+	desired_value: ValueEdit | ProofEdit;
 	id?: string;
 	fact_id?: string | null;
 	relation_id?: string | null;

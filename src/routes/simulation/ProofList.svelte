@@ -52,6 +52,37 @@
 			});
 	}
 
+	/** The label of each field a desired value can edit, in display order. */
+	const EDIT_LABELS: [string, () => string][] = [
+		['value', m.simulation_field_value],
+		['name', m.simulation_field_name],
+		['description', m.simulation_field_description],
+		['verification_method', m.simulation_field_verification_method],
+		['falsifiability_method', m.simulation_field_falsifiability_method],
+		['source', m.simulation_field_source],
+		['veracity', m.proof_veracity],
+		['uncertainty', m.simulation_evolution_uncertainty],
+		['impact', m.simulation_field_impact],
+		['originality', m.simulation_field_originality]
+	];
+
+	/** The fields the proof edits (in its value, or in the debated proof for a sub-proof), formatted. */
+	function desiredEdits(proof: StoredProof): { label: string; value: string }[] {
+		const desired = proof.desired_value as Record<string, unknown>;
+		return EDIT_LABELS.flatMap(([key, label]) => {
+			const value = desired[key];
+			if (value === null || value === undefined) return [];
+			const text = Array.isArray(value)
+				? value.join('\n')
+				: key === 'veracity' || key === 'originality'
+					? `${format(value)}%`
+					: key === 'uncertainty'
+						? `±${format(value)}%`
+						: format(value);
+			return [{ label: label(), value: text }];
+		});
+	}
+
 	function debate(proof: StoredProof) {
 		addValueTarget.set(null);
 		addProofTarget.set(null);
@@ -63,6 +94,7 @@
 <ul class="proof-list" class:nested={parentId !== null}>
 	{#each visible as proof (proof.id)}
 		{@const count = subProofCount(proof.id)}
+		{@const edits = desiredEdits(proof)}
 		<li class="proof-item">
 			<h4>
 				{format(proof.name)}
@@ -73,10 +105,17 @@
 				{/if}
 			</h4>
 			<p class="proof-description">{format(proof.description)}</p>
-			<div class="desired-value">
-				<span class="desired-label">{m.proof_desired_value()}</span>
-				<span class="desired-content">{format(proof.desired_value)}</span>
-			</div>
+			{#if edits.length > 0}
+				<div class="desired-value">
+					<span class="desired-label">{m.proof_desired_value()}</span>
+					{#each edits as edit}
+						<div class="desired-edit">
+							<span class="desired-field">{edit.label}</span>
+							<span class="desired-content">{edit.value}</span>
+						</div>
+					{/each}
+				</div>
+			{/if}
 			<div class="proof-actions">
 				<button
 					type="button"
@@ -247,6 +286,17 @@
 		font-weight: 700;
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
+	}
+
+	.desired-edit {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.desired-field {
+		color: #94a3b8;
+		font-size: 11px;
+		font-weight: 600;
 	}
 
 	.desired-content {
