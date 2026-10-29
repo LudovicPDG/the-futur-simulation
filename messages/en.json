@@ -154,7 +154,7 @@
 	"proof_veracity": "Veracity",
 	"proof_hide_params": "Hide parameters",
 	"proof_edit_changed": "Modified",
-	"proof_edit_changed_hint": "Changed compared with the debated proof",
+	"proof_edit_changed_hint": "Changed by this proof: only the changed fields vote",
 	"simulation_existence_title_fact": "Evolution of the certainty of the existence of the fact",
 	"simulation_existence_title_person": "Evolution of the certainty of the existence of the person",
 	"simulation_existence_title_organization": "Evolution of the certainty of the existence of the organization",

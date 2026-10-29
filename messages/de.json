@@ -154,7 +154,7 @@
 	"proof_veracity": "Wahrhaftigkeit",
 	"proof_hide_params": "Parameter ausblenden",
 	"proof_edit_changed": "Geändert",
-	"proof_edit_changed_hint": "Geändert gegenüber dem debattierten Beweis",
+	"proof_edit_changed_hint": "Von diesem Beweis geändert: nur die geänderten Felder stimmen ab",
 	"simulation_existence_title_fact": "Entwicklung der Gewissheit über die Existenz der Tatsache",
 	"simulation_existence_title_person": "Entwicklung der Gewissheit über die Existenz der Person",
 	"simulation_existence_title_organization": "Entwicklung der Gewissheit über die Existenz der Organisation",

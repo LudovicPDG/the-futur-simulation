@@ -19,6 +19,7 @@
 		type EvolutionValue
 	} from '$lib/simulation/event/EvolutionFunction';
 	import type { ProofData } from '$lib/simulation/Proof';
+	import { resolveValue } from '$lib/simulation/ProofResolution';
 	import { onMount } from 'svelte';
 	import {
 		addProofTarget,
@@ -708,16 +709,9 @@
 					return kept.length > 0 ? [{ relation, entries: kept }] : [];
 				});
 
-		// Scores: each one is the latest desired by a proof of the value (the founding proof adds all of them). Proofs
-		// saved before they held their edits only have their own scores.
-		const latest = proofs.find((proof) => Number.isFinite(proof.veracity));
-		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'originality'): number => {
-			for (const proof of proofs) {
-				const desired = (proof.desired_value as Record<string, unknown>)[key];
-				if (typeof desired === 'number' && Number.isFinite(desired)) return desired;
-			}
-			return latest ? Number(latest[key]) : NaN;
-		};
+		// Scores: the weighted average voted by the proofs of the value (the founding proof among them).
+		const voted = resolveValue(proofs);
+		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'originality'): number => voted[key] ?? NaN;
 		const veracityNow = score('veracity');
 		const uncertaintyNow = score('uncertainty');
 		const impactNow = score('impact');

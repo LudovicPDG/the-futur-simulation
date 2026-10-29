@@ -89,16 +89,13 @@
 	};
 
 	/**
-	 * The desired value of the proof, split into texts, sources and scores. For a sub-proof, each field is compared
-	 * with the debated proof, so that what the sub-proof changes stands out.
+	 * The desired value of the proof, split into texts, sources and scores. The fields the proof really changed (the
+	 * only ones that vote) stand out; the founding proof and the original proof copy give every field, so none does.
 	 */
 	function desiredView(proof: StoredProof): DesiredView {
 		const desired = proof.desired_value as Record<string, unknown>;
-		const parent = proof.parent_proof_id && !proof.original_proof_id
-			? (proofs.find((candidate) => candidate.id === proof.parent_proof_id) as Record<string, unknown> | undefined)
-			: undefined;
-		const changed = (key: string) =>
-			parent !== undefined && JSON.stringify(desired[key]) !== JSON.stringify(parent[key]);
+		const compared = proof.id !== foundingId && !proof.original_proof_id && !!proof.edited_fields;
+		const changed = (key: string) => compared && !!proof.edited_fields?.includes(key);
 
 		const texts = TEXT_FIELDS.flatMap(([key, label, accent]) => {
 			const value = desired[key];
@@ -112,7 +109,7 @@
 			if (desired[key] === null || !Number.isFinite(value)) return [];
 			return [{ key, label: label(), value, text: text(value), changed: changed(key) }];
 		});
-		return { compared: parent !== undefined, texts, sources, scores };
+		return { compared, texts, sources, scores };
 	}
 
 	function debate(proof: StoredProof) {

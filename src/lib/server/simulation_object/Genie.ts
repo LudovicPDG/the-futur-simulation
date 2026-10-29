@@ -12,6 +12,7 @@ import type { ActionData } from '$lib/simulation/Action';
 import type { MaterialResourceData } from '$lib/simulation/Material_resouce';
 import type { ProofData } from '$lib/simulation/Proof';
 import type { RelationData } from '$lib/simulation/Relation';
+import { resolveElement } from '$lib/simulation/ProofResolution';
 
 import { Fact } from './fact';
 import { Person } from './character/Person';
@@ -198,7 +199,7 @@ export class Genie {
 
 	Every proof is about **one single value** of the element it targets:
 	- **value_name**: the existing value the proof is about (the key of a primary property, or the name of an "other information").
-	- **desired_value**: the parts of this value the proof changes: its content, veracity, uncertainty, impact and originality. Change ONLY what the request asks for and give null for every other part: it keeps its current value exactly. A founding proof adds all of them.
+	- **desired_value**: the parts of this value the proof changes: its content, veracity and uncertainty, and for an entry of a list of a fact (an "other" value, a titled item, a ranked entry) also its impact and originality. Change ONLY what the request asks for and give null for every other part: it keeps its current value exactly. A founding proof adds all of them.
 	A value is either a number, a boolean or a text. **A text never exists alone in the simulation: it is always translated in every language (fr, en, de, es)**, as one single value, never one entry per language. The desired content must keep the exact type of the current value.
 	A sub-proof debates a proof (and a sub-sub-proof debates a sub-proof): its desired_value gives ONLY the fields of the debated proof that the request asks to change (name, description, verification and falsifiability methods, sources, veracity, uncertainty, impact, originality) and null for every other field, which keeps its current value exactly. It never changes the desired value of the debated proof.
 	There is no deletion: to remove something, give it another desired value instead.
@@ -402,17 +403,17 @@ export class Genie {
 
 	static async get_all_data() {
 		const [
-			facts,
-			persons,
-			organizations,
-			interest_groups,
-			events,
-			evolutions,
-			rankings,
-			actions,
-			material_resources,
-			proofs,
-			relations
+			storedFacts,
+			storedPersons,
+			storedOrganizations,
+			storedInterestGroups,
+			storedEvents,
+			storedEvolutions,
+			storedRankings,
+			storedActions,
+			storedMaterialResources,
+			resolvedProofs,
+			storedRelations
 		] = await Promise.all([
 			Fact.get_all_facts(),
 			Person.get_all(),
@@ -423,9 +424,37 @@ export class Genie {
 			Ranking.get_all(),
 			Action.get_all(),
 			MaterialResource.get_all(),
-			Proof.get_all(),
+			Proof.get_all_resolved(),
 			Relation.get_all()
 		]);
+
+		// Only the entries of the lists of a fact have an originality and an impact of their own.
+		const proofs = Proof.withoutUnusedValueScores(resolvedProofs, [
+			...storedFacts,
+			...storedPersons,
+			...storedOrganizations,
+			...storedInterestGroups,
+			...storedEvents,
+			...storedEvolutions,
+			...storedRankings,
+			...storedActions,
+			...storedMaterialResources,
+			...storedRelations
+		]);
+
+		// Every value as decided by the votes of its proofs: the stored elements keep the values they were created with.
+		const resolve = <T extends object>(elements: T[]) =>
+			elements.map((element) => resolveElement(element, proofs));
+		const facts = resolve(storedFacts);
+		const persons = resolve(storedPersons);
+		const organizations = resolve(storedOrganizations);
+		const interest_groups = resolve(storedInterestGroups);
+		const events = resolve(storedEvents);
+		const evolutions = resolve(storedEvolutions);
+		const rankings = resolve(storedRankings);
+		const actions = resolve(storedActions);
+		const material_resources = resolve(storedMaterialResources);
+		const relations = resolve(storedRelations);
 
 		return {
 			facts,

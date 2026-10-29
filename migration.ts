@@ -151,6 +151,8 @@ export async function createDatabase() {
 				impact NUMERIC NOT NULL DEFAULT 0.0,
 				value_name JSONB,
 				desired_value JSONB NOT NULL,
+				-- Les champs de desired_value que la preuve modifie vraiment : seuls eux votent
+				edited_fields TEXT[],
 				fact_id UUID REFERENCES facts(id) ON DELETE CASCADE,
 				relation_id UUID REFERENCES relations(id) ON DELETE CASCADE,
 				parent_proof_id UUID REFERENCES proofs(id) ON DELETE CASCADE,

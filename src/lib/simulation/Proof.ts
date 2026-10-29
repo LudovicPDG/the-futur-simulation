@@ -78,7 +78,7 @@ export const ValueScoresSchema = z.object({
 export const ValueEditSchema = z.object({
 	// Not z.any(): its JSON schema has no "type", which strict structured outputs reject.
 	value: z
-		.union([TranslationSchema, z.number(), z.boolean()])
+		.union([TranslationSchema, z.number(), z.boolean(), EvolutionTypeSchema])
 		.describe(
 			'The content this proof wants the value to have (the current content if it keeps it). A text is translated in every language (never a plain string). It MUST have the same type as the current value: a number replaces a number, a boolean a boolean, a translated text a translated text, an evolution (a mathjs function of the time t and its unit) an evolution. For the existence of the element, the evolution is a percentage between 0 and 100 with the unit "%".'
 		),
@@ -104,7 +104,13 @@ export const ProofEditSchema = z.object({
 	originality: scores.originality.describe('The originality this sub-proof wants for the debated proof.')
 });
 
-export type ValueEdit = z.infer<typeof ValueEditSchema>;
+/**
+ * The desired value of a value without an originality and an impact: a primary property of the element (name,
+ * description, existence...) or a value of a relation (its originality and impact are the relation's).
+ */
+export const PlainValueEditSchema = ValueEditSchema.omit({ impact: true, originality: true });
+
+export type ValueEdit = z.infer<typeof ValueEditSchema> | z.infer<typeof PlainValueEditSchema>;
 export type ProofEdit = z.infer<typeof ProofEditSchema>;
 
 /**
@@ -144,6 +150,8 @@ export const SubProofSchema = ProofSchema.extend({
  */
 export type ProofData = Omit<z.infer<typeof ProofSchema>, 'desired_value'> & {
 	desired_value: ValueEdit | ProofEdit;
+	/** The fields of the desired value the proof really changed: only they vote (see ProofResolution). */
+	edited_fields?: string[] | null;
 	id?: string;
 	fact_id?: string | null;
 	relation_id?: string | null;
