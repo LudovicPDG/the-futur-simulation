@@ -37,34 +37,22 @@ function toProofValue(value: unknown): ProofValue | undefined {
 	return valueKind(value) ? (value as ProofValue) : undefined;
 }
 
-const EMPTY_PROOF_EDIT: ProofEdit = {
-	name: null,
-	description: null,
-	verification_method: null,
-	falsifiability_method: null,
-	source: null,
-	veracity: null,
-	uncertainty: null,
-	impact: null,
-	originality: null
-};
-
 /**
- * The stored desired value as edits. A desired value saved before it held edits was the content alone: it becomes
- * the content edited by a top-level proof, and nothing for a sub-proof (it could not edit the debated proof).
+ * The stored desired value, complete. A desired value saved before it held every field was the content alone, or
+ * left out (null) what it kept: the missing fields are those it kept, from the proof itself for a top-level proof
+ * (its scores were the ones of its value) and from the debated proof for a sub-proof.
  */
-function toDesiredValue(stored: unknown, isSubProof: boolean): ProofData['desired_value'] {
-	if (typeof stored === 'object' && stored !== null && 'veracity' in stored) {
-		return stored as ProofData['desired_value'];
-	}
-	if (isSubProof) return EMPTY_PROOF_EDIT;
-	return {
-		value: toProofValue(stored) ?? null,
-		veracity: null,
-		uncertainty: null,
-		impact: null,
-		originality: null
-	};
+function toDesiredValue(
+	stored: unknown,
+	kept: ValueEdit | ProofEdit
+): ProofData['desired_value'] {
+	const isEdit = typeof stored === 'object' && stored !== null && 'veracity' in stored;
+	const given = isEdit
+		? Object.fromEntries(Object.entries(stored).filter(([, value]) => value !== null))
+		: 'value' in kept
+			? { value: toProofValue(stored) }
+			: {};
+	return { ...kept, ...given } as ProofData['desired_value'];
 }
 
 /** Every language-keyed name of a value ("description" or {fr, en, de, es}). */
@@ -124,7 +112,7 @@ function findDesiredValueError(
 		return `the value "${label}" does not exist in the element. A proof is about ONE existing value: use the exact key of a primary property or the exact name of an "other information".`;
 	}
 	// A sub-proof edits the debated proof, not the content of the value.
-	if (!('value' in proof.desired_value) || proof.desired_value.value === null) return undefined;
+	if (!('value' in proof.desired_value)) return undefined;
 	const originalKind = valueKind(findOriginalValue(proof.value_name, element));
 	const desiredKind = valueKind(proof.desired_value.value);
 	if (originalKind && originalKind !== desiredKind) {
@@ -472,8 +460,8 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 
 ${
 			parentProofId
-				? 'A sub-proof debates the proof above: its desired_value holds every field of the debated proof it decides to edit (name, description, verification and falsifiability methods, sources, veracity, uncertainty, impact, originality), null for the fields it keeps. It cannot edit the desired value of the debated proof. A sub-proof that supports the debated proof may raise its veracity, one that questions or refutes it lowers its veracity or corrects its other fields.'
-				: 'A proof is about ONE value of the element: value_name is this existing value and desired_value holds every part of it the proof decides to edit (its content and its veracity, uncertainty, impact and originality), null for the parts it keeps.'
+				? 'A sub-proof debates the proof above: its desired_value MUST give EVERY field of the debated proof (name, description, verification method, falsifiability method, sources, veracity, uncertainty, impact, originality) as the sub-proof wants it, repeating the current one for a field it keeps. It cannot edit the desired value of the debated proof. A sub-proof that supports the debated proof may raise its veracity, one that questions or refutes it lowers its veracity or corrects its other fields.'
+				: 'A proof is about ONE value of the element: value_name is this existing value and desired_value MUST give EVERY part of it (its content, veracity, uncertainty, impact and originality) as the proof wants it, repeating the current content for a part it keeps.'
 		}`;
 
 		// The value must exist and the desired content must keep its type: retry once with the error.
@@ -550,13 +538,13 @@ ${
 			ORDER BY created_at DESC
 		`);
 
-		return result.rows.map((row) => ({
+		const proofs: ProofData[] = result.rows.map((row) => ({
 			id: row.id,
 			type: 'proof' as const,
 			name: row.name,
 			description: row.description,
 			value_name: row.value_name,
-			desired_value: toDesiredValue(row.desired_value, row.parent_proof_id !== null),
+			desired_value: row.desired_value,
 			verification_method: row.verification_method,
 			falsifiability_method: row.falsifiability_method,
 			source: row.source || [],
@@ -569,6 +557,31 @@ ${
 			parent_proof_id: row.parent_proof_id,
 			original_proof_id: row.original_proof_id ?? null
 		}));
+
+		// The fields a desired value kept: the scores of the proof itself, or the fields of the debated proof.
+		const byId = new Map(proofs.map((proof) => [proof.id, proof]));
+		const scoresOf = ({ veracity, uncertainty, impact, originality }: ProofData) => ({
+			veracity,
+			uncertainty,
+			impact,
+			originality
+		});
+		return proofs.map((proof) => {
+			const parent = proof.parent_proof_id ? byId.get(proof.parent_proof_id) : undefined;
+			// The original proof is a copy of the debated proof: its desired value is the one of a top-level proof.
+			const kept: ValueEdit | ProofEdit =
+				parent && !proof.original_proof_id
+					? {
+							name: parent.name,
+							description: parent.description,
+							verification_method: parent.verification_method,
+							falsifiability_method: parent.falsifiability_method,
+							source: parent.source,
+							...scoresOf(parent)
+						}
+					: ({ value: null, ...scoresOf(proof) } as unknown as ValueEdit);
+			return { ...proof, desired_value: toDesiredValue(proof.desired_value, kept) };
+		});
 	}
 
 	static instance = new ProofServer();

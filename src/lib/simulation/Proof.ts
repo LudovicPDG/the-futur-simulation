@@ -72,37 +72,36 @@ export const ValueScoresSchema = z.object({
 });
 
 /**
- * What a top-level proof edits in its value of the element: its content and its scores.
- * Null means the proof leaves it unchanged; a founding proof gives all of them.
+ * Every part of its value of the element that a top-level proof wants: its content and its scores.
+ * All of them are always given (a part the proof keeps repeats the current one).
  */
 export const ValueEditSchema = z.object({
 	// Not z.any(): its JSON schema has no "type", which strict structured outputs reject.
 	value: z
 		.union([TranslationSchema, z.number(), z.boolean()])
-		.nullable()
 		.describe(
-			'The content this proof wants the value to have, or null to keep it. A text is translated in every language (never a plain string). It MUST have the same type as the current value: a number replaces a number, a boolean a boolean, a translated text a translated text, an evolution (a mathjs function of the time t and its unit) an evolution. For the existence of the element, the evolution is a percentage between 0 and 100 with the unit "%".'
+			'The content this proof wants the value to have (the current content if it keeps it). A text is translated in every language (never a plain string). It MUST have the same type as the current value: a number replaces a number, a boolean a boolean, a translated text a translated text, an evolution (a mathjs function of the time t and its unit) an evolution. For the existence of the element, the evolution is a percentage between 0 and 100 with the unit "%".'
 		),
-	veracity: ValueScoresSchema.shape.veracity.nullable().describe('The veracity this proof wants for the value, or null to keep it.'),
-	uncertainty: ValueScoresSchema.shape.uncertainty.nullable().describe('The uncertainty this proof wants for the value, or null to keep it.'),
-	impact: ValueScoresSchema.shape.impact.nullable().describe('The impact this proof wants for the value, or null to keep it.'),
-	originality: ValueScoresSchema.shape.originality.nullable().describe('The originality this proof wants for the value, or null to keep it.')
+	veracity: ValueScoresSchema.shape.veracity.describe('The veracity this proof wants for the value.'),
+	uncertainty: ValueScoresSchema.shape.uncertainty.describe('The uncertainty this proof wants for the value.'),
+	impact: ValueScoresSchema.shape.impact.describe('The impact this proof wants for the value.'),
+	originality: ValueScoresSchema.shape.originality.describe('The originality this proof wants for the value.')
 });
 
 /**
- * What a sub-proof edits in the proof it debates: every field of it except its desired value.
- * Null means the sub-proof leaves it unchanged.
+ * Every field of the debated proof that a sub-proof wants, except its desired value.
+ * All of them are always given (a field the sub-proof keeps repeats the current one).
  */
 export const ProofEditSchema = z.object({
-	name: TranslationSchema.nullable().describe('The new name of the debated proof, or null to keep it.'),
-	description: TranslationSchema.nullable().describe('The new description of the debated proof, or null to keep it.'),
-	verification_method: TranslationSchema.nullable().describe('The new verification method of the debated proof, or null to keep it.'),
-	falsifiability_method: TranslationSchema.nullable().describe('The new falsifiability method of the debated proof, or null to keep it.'),
-	source: z.array(z.string()).nullable().describe('The new sources of the debated proof (the whole list), or null to keep them.'),
-	veracity: scores.veracity.nullable().describe('The veracity this sub-proof wants for the debated proof, or null to keep it.'),
-	uncertainty: scores.uncertainty.nullable().describe('The uncertainty this sub-proof wants for the debated proof, or null to keep it.'),
-	impact: scores.impact.nullable().describe('The impact this sub-proof wants for the debated proof, or null to keep it.'),
-	originality: scores.originality.nullable().describe('The originality this sub-proof wants for the debated proof, or null to keep it.')
+	name: TranslationSchema.describe('The name this sub-proof wants for the debated proof (the current one if it keeps it).'),
+	description: TranslationSchema.describe('The description this sub-proof wants for the debated proof (the current one if it keeps it).'),
+	verification_method: TranslationSchema.describe('The verification method this sub-proof wants for the debated proof (the current one if it keeps it).'),
+	falsifiability_method: TranslationSchema.describe('The falsifiability method this sub-proof wants for the debated proof (the current one if it keeps it).'),
+	source: z.array(z.string()).describe('The whole list of sources this sub-proof wants for the debated proof (the current ones if it keeps them).'),
+	veracity: scores.veracity.describe('The veracity this sub-proof wants for the debated proof.'),
+	uncertainty: scores.uncertainty.describe('The uncertainty this sub-proof wants for the debated proof.'),
+	impact: scores.impact.describe('The impact this sub-proof wants for the debated proof.'),
+	originality: scores.originality.describe('The originality this sub-proof wants for the debated proof.')
 });
 
 export type ValueEdit = z.infer<typeof ValueEditSchema>;
@@ -123,7 +122,7 @@ export const ProofSchema = z.object({
 			'The ONE existing value of the element this proof is about. For a primary property of the element, the exact property key as a plain string (e.g. "description"). For an "other information", its name translated in every language, exactly as in the element.'
 		),
 	desired_value: ValueEditSchema.describe(
-		'Everything this proof edits in its value: its content and its scores. Give only what the proof decides to change, null for the rest.'
+		'Every part this proof wants for its value: its content and its scores. Give all of them, never leave one out.'
 	),
 	verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
 	falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),
@@ -134,7 +133,7 @@ export const ProofSchema = z.object({
 /** A sub-proof debates a proof: its desired value holds every field of the debated proof it edits. */
 export const SubProofSchema = ProofSchema.extend({
 	desired_value: ProofEditSchema.describe(
-		'Everything this sub-proof edits in the debated proof (never its desired value). Give only what the sub-proof decides to change, null for the rest.'
+		'Every field this sub-proof wants for the debated proof (never its desired value). Give all of them, never leave one out.'
 	)
 });
 
