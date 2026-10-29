@@ -4,6 +4,8 @@ import { BaseSimulationObject } from './BaseSimulationObject';
 import {
 	ProofSchema,
 	SubProofSchema,
+	ProofEditSchema,
+	ValueEditSchema,
 	ValueScoresSchema,
 	valueKind,
 	type ProofData,
@@ -26,6 +28,32 @@ const FOUNDING_PROOF_CONCURRENCY = 4;
  */
 const FoundingProofSchema = ProofSchema.omit({ value_name: true, desired_value: true }).extend({
 	desired_value: ValueScoresSchema.describe('The scores this founding proof adds to its value.')
+});
+
+/** The same edit with every field nullable: the genie gives only what it changes, null for what it keeps. */
+function keepable<Shape extends z.ZodRawShape>(schema: z.ZodObject<Shape>) {
+	return z.object(
+		Object.fromEntries(
+			Object.entries(schema.shape).map(([key, field]) => {
+				const type = field as z.ZodType;
+				return [key, type.nullable().describe(`${type.description ?? ''} Null to keep the current one unchanged.`)];
+			})
+		)
+	) as unknown as z.ZodObject<{ [Key in keyof Shape]: z.ZodNullable<Shape[Key]> }>;
+}
+
+/** A top-level proof as generated: its desired value gives only the parts of the value it changes. */
+const GeneratedProofSchema = ProofSchema.extend({
+	desired_value: keepable(ValueEditSchema).describe(
+		'Only the parts of the value this proof changes (its content and its scores); null for every part it keeps.'
+	)
+});
+
+/** A sub-proof as generated: its desired value gives only the fields of the debated proof it changes. */
+const GeneratedSubProofSchema = SubProofSchema.extend({
+	desired_value: keepable(ProofEditSchema).describe(
+		'Only the fields of the debated proof this sub-proof changes (never its desired value); null for every field it keeps.'
+	)
 });
 
 type ProofValue = NonNullable<ValueEdit['value']>;
@@ -104,17 +132,18 @@ function findOriginalValue(name: unknown, element: Record<string, unknown>): unk
 
 /** Describes why the value of a proof does not fit its element: an unknown value or a desired content of another type. */
 function findDesiredValueError(
-	proof: Pick<ProofData, 'value_name' | 'desired_value'>,
+	proof: { value_name: ProofData['value_name']; desired_value: object },
 	element: Record<string, unknown>
 ): string | undefined {
 	const label = valueNames(proof.value_name)[0];
 	if (!hasValue(proof.value_name, element)) {
 		return `the value "${label}" does not exist in the element. A proof is about ONE existing value: use the exact key of a primary property or the exact name of an "other information".`;
 	}
-	// A sub-proof edits the debated proof, not the content of the value.
-	if (!('value' in proof.desired_value)) return undefined;
+	// A sub-proof edits the debated proof, not the content of the value; a proof may also keep the content.
+	const content = (proof.desired_value as { value?: unknown }).value;
+	if (content === undefined || content === null) return undefined;
 	const originalKind = valueKind(findOriginalValue(proof.value_name, element));
-	const desiredKind = valueKind(proof.desired_value.value);
+	const desiredKind = valueKind(content);
 	if (originalKind && originalKind !== desiredKind) {
 		return `the value "${label}" is a ${originalKind}, but you gave a ${desiredKind ?? 'value of another type'}. The desired value must keep the type of the current value (a text stays a text translated in every language).`;
 	}
@@ -428,6 +457,48 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 		};
 	}
 
+	/**
+	 * The current state of a value of the element: its content in the element, and its scores as desired by its latest
+	 * top-level proof (by the new proof itself when the value has none yet).
+	 */
+	private async currentValue(
+		target: ProofTarget,
+		valueName: ProofData['value_name'],
+		element: Record<string, unknown>,
+		fallback: Pick<ProofData, 'veracity' | 'uncertainty' | 'impact' | 'originality'>
+	): Promise<ValueEdit> {
+		const result = await db.query(
+			`SELECT value_name, desired_value, veracity, uncertainty, impact, originality
+			FROM proofs
+			WHERE ${'factId' in target ? 'fact_id' : 'relation_id'} = $1 AND parent_proof_id IS NULL
+			ORDER BY created_at DESC`,
+			['factId' in target ? target.factId : target.relationId]
+		);
+		const names = valueNames(valueName);
+		const latest = result.rows.find((row) =>
+			valueNames(row.value_name).some((name) => names.includes(name))
+		);
+		const raw = findOriginalValue(valueName, element);
+		const scores = latest ?? fallback;
+		const ownScores = {
+			veracity: Number(scores.veracity),
+			uncertainty: Number(scores.uncertainty),
+			impact: Number(scores.impact),
+			originality: Number(scores.originality)
+		};
+		const desired = latest
+			? (toDesiredValue(latest.desired_value, { value: null, ...ownScores } as unknown as ValueEdit) as ValueEdit)
+			: ownScores;
+		// The content is the one of the element, the scores the latest desired ones.
+		return {
+			value: toProofValue(raw) ?? (raw as ProofValue),
+			veracity: desired.veracity,
+			uncertainty: desired.uncertainty,
+			impact: desired.impact,
+			originality: desired.originality
+		};
+	}
+
 	private async generateForTarget(
 		model_name: string,
 		level_of_reasoning: string,
@@ -438,19 +509,30 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 		const { text, element } = await this.targetContext(target);
 		let context = text;
 
+		let parentEdit: ProofEdit | undefined;
 		if (parentProofId) {
 			const parent = await db.query(
-				`SELECT (name).fr AS name_fr, (name).en AS name_en,
-					(description).fr AS description_fr, (description).en AS description_en,
-					value_name, desired_value,
-					(verification_method).fr AS verification_method_fr,
-					(falsifiability_method).fr AS falsifiability_method_fr,
+				`SELECT name, description, value_name, desired_value, verification_method, falsifiability_method,
 					source, veracity, uncertainty, impact, originality
 				FROM proofs WHERE id = $1`,
 				[parentProofId]
 			);
 			if (parent.rows.length === 0) throw new Error('The debated proof does not exist');
-			context += `\n\nThis proof is a sub-proof: it debates (supports, questions or refutes) the following existing proof:\n${JSON.stringify(parent.rows[0])}`;
+			const row = parent.rows[0];
+			parentEdit = {
+				name: row.name,
+				description: row.description,
+				verification_method: row.verification_method,
+				falsifiability_method: row.falsifiability_method,
+				source: row.source || [],
+				veracity: Number(row.veracity),
+				uncertainty: Number(row.uncertainty),
+				impact: Number(row.impact),
+				originality: Number(row.originality)
+			};
+			context += `\n\nThis proof is a sub-proof: it debates (supports, questions or refutes) the following existing proof:\n${JSON.stringify(
+				{ ...parentEdit, value_name: row.value_name, desired_value: row.desired_value }
+			)}`;
 		}
 		if (valueName !== undefined) {
 			context += `\n\nThis proof is about the value ${JSON.stringify(valueName)} of the element: use exactly this value_name.`;
@@ -460,27 +542,33 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 
 ${
 			parentProofId
-				? 'A sub-proof debates the proof above: its desired_value MUST give EVERY field of the debated proof (name, description, verification method, falsifiability method, sources, veracity, uncertainty, impact, originality) as the sub-proof wants it, repeating the current one for a field it keeps. It cannot edit the desired value of the debated proof. A sub-proof that supports the debated proof may raise its veracity, one that questions or refutes it lowers its veracity or corrects its other fields.'
-				: 'A proof is about ONE value of the element: value_name is this existing value and desired_value MUST give EVERY part of it (its content, veracity, uncertainty, impact and originality) as the proof wants it, repeating the current content for a part it keeps.'
+				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources, veracity, uncertainty, impact, originality) and null for every other field: they keep their current value exactly. Never rewrite a field that does not need to change. It cannot edit the desired value of the debated proof.'
+				: 'A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY the parts of the value that the request asks to change (its content, veracity, uncertainty, impact, originality) and null for every other part: they keep their current value exactly.'
 		}`;
 
 		// The value must exist and the desired content must keep its type: retry once with the error.
 		const generate = async (extra = '') => {
-			const proof: z.infer<typeof ProofSchema | typeof SubProofSchema> = await this.generateWithSchema(
-				model_name,
-				level_of_reasoning,
-				basePrompt + extra,
-				parentProofId ? SubProofSchema : ProofSchema
-			);
+			const proof: z.infer<typeof GeneratedProofSchema | typeof GeneratedSubProofSchema> =
+				await this.generateWithSchema(
+					model_name,
+					level_of_reasoning,
+					basePrompt + extra,
+					parentProofId ? GeneratedSubProofSchema : GeneratedProofSchema
+				);
 			return valueName !== undefined ? { ...proof, value_name: valueName } : proof;
 		};
-		let proof = await generate();
-		const error = findDesiredValueError(proof, element);
+		let generated = await generate();
+		const error = findDesiredValueError(generated, element);
 		if (error) {
-			proof = await generate(`\n\nYour previous answer was rejected: ${error}`);
-			const secondError = findDesiredValueError(proof, element);
+			generated = await generate(`\n\nYour previous answer was rejected: ${error}`);
+			const secondError = findDesiredValueError(generated, element);
 			if (secondError) throw new Error(secondError);
 		}
+
+		// The fields left null keep their current value: the desired value is always complete.
+		const kept: ValueEdit | ProofEdit =
+			parentEdit ?? (await this.currentValue(target, generated.value_name, element, generated));
+		const proof = { ...generated, desired_value: toDesiredValue(generated.desired_value, kept) };
 
 		return {
 			...proof,

@@ -153,6 +153,8 @@
 	"proof_desired_scores": "Scores souhaités",
 	"proof_veracity": "Véracité",
 	"proof_hide_params": "Masquer les paramètres",
+	"proof_edit_changed": "Modifié",
+	"proof_edit_changed_hint": "Changé par rapport à la preuve débattue",
 	"simulation_existence_title_fact": "Évolution de la certitude de l'existence du fait",
 	"simulation_existence_title_person": "Évolution de la certitude de l'existence de la personne",
 	"simulation_existence_title_organization": "Évolution de la certitude de l'existence de l'organisation",

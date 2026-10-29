@@ -52,35 +52,67 @@
 			});
 	}
 
-	/** The label of each field a desired value can edit, in display order. */
-	const EDIT_LABELS: [string, () => string][] = [
+	/** The text fields a desired value can give, in display order; the methods get the accent of their parameter. */
+	const TEXT_FIELDS: [string, () => string, string?][] = [
 		['value', m.simulation_field_value],
 		['name', m.simulation_field_name],
 		['description', m.simulation_field_description],
-		['verification_method', m.simulation_field_verification_method],
-		['falsifiability_method', m.simulation_field_falsifiability_method],
-		['source', m.simulation_field_source],
-		['veracity', m.proof_veracity],
-		['uncertainty', m.simulation_evolution_uncertainty],
-		['impact', m.simulation_field_impact],
-		['originality', m.simulation_field_originality]
+		['verification_method', m.simulation_field_verification_method, 'verification'],
+		['falsifiability_method', m.simulation_field_falsifiability_method, 'falsification']
 	];
 
-	/** The fields the proof edits (in its value, or in the debated proof for a sub-proof), formatted. */
-	function desiredEdits(proof: StoredProof): { label: string; value: string }[] {
+	/** The scores a desired value gives, each shown as a gauge from 0 to 100. */
+	const SCORE_FIELDS: [string, () => string, (value: number) => string][] = [
+		['veracity', m.proof_veracity, (value) => `${Math.round(value)}%`],
+		['uncertainty', m.simulation_evolution_uncertainty, (value) => `±${Math.round(value)}%`],
+		['impact', m.simulation_field_impact, (value) => `${Math.round(value)}`],
+		['originality', m.simulation_field_originality, (value) => `${Math.round(value)}%`]
+	];
+
+	type ScoreView = { key: string; label: string; value: number; text: string; changed: boolean };
+
+	/** The own scores of the proof, shown like the scores of its desired value. */
+	function proofScores(proof: StoredProof): ScoreView[] {
+		return SCORE_FIELDS.flatMap(([key, label, text]) => {
+			const value = Number(proof[key as keyof StoredProof]);
+			if (!Number.isFinite(value)) return [];
+			return [{ key, label: label(), value, text: text(value), changed: false }];
+		});
+	}
+
+	type DesiredView = {
+		/** Whether the fields are compared with a debated proof (only for a sub-proof). */
+		compared: boolean;
+		texts: { key: string; label: string; text: string; accent?: string; changed: boolean }[];
+		sources: { list: string[]; changed: boolean } | null;
+		scores: ScoreView[];
+	};
+
+	/**
+	 * The desired value of the proof, split into texts, sources and scores. For a sub-proof, each field is compared
+	 * with the debated proof, so that what the sub-proof changes stands out.
+	 */
+	function desiredView(proof: StoredProof): DesiredView {
 		const desired = proof.desired_value as Record<string, unknown>;
-		return EDIT_LABELS.flatMap(([key, label]) => {
+		const parent = proof.parent_proof_id && !proof.original_proof_id
+			? (proofs.find((candidate) => candidate.id === proof.parent_proof_id) as Record<string, unknown> | undefined)
+			: undefined;
+		const changed = (key: string) =>
+			parent !== undefined && JSON.stringify(desired[key]) !== JSON.stringify(parent[key]);
+
+		const texts = TEXT_FIELDS.flatMap(([key, label, accent]) => {
 			const value = desired[key];
 			if (value === null || value === undefined) return [];
-			const text = Array.isArray(value)
-				? value.join('\n')
-				: key === 'veracity' || key === 'originality'
-					? `${format(value)}%`
-					: key === 'uncertainty'
-						? `±${format(value)}%`
-						: format(value);
-			return [{ label: label(), value: text }];
+			return [{ key, label: label(), text: format(value), accent, changed: changed(key) }];
 		});
+		const source = desired.source;
+		const sources = Array.isArray(source) ? { list: source.map(String), changed: changed('source') } : null;
+		const scores = SCORE_FIELDS.flatMap(([key, label, text]) => {
+			const value = Number(desired[key]);
+			if (desired[key] === null || !Number.isFinite(value)) return [];
+			return [{ key, label: label(), value, text: text(value), changed: changed(key) }];
+		});
+		return { compared: parent !== undefined, texts, sources, scores };
 	}
 
 	function debate(proof: StoredProof) {
@@ -91,10 +123,28 @@
 	}
 </script>
 
+{#snippet scoreGrid(scores: ScoreView[])}
+	{#if scores.length > 0}
+		<dl class="desired-scores">
+			{#each scores as score (score.key)}
+				<div class="score {score.key}" class:changed={score.changed}>
+					<dt>{score.label}</dt>
+					<dd>
+						<strong>{score.text}</strong>
+						<span class="gauge" aria-hidden="true">
+							<span style:width="{Math.min(100, Math.max(0, score.value))}%"></span>
+						</span>
+					</dd>
+				</div>
+			{/each}
+		</dl>
+	{/if}
+{/snippet}
+
 <ul class="proof-list" class:nested={parentId !== null}>
 	{#each visible as proof (proof.id)}
 		{@const count = subProofCount(proof.id)}
-		{@const edits = desiredEdits(proof)}
+		{@const desired = desiredView(proof)}
 		<li class="proof-item">
 			<h4>
 				{format(proof.name)}
@@ -105,16 +155,55 @@
 				{/if}
 			</h4>
 			<p class="proof-description">{format(proof.description)}</p>
-			{#if edits.length > 0}
-				<div class="desired-value">
+			{#if desired.texts.length > 0 || desired.sources || desired.scores.length > 0}
+				<section class="desired-value">
 					<span class="desired-label">{m.proof_desired_value()}</span>
-					{#each edits as edit}
-						<div class="desired-edit">
-							<span class="desired-field">{edit.label}</span>
-							<span class="desired-content">{edit.value}</span>
+					{#each desired.texts as field (field.key)}
+						<div
+							class="desired-field {field.accent ?? ''}"
+							class:main={field.key === 'value' || field.key === 'name'}
+							class:kept={desired.compared && !field.changed}
+						>
+							<span class="field-label">
+								{field.label}
+								{#if field.changed}
+									<span class="changed-tag" title={m.proof_edit_changed_hint()}>{m.proof_edit_changed()}</span>
+								{/if}
+							</span>
+							<span class="field-text">{field.text}</span>
 						</div>
 					{/each}
-				</div>
+					{#if desired.sources}
+						<div class="desired-field" class:kept={desired.compared && !desired.sources.changed}>
+							<span class="field-label">
+								{m.simulation_field_source()}
+								{#if desired.sources.changed}
+									<span class="changed-tag" title={m.proof_edit_changed_hint()}>{m.proof_edit_changed()}</span>
+								{/if}
+							</span>
+							{#if desired.sources.list.length > 0}
+								<ul class="sources">
+									{#each desired.sources.list as source}
+										<li>
+											{#each splitLinks(source) as part}
+												{#if part.href}
+													<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>
+												{:else}
+													{part.text}
+												{/if}
+											{/each}
+										</li>
+									{/each}
+								</ul>
+							{:else}
+								<span class="field-text">—</span>
+							{/if}
+						</div>
+					{/if}
+					{#if desired.scores.length > 0}
+						{@render scoreGrid(desired.scores)}
+					{/if}
+				</section>
 			{/if}
 			<div class="proof-actions">
 				<button
@@ -146,54 +235,41 @@
 				{/if}
 			</div>
 			{#if paramsShown[proof.id]}
-				<dl class="proof-params">
-					<div class="param-row verification">
-						<dt>{m.simulation_field_verification_method()}</dt>
-						<dd>{format(proof.verification_method)}</dd>
-					</div>
-					<div class="param-row falsification">
-						<dt>{m.simulation_field_falsifiability_method()}</dt>
-						<dd>{format(proof.falsifiability_method)}</dd>
-					</div>
-					<div class="param-row">
-						<dt>{m.simulation_field_source()}</dt>
-						<dd>
-							{#if proof.source?.length}
-								<ul class="sources">
-									{#each proof.source as source}
-										<li>
-											{#each splitLinks(source) as part}
-												{#if part.href}
-													<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>
-												{:else}
-													{part.text}
-												{/if}
-											{/each}
-										</li>
-									{/each}
-								</ul>
-							{:else}
-								—
-							{/if}
-						</dd>
-					</div>
-					<div class="param-row">
-						<dt>{m.simulation_field_originality()}</dt>
-						<dd>{format(proof.originality)}%</dd>
-					</div>
-					<div class="param-row">
-						<dt>{m.simulation_field_impact()}</dt>
-						<dd>{format(proof.impact)}</dd>
-					</div>
-					<div class="param-row">
-						<dt>{m.proof_veracity()}</dt>
-						<dd>{Number.isFinite(proof.veracity) ? `${Math.round(proof.veracity)}%` : '—'}</dd>
-					</div>
-					<div class="param-row">
-						<dt>{m.simulation_evolution_uncertainty()}</dt>
-						<dd>{Number.isFinite(proof.uncertainty) ? `±${Math.round(proof.uncertainty)}%` : '—'}</dd>
-					</div>
-				</dl>
+				<div class="proof-params">
+					<dl>
+						<div class="param-row verification">
+							<dt>{m.simulation_field_verification_method()}</dt>
+							<dd>{format(proof.verification_method)}</dd>
+						</div>
+						<div class="param-row falsification">
+							<dt>{m.simulation_field_falsifiability_method()}</dt>
+							<dd>{format(proof.falsifiability_method)}</dd>
+						</div>
+						<div class="param-row">
+							<dt>{m.simulation_field_source()}</dt>
+							<dd>
+								{#if proof.source?.length}
+									<ul class="sources">
+										{#each proof.source as source}
+											<li>
+												{#each splitLinks(source) as part}
+													{#if part.href}
+														<a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a>
+													{:else}
+														{part.text}
+													{/if}
+												{/each}
+											</li>
+										{/each}
+									</ul>
+								{:else}
+									—
+								{/if}
+							</dd>
+						</div>
+					</dl>
+					{@render scoreGrid(proofScores(proof))}
+				</div>
 			{/if}
 			{#if expanded[proof.id]}
 				{#if count > 0}
@@ -271,9 +347,9 @@
 	.desired-value {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 8px;
 		margin: 0 0 8px;
-		padding: 6px 8px;
+		padding: 8px 10px 10px;
 		border-left: 3px solid #7dd3fc;
 		border-radius: 4px;
 		background: rgb(125 211 252 / 8%);
@@ -288,22 +364,138 @@
 		text-transform: uppercase;
 	}
 
-	.desired-edit {
+	.desired-field {
 		display: flex;
 		flex-direction: column;
+		gap: 2px;
 	}
 
-	.desired-field {
+	.desired-field.verification,
+	.desired-field.falsification {
+		padding: 4px 8px;
+		border-left: 2px solid var(--accent);
+		border-radius: 3px;
+		background: color-mix(in srgb, var(--accent) 8%, transparent);
+	}
+
+	.desired-field.verification {
+		--accent: #22c55e;
+	}
+
+	.desired-field.falsification {
+		--accent: #ef4444;
+	}
+
+	/* For a sub-proof, the fields it keeps from the debated proof step back. */
+	.desired-field.kept {
+		opacity: 0.55;
+	}
+
+	.field-label {
+		display: flex;
+		align-items: center;
+		gap: 6px;
 		color: #94a3b8;
-		font-size: 11px;
+		font-size: 10px;
 		font-weight: 600;
 	}
 
-	.desired-content {
+	.desired-field.verification .field-label,
+	.desired-field.falsification .field-label {
+		color: var(--accent);
+	}
+
+	.field-text {
+		color: #e2e8f0;
+		font-size: 12px;
+		line-height: 1.5;
+		white-space: pre-wrap;
+	}
+
+	.desired-field.main .field-text {
 		color: #f1f5f9;
 		font-size: 13px;
 		font-weight: 600;
-		white-space: pre-wrap;
+	}
+
+	.changed-tag {
+		padding: 0 6px;
+		color: #fbbf24;
+		background: rgb(251 191 36 / 12%);
+		border: 1px solid rgb(251 191 36 / 40%);
+		border-radius: 999px;
+		font-size: 9px;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.desired-scores {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+		gap: 6px;
+		margin: 2px 0 0;
+	}
+
+	.score {
+		--accent: #7dd3fc;
+		padding: 6px 8px;
+		border: 1px solid rgb(148 163 184 / 18%);
+		border-radius: 6px;
+		background: rgb(15 23 42 / 30%);
+	}
+
+	.score.veracity {
+		--accent: #22c55e;
+	}
+
+	.score.uncertainty {
+		--accent: #f59e0b;
+	}
+
+	.score.impact {
+		--accent: #a78bfa;
+	}
+
+	.score.originality {
+		--accent: #38bdf8;
+	}
+
+	.score.changed {
+		border-color: rgb(251 191 36 / 55%);
+	}
+
+	.score dt {
+		color: #94a3b8;
+		font-size: 10px;
+		font-weight: 600;
+	}
+
+	.score dd {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		margin: 2px 0 0;
+	}
+
+	.score strong {
+		color: #f1f5f9;
+		font-size: 15px;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.gauge {
+		height: 4px;
+		overflow: hidden;
+		border-radius: 999px;
+		background: rgb(148 163 184 / 20%);
+	}
+
+	.gauge span {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--accent);
 	}
 
 	:global(body.light) .desired-value {
@@ -311,12 +503,41 @@
 		background: rgb(8 126 139 / 8%);
 	}
 
-	:global(body.light) .desired-label {
+	:global(body.light) .desired-label,
+	:global(body.light) .field-label,
+	:global(body.light) .score dt {
 		color: #64748b;
 	}
 
-	:global(body.light) .desired-content {
+	:global(body.light) .field-text {
+		color: #334155;
+	}
+
+	:global(body.light) .desired-field.main .field-text,
+	:global(body.light) .score strong {
 		color: #0f172a;
+	}
+
+	:global(body.light) .desired-field.verification {
+		--accent: #16a34a;
+	}
+
+	:global(body.light) .desired-field.falsification {
+		--accent: #dc2626;
+	}
+
+	:global(body.light) .desired-field.verification .field-label,
+	:global(body.light) .desired-field.falsification .field-label {
+		color: var(--accent);
+	}
+
+	:global(body.light) .changed-tag {
+		color: #a16207;
+		border-color: rgb(161 98 7 / 45%);
+	}
+
+	:global(body.light) .score {
+		background: rgb(255 255 255 / 60%);
 	}
 
 	.proof-params {
@@ -324,6 +545,14 @@
 		padding: 8px 10px;
 		background: rgb(148 163 184 / 8%);
 		border-radius: 6px;
+	}
+
+	.proof-params > dl {
+		margin: 0;
+	}
+
+	.proof-params > .desired-scores {
+		margin-top: 8px;
 	}
 
 	.param-row {
