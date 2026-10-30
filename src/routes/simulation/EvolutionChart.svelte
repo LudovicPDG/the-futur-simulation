@@ -141,18 +141,19 @@
 			// Nothing to draw in the window (the fact does not exist there), but the formula is valid
 			const sample = [lo, today, hi].map(valueAt).filter(Number.isFinite);
 			if (sample.length === 0) return null;
-			return { valueAt, widthAt: () => 0, curve: [] as CurvePoint[] };
+			return { valueAt, uncertaintyAt, curve: [] as CurvePoint[] };
 		}
 
 		const [minValue, maxValue] = d3.extent(values, (d) => d.value) as [number, number];
 		const range = maxValue - minValue > 1e-9 ? maxValue - minValue : Math.max(Math.abs(maxValue), 1) * 0.2;
-		// The cloud is the uncertainty of the components (a share of their value), never thinner than a few pixels
-		const widthAt = (t: number) =>
-			Math.max(uncertaintyAt(t), range * MIN_WIDTH_SHARE);
+		// The cloud is the uncertainty of the components (a share of their value), never thinner than a few pixels.
+		// This minimum is only for the drawing: the readout gives the real uncertainty.
+		const curve: CurvePoint[] = values.map((d) => ({
+			...d,
+			width: Math.max(uncertaintyAt(d.t), range * MIN_WIDTH_SHARE)
+		}));
 
-		const curve: CurvePoint[] = values.map((d) => ({ ...d, width: widthAt(d.t) }));
-
-		return { valueAt, widthAt, curve };
+		return { valueAt, uncertaintyAt, curve };
 	});
 
 	const margin = { top: 10, right: 12, bottom: 24, left: 46 };
@@ -206,11 +207,10 @@
 		if (!drawn || t < shownFrom || t > shownTo) return null;
 		const value = model.valueAt(t);
 		if (!Number.isFinite(value)) return null;
-		const width = model.widthAt(t);
 		return {
 			t,
 			value,
-			width,
+			uncertainty: model.uncertaintyAt(t),
 			x: geometry.xScale(t),
 			y: geometry.yScale(value)
 		};
@@ -384,7 +384,7 @@
 				</span>
 				<span>
 					{m.simulation_evolution_uncertainty()} :
-					<span class="readout-value">± {preciseFormatter.format(active.width)} {unit}</span>
+					<span class="readout-value">± {preciseFormatter.format(active.uncertainty)} {unit}</span>
 				</span>
 			{:else}
 				<span class="readout-empty">—</span>
