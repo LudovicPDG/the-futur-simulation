@@ -25,6 +25,9 @@
 		allProofs: (ProofData & { id: string })[];
 		proofs: (ProofData & { id: string })[];
 		relations: { relation: RelationData; entries: RelationInfluenceEntry[] }[];
+		/** Existence of the element and color of the value: the evolutions of the proofs are drawn like the value. */
+		existence?: unknown;
+		accent?: { dark: string; light: string };
 		/** Ask the genie for a new proof / a new relation of this value. */
 		addProof?: () => void;
 		addRelation?: () => void;
@@ -66,7 +69,13 @@
 	<h5>{m.simulation_influence()}</h5>
 	<h6>{m.simulation_influence_proofs()}</h6>
 	{#if info.proofs.length > 0}
-		<ProofList proofs={info.allProofs} roots={info.proofs} {format} />
+		<ProofList
+			proofs={info.allProofs}
+			roots={info.proofs}
+			{format}
+			existence={info.existence}
+			accent={info.accent}
+		/>
 	{:else}
 		<p class="influence-empty">—</p>
 	{/if}

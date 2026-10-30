@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { ProofData } from '$lib/simulation/Proof';
+	import { parseEvolutionValue, type EvolutionValue } from '$lib/simulation/event/EvolutionFunction';
 	import { addProofTarget, addRelationTarget, addValueTarget, debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
+	import EvolutionChart from './EvolutionChart.svelte';
 	import ProofList from './ProofList.svelte';
 
 	const PAGE_SIZE = 5;
@@ -12,7 +14,9 @@
 		proofs,
 		roots = [],
 		parentId = null,
-		format
+		format,
+		existence,
+		accent
 	}: {
 		/** Every proof, to find the sub-proofs. */
 		proofs: StoredProof[];
@@ -20,6 +24,9 @@
 		roots?: StoredProof[];
 		parentId?: string | null;
 		format: (value: unknown) => string;
+		/** Existence of the element and color of the value: an evolution of a proof is drawn like the value. */
+		existence?: unknown;
+		accent?: { dark: string; light: string };
 	} = $props();
 
 	let visibleCount = $state(PAGE_SIZE);
@@ -83,7 +90,15 @@
 	type DesiredView = {
 		/** Whether the fields are compared with a debated proof (only for a sub-proof). */
 		compared: boolean;
-		texts: { key: string; label: string; text: string; accent?: string; changed: boolean }[];
+		texts: {
+			key: string;
+			label: string;
+			text: string;
+			accent?: string;
+			changed: boolean;
+			/** The content of the value when it is an evolution: drawn instead of its text. */
+			evolution: EvolutionValue | null;
+		}[];
 		sources: { list: string[]; changed: boolean } | null;
 		scores: ScoreView[];
 	};
@@ -100,7 +115,8 @@
 		const texts = TEXT_FIELDS.flatMap(([key, label, accent]) => {
 			const value = desired[key];
 			if (value === null || value === undefined) return [];
-			return [{ key, label: label(), text: format(value), accent, changed: changed(key) }];
+			const evolution = key === 'value' ? parseEvolutionValue(value) : null;
+			return [{ key, label: label(), text: format(value), accent, changed: changed(key), evolution }];
 		});
 		const source = desired.source;
 		const sources = Array.isArray(source) ? { list: source.map(String), changed: changed('source') } : null;
@@ -167,7 +183,25 @@
 									<span class="changed-tag" title={m.proof_edit_changed_hint()}>{m.proof_edit_changed()}</span>
 								{/if}
 							</span>
-							<span class="field-text">{field.text}</span>
+							{#if field.evolution && proof.value_name === 'existence'}
+								<!-- A proof of the existence: drawn like the existence itself, as a percentage on its whole axis. -->
+								<EvolutionChart
+									evolution={field.evolution.evolution}
+									unit={field.evolution.unit}
+									existence={field.evolution.evolution}
+									clipToExistence={false}
+									bounds={[0, 100]}
+								/>
+							{:else if field.evolution}
+								<EvolutionChart
+									evolution={field.evolution.evolution}
+									unit={field.evolution.unit}
+									{existence}
+									{accent}
+								/>
+							{:else}
+								<span class="field-text">{field.text}</span>
+							{/if}
 						</div>
 					{/each}
 					{#if desired.sources}
@@ -270,7 +304,7 @@
 			{/if}
 			{#if expanded[proof.id]}
 				{#if count > 0}
-					<ProofList {proofs} parentId={proof.id} {format} />
+					<ProofList {proofs} parentId={proof.id} {format} {existence} {accent} />
 				{:else}
 					<p class="proof-empty">{m.proof_no_sub()}</p>
 				{/if}

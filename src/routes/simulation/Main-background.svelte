@@ -739,6 +739,8 @@
 			allProofs,
 			proofs,
 			relations,
+			existence: activeExistence?.evolution,
+			accent: typeof name === 'string' ? ACCENTS[name] : undefined,
 			addProof: () => startAddProof(name),
 			addRelation: activeRelation ? undefined : () => startAddRelation(name)
 		};
