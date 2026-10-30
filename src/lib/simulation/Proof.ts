@@ -71,7 +71,7 @@ export const ValueScoresSchema = z.object({
 		.describe('The originality of the value, as a percentage from 0 (a copy of an existing one) to 100 (completely new).')
 });
 
-/** A proof gives one single function: the voters of a value are what makes it a mix of functions. */
+/** A proof gives one single function, and the best proof of a value decides it: a value is never a mix of proofs. */
 const ProofEvolutionSchema = EvolutionTypeSchema.extend({
 	evolution: EvolutionFunctionSchema.describe(
 		'The evolution this proof wants, as a function of the time t: EXACTLY ONE component with the weight 1, never a mix of functions. A hypothesis mixing several scenarios is written as one single function.'
@@ -157,7 +157,7 @@ export const SubProofSchema = ProofSchema.extend({
  */
 export type ProofData = Omit<z.infer<typeof ProofSchema>, 'desired_value'> & {
 	desired_value: ValueEdit | ProofEdit;
-	/** The fields of the desired value the proof really changed: only they vote (see ProofResolution). */
+	/** The fields of the desired value the proof really changed: the others repeat what it kept. */
 	edited_fields?: string[] | null;
 	id?: string;
 	fact_id?: string | null;

@@ -442,7 +442,7 @@ export class Genie {
 			...storedRelations
 		]);
 
-		// Every value as decided by the votes of its proofs: the stored elements keep the values they were created with.
+		// Every value as decided by its best proof: the stored elements keep the values they were created with.
 		const resolve = <T extends object>(elements: T[]) =>
 			elements.map((element) => resolveElement(element, proofs));
 		const facts = resolve(storedFacts);

@@ -104,8 +104,8 @@
 	};
 
 	/**
-	 * The desired value of the proof, split into texts, sources and scores. The fields the proof really changed (the
-	 * only ones that vote) stand out; the founding proof and the original proof copy give every field, so none does.
+	 * The desired value of the proof, split into texts, sources and scores. The fields the proof really changed stand
+	 * out; the founding proof and the original proof copy give every field, so none does.
 	 */
 	function desiredView(proof: StoredProof): DesiredView {
 		const desired = proof.desired_value as Record<string, unknown>;

@@ -553,8 +553,8 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 	}
 
 	/**
-	 * The current state of a value of the element: its content in the (resolved) element, and its scores as voted by
-	 * its top-level proofs (the ones of the new proof itself when the value has none yet).
+	 * The current state of a value of the element: its content in the (resolved) element, and its scores as decided by
+	 * its best top-level proof (the ones of the new proof itself when the value has none yet).
 	 */
 	private currentValue(
 		target: ProofTarget,
@@ -658,7 +658,7 @@ ${
 
 		return {
 			...proof,
-			// Only the fields the genie did not leave null vote for a change.
+			// Only the fields the genie did not leave null are a change.
 			edited_fields: changedFields(generated.desired_value),
 			id: randomUUID(),
 			fact_id: 'factId' in target ? target.factId : null,

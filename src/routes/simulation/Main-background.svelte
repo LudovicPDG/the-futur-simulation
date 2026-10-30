@@ -709,7 +709,7 @@
 					return kept.length > 0 ? [{ relation, entries: kept }] : [];
 				});
 
-		// Scores: the weighted average voted by the proofs of the value (the founding proof among them).
+		// Scores: the ones of the best proof of the value (the founding proof among them).
 		const voted = resolveValue(proofs);
 		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'originality'): number => voted[key] ?? NaN;
 		const veracityNow = score('veracity');
