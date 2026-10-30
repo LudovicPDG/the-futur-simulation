@@ -99,6 +99,8 @@
 	"simulation_evolution_today": "Aujourd'hui",
 	"simulation_evolution_invalid": "Fonction d'évolution illisible",
 	"simulation_evolution_function_hint": "f(t), avec t = l'année",
+	"simulation_evolution_see_more": "Voir plus",
+	"simulation_evolution_see_less": "Voir moins",
 	"simulation_evolution_uncertainty": "Incertitude",
 	"simulation_evolution_legend_curve": "Évolution",
 	"simulation_evolution_legend_cloud": "Nuage d'incertitude (largeur proportionnelle au paramètre d'incertitude)",

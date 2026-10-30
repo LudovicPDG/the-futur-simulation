@@ -99,6 +99,8 @@
 	"simulation_evolution_today": "Today",
 	"simulation_evolution_invalid": "Unreadable evolution function",
 	"simulation_evolution_function_hint": "f(t), with t = the year",
+	"simulation_evolution_see_more": "See more",
+	"simulation_evolution_see_less": "See less",
 	"simulation_evolution_uncertainty": "Uncertainty",
 	"simulation_evolution_legend_curve": "Evolution",
 	"simulation_evolution_legend_cloud": "Uncertainty cloud (width proportional to the uncertainty parameter)",

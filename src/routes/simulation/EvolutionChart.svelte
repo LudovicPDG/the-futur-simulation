@@ -58,6 +58,13 @@
 	const locale = $derived(getLocale());
 	const components = $derived(parseEvolutionFunction(evolution));
 	const totalWeight = $derived(components?.reduce((sum, item) => sum + item.weight, 0) ?? 1);
+	// The most weighted function comes first, the others are shown on demand
+	const sortedComponents = $derived([...(components ?? [])].sort((a, b) => b.weight - a.weight));
+	// The functions that were expanded: another evolution shown by this chart starts collapsed
+	const componentsKey = $derived(JSON.stringify(components));
+	let expandedKey = $state<string | null>(null);
+	const expanded = $derived(expandedKey === componentsKey);
+	const shownComponents = $derived(expanded ? sortedComponents : sortedComponents.slice(0, 1));
 
 	const today = (() => {
 		const now = new Date();
@@ -262,7 +269,7 @@
 		<div class="error-badge">{m.simulation_evolution_invalid()}</div>
 	{:else}
 		<div class="function-list">
-			{#each components as component}
+			{#each shownComponents as component}
 				<div class="function-card">
 					<div class="function-field">
 						<span class="field-label">{m.simulation_evolution_function_label()}</span>
@@ -278,6 +285,16 @@
 					</div>
 				</div>
 			{/each}
+			{#if components.length > 1}
+				<button
+					type="button"
+					class="functions-toggle"
+					aria-expanded={expanded}
+					onclick={() => (expandedKey = expanded ? null : componentsKey)}
+				>
+					{expanded ? m.simulation_evolution_see_less() : m.simulation_evolution_see_more()}
+				</button>
+			{/if}
 			<p class="function-hint">
 				{m.simulation_evolution_function_hint()}{#if unit}&nbsp;· {m.simulation_field_unit()} : {unit}{/if}
 			</p>
@@ -451,6 +468,35 @@
 
 	:global(body.light) .function-weight {
 		color: #243442;
+	}
+
+	.functions-toggle {
+		width: 100%;
+		min-height: 36px;
+		margin-top: 2px;
+		padding: 8px 12px;
+		background: color-mix(in srgb, var(--accent, #34d399) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--accent, #34d399) 50%, transparent);
+		border-radius: 6px;
+		color: var(--accent, #34d399);
+		font-size: 13px;
+		font-weight: 700;
+		cursor: pointer;
+		transition: background 0.15s ease;
+	}
+
+	.functions-toggle:hover {
+		background: color-mix(in srgb, var(--accent, #34d399) 24%, transparent);
+	}
+
+	:global(body.light) .functions-toggle {
+		background: color-mix(in srgb, var(--accent-light, #047857) 10%, transparent);
+		border-color: color-mix(in srgb, var(--accent-light, #047857) 50%, transparent);
+		color: var(--accent-light, #047857);
+	}
+
+	:global(body.light) .functions-toggle:hover {
+		background: color-mix(in srgb, var(--accent-light, #047857) 20%, transparent);
 	}
 
 	.function-hint {
