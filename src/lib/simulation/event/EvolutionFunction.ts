@@ -93,6 +93,23 @@ export function buildEvolutionFunction(components: EvolutionComponent[]): (t: nu
 	};
 }
 
+/**
+ * The mix of functions as one single function: the weighted average of the components, written as one expression,
+ * with the weighted average of their uncertainties.
+ */
+export function combineEvolution(components: EvolutionComponent[]): EvolutionComponent {
+	if (components.length === 1) return components[0];
+	const totalWeight = components.reduce((sum, component) => sum + component.weight, 0);
+	return {
+		function: components
+			.map((component) => `${Math.round((component.weight / totalWeight) * 10000) / 10000} * (${component.function})`)
+			.join(' + '),
+		weight: 1,
+		uncertainty:
+			components.reduce((sum, component) => sum + component.weight * component.uncertainty, 0) / totalWeight
+	};
+}
+
 /** Splits a postgres record literal like ("a ""b""",c) into its raw fields. */
 function parsePgRecord(literal: string): (string | null)[] | null {
 	const input = literal.trim();

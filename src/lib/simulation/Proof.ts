@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
-import { EvolutionTypeSchema } from './event/EvolutionType';
+import { EvolutionFunctionSchema, EvolutionTypeSchema } from './event/EvolutionType';
 
 export type ProofValueKind = 'translation' | 'number' | 'boolean' | 'evolution';
 
@@ -71,6 +71,13 @@ export const ValueScoresSchema = z.object({
 		.describe('The originality of the value, as a percentage from 0 (a copy of an existing one) to 100 (completely new).')
 });
 
+/** A proof gives one single function: the voters of a value are what makes it a mix of functions. */
+const ProofEvolutionSchema = EvolutionTypeSchema.extend({
+	evolution: EvolutionFunctionSchema.describe(
+		'The evolution this proof wants, as a function of the time t: EXACTLY ONE component with the weight 1, never a mix of functions. A hypothesis mixing several scenarios is written as one single function.'
+	)
+});
+
 /**
  * Every part of its value of the element that a top-level proof wants: its content and its scores.
  * All of them are always given (a part the proof keeps repeats the current one).
@@ -78,9 +85,9 @@ export const ValueScoresSchema = z.object({
 export const ValueEditSchema = z.object({
 	// Not z.any(): its JSON schema has no "type", which strict structured outputs reject.
 	value: z
-		.union([TranslationSchema, z.number(), z.boolean(), EvolutionTypeSchema])
+		.union([TranslationSchema, z.number(), z.boolean(), ProofEvolutionSchema])
 		.describe(
-			'The content this proof wants the value to have (the current content if it keeps it). A text is translated in every language (never a plain string). It MUST have the same type as the current value: a number replaces a number, a boolean a boolean, a translated text a translated text, an evolution (a mathjs function of the time t and its unit) an evolution. For the existence of the element, the evolution is a percentage between 0 and 100 with the unit "%".'
+			'The content this proof wants the value to have (the current content if it keeps it). A text is translated in every language (never a plain string). It MUST have the same type as the current value: a number replaces a number, a boolean a boolean, a translated text a translated text, an evolution (ONE mathjs function of the time t and its unit) an evolution. For the existence of the element, the evolution is a percentage between 0 and 100 with the unit "%".'
 		),
 	veracity: ValueScoresSchema.shape.veracity.describe('The veracity this proof wants for the value.'),
 	uncertainty: ValueScoresSchema.shape.uncertainty.describe('The uncertainty this proof wants for the value.'),

@@ -22,6 +22,7 @@ import {
 	resolveValue,
 	valueNames
 } from '$lib/simulation/ProofResolution';
+import { combineEvolution, parseEvolutionFunction } from '$lib/simulation/event/EvolutionFunction';
 import { relationValues, type RelationData } from '$lib/simulation/Relation';
 import { RelationServer } from './Relation';
 import { convertToPg } from './Genie';
@@ -95,11 +96,18 @@ const GeneratedSubProofSchema = SubProofSchema.extend({
 
 type ProofValue = NonNullable<ValueEdit['value']>;
 
+/** A proof gives one single function: an evolution with several (saved like that, or a mixed element) is combined. */
+function withOneFunction<T>(value: T): T {
+	if (valueKind(value) !== 'evolution') return value;
+	const components = parseEvolutionFunction((value as { evolution: unknown }).evolution);
+	return components && components.length > 1 ? { ...value, evolution: [combineEvolution(components)] } : value;
+}
+
 /** Values saved as a plain string (before texts had to be translated) are repeated in every language. */
 function toProofValue(value: unknown): ProofValue | undefined {
 	if (typeof value === 'number' || typeof value === 'boolean') return value;
 	if (typeof value === 'string') return { fr: value, en: value, de: value, es: value };
-	return valueKind(value) ? (value as ProofValue) : undefined;
+	return valueKind(value) ? withOneFunction(value as ProofValue) : undefined;
 }
 
 /**
@@ -117,7 +125,9 @@ function toDesiredValue(
 		: 'value' in kept
 			? { value: toProofValue(stored) }
 			: {};
-	return { ...kept, ...given } as ProofData['desired_value'];
+	const desired = { ...kept, ...given } as Record<string, unknown>;
+	if ('value' in desired) desired.value = withOneFunction(desired.value);
+	return desired as ProofData['desired_value'];
 }
 
 /** The fields of a generated desired value that the proof really changed: the ones it did not leave null. */
@@ -611,7 +621,7 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 ${
 			parentProofId
 				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources, veracity, uncertainty, impact, originality) and null for every other field: they keep their current value exactly. Never rewrite a field that does not need to change. It cannot edit the desired value of the debated proof.'
-				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY the parts of the value that the request asks to change (its content, veracity, uncertainty${scored ? ', impact, originality' : ''}) and null for every other part: they keep their current value exactly.`
+				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY the parts of the value that the request asks to change (its content, veracity, uncertainty${scored ? ', impact, originality' : ''}) and null for every other part: they keep their current value exactly. If its content is an evolution, it holds exactly ONE function (weight 1), never a mix of functions.`
 		}`;
 
 		// The value must exist and the desired content must keep its type: retry once with the error.
