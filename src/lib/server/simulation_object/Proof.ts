@@ -25,7 +25,7 @@ import {
 import { combineEvolution, parseEvolutionFunction } from '$lib/simulation/event/EvolutionFunction';
 import { relationValues, type RelationData } from '$lib/simulation/Relation';
 import { RelationServer } from './Relation';
-import { convertToPg } from './Genie';
+import { convertToPg } from './PgConversion';
 import { db } from '../utils/database';
 
 /** The element a proof is about: a fact (or subtype) or a relation. */

@@ -3,7 +3,7 @@ import {
 	InterestGroupSchema,
 	type InterestGroupData
 } from '$lib/simulation/character/Interest_group';
-import { convertToPg, convertToPgNullable } from '../Genie';
+import { convertToPg, convertToPgNullable } from '../PgConversion';
 import { db } from '../../utils/database';
 
 export class InterestGroupServer extends BaseSimulationObject<InterestGroupData> {

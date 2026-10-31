@@ -1,6 +1,6 @@
 import { BaseSimulationObject } from './BaseSimulationObject';
 import { ActionSchema, type ActionData } from '$lib/simulation/Action';
-import { convertToPg, convertToPgNullable } from './Genie';
+import { convertToPg, convertToPgNullable } from './PgConversion';
 import { db } from '../utils/database';
 
 export class ActionServer extends BaseSimulationObject<ActionData> {

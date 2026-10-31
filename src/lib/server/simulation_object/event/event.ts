@@ -1,6 +1,6 @@
 import { BaseSimulationObject } from '../BaseSimulationObject';
 import { EventSchema, type EventData } from '$lib/simulation/event/event';
-import { convertToPg, convertToPgNullable } from '../Genie';
+import { convertToPg, convertToPgNullable } from '../PgConversion';
 import { db } from '../../utils/database';
 
 export class EventServer extends BaseSimulationObject<EventData> {

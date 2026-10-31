@@ -1,6 +1,6 @@
 import { BaseSimulationObject } from '../BaseSimulationObject';
 import { PersonSchema, type PersonData } from '$lib/simulation/character/Person';
-import { convertToPg, convertToPgNullable } from '../Genie';
+import { convertToPg, convertToPgNullable } from '../PgConversion';
 import { db } from '../../utils/database';
 
 export class PersonServer extends BaseSimulationObject<PersonData> {

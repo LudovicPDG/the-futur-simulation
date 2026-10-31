@@ -16,6 +16,8 @@
 		parseEvolutionFunction,
 		parseEvolutionValue,
 		buildEvolutionFunction,
+		buildEvolutionUncertainty,
+		formatUncertainty,
 		type EvolutionValue
 	} from '$lib/simulation/event/EvolutionFunction';
 	import type { ProofData } from '$lib/simulation/Proof';
@@ -187,15 +189,12 @@
 		const parsed = parseEvolutionValue(raw);
 		if (!parsed) return null;
 		const score = buildEvolutionFunction(parsed.evolution)(currentYear());
-		const totalWeight = parsed.evolution.reduce((sum, item) => sum + item.weight, 0) || 1;
-		const uncertainty =
-			(parsed.evolution.reduce((sum, item) => sum + item.uncertainty * item.weight, 0) / totalWeight) * 100;
+		const { down, up } = buildEvolutionUncertainty(parsed.evolution)(currentYear());
+		const formatter = new Intl.NumberFormat(currentLocale, { maximumFractionDigits: 2 });
 		return {
 			label: formatLabel(key),
-			amount: Number.isFinite(score)
-				? new Intl.NumberFormat(currentLocale, { maximumFractionDigits: 2 }).format(score)
-				: '—',
-			uncertainty: uncertainty > 0 ? `±${Math.round(uncertainty * 10) / 10}%` : '',
+			amount: Number.isFinite(score) ? formatter.format(score) : '—',
+			uncertainty: down > 0 || up > 0 ? formatUncertainty(formatter.format(down), formatter.format(up)) : '',
 			unit: parsed.unit
 		};
 	}
@@ -323,7 +322,7 @@
 	// Text summary of an evolution, for the places where its chart does not fit (lists...)
 	function formatEvolution({ evolution, unit }: EvolutionValue): string {
 		const mix = evolution
-			.map((item) => (evolution.length > 1 ? `${item.weight} × (${item.function})` : item.function) + ` ±${Math.round(item.uncertainty * 1000) / 10}%`)
+			.map((item) => (evolution.length > 1 ? `${item.weight} × (${item.function})` : item.function) + ` (${m.simulation_evolution_uncertainty_above()} : ${item.uncertainty_up} ; ${m.simulation_evolution_uncertainty_below()} : ${item.uncertainty_down})`)
 			.join(' + ');
 		return unit ? `${mix} [${unit}]` : mix;
 	}

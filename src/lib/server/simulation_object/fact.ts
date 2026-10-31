@@ -1,6 +1,6 @@
 import { BaseSimulationObject } from './BaseSimulationObject';
 import { FactSchema, type FactData } from '$lib/simulation/fact';
-import { convertToPg, convertToPgNullable } from './Genie';
+import { convertToPg, convertToPgNullable } from './PgConversion';
 import { db } from '../utils/database';
 
 export class FactServer extends BaseSimulationObject<FactData> {

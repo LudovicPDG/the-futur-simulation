@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UncertaintySchema } from './event/EvolutionType';
+import { UncertaintyDownSchema, UncertaintyUpSchema } from './event/EvolutionType';
 import { isPercentageFunction } from './event/EvolutionFunction';
 
 /**
@@ -20,7 +20,8 @@ export const PercentageEvolutionSchema = z.object({
 						'A mathjs expression of the time t, where t is the calendar year as a decimal number (2026.75 = October 2026). It gives a PERCENTAGE: for every t the result must be between 0 and 100 (use min/max to be sure). A constant such as "80" is fine for something that does not change. Use a smooth step such as "50 * (1 + tanh((t - 1977.17) / 0.0005))" for a value that goes from 0 to 100 around a moment, and multiply steps to rise and fall.'
 					),
 				weight: z.number().positive().describe('The weight of this function in the mix of functions.'),
-				uncertainty: UncertaintySchema
+				uncertainty_down: UncertaintyDownSchema,
+				uncertainty_up: UncertaintyUpSchema
 			})
 		)
 		.min(1)

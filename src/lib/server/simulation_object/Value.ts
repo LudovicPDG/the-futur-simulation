@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
-import { convertToPg } from './Genie';
+import { convertToPg } from './PgConversion';
 import { db } from '../utils/database';
 import { TitledItemSchema } from '$lib/simulation/Translation';
 import { OtherValueSchema, type FactData } from '$lib/simulation/fact';

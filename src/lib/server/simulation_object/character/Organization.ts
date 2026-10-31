@@ -1,6 +1,6 @@
 import { BaseSimulationObject } from '../BaseSimulationObject';
 import { OrganizationSchema, type OrganizationData } from '$lib/simulation/character/Organization';
-import { convertToPg, convertToPgNullable } from '../Genie';
+import { convertToPg, convertToPgNullable } from '../PgConversion';
 import { db } from '../../utils/database';
 
 export class OrganizationServer extends BaseSimulationObject<OrganizationData> {

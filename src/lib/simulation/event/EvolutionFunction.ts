@@ -1,4 +1,4 @@
-import { all, create } from 'mathjs';
+import { all, create, type EvalFunction } from 'mathjs';
 
 /**
  * One component of an evolution: a mathematical function of the time t and its weight.
@@ -7,8 +7,16 @@ import { all, create } from 'mathjs';
 export interface EvolutionComponent {
 	function: string;
 	weight: number;
-	/** Relative uncertainty of the values of this function (0.1 = +-10%) */
-	uncertainty: number;
+	/** Distance (about 2 sigma) below the function, as a mathjs expression of t and of its value v at t. */
+	uncertainty_down: string;
+	/** Distance (about 2 sigma) above the function, as a mathjs expression of t and of its value v at t. */
+	uncertainty_up: string;
+}
+
+/** The two sides of an uncertainty at one moment: the function is the median, each side has its own spread. */
+export interface EvolutionUncertainty {
+	down: number;
+	up: number;
 }
 
 const math = create(all);
@@ -35,10 +43,12 @@ math.import(
 
 /** Reference date used to check that a function is computable (decimal year, 2026.75 = Oct. 2026). */
 const CHECK_YEARS = [2026.75, 2035, 2050, 2075];
+/** Values of a function used to check that an uncertainty is computable. */
+const CHECK_VALUES = [1, 100];
 
-function evaluateCompiled(compiled: { evaluate: (scope: object) => unknown }, t: number): number {
+function evaluateCompiled(compiled: { evaluate: (scope: object) => unknown }, t: number, v?: number): number {
 	try {
-		const value = compiled.evaluate({ t });
+		const value = compiled.evaluate(v === undefined ? { t } : { t, v });
 		return typeof value === 'number' ? value : Number.NaN;
 	} catch {
 		return Number.NaN;
@@ -55,20 +65,61 @@ export function isValidEvolutionFunction(expression: string): boolean {
 	}
 }
 
+/** True when the expression compiles and gives a distance (a finite number, not negative) for t in the next decades. */
+export function isValidUncertaintyFunction(expression: string): boolean {
+	try {
+		const compiled = compile(expression);
+		return CHECK_YEARS.some((t) =>
+			CHECK_VALUES.some((v) => {
+				const distance = evaluateCompiled(compiled, t, v);
+				return Number.isFinite(distance) && distance >= 0;
+			})
+		);
+	} catch {
+		return false;
+	}
+}
+
+/** Builds the function (t, v) -> distance of one side of an uncertainty: 0 where it is negative or not computable. */
+function buildDistance(expression: string): (t: number, v: number) => number {
+	let compiled: EvalFunction;
+	try {
+		compiled = compile(expression);
+	} catch {
+		return () => 0;
+	}
+	return (t, v) => {
+		const distance = evaluateCompiled(compiled, t, v);
+		return Number.isFinite(distance) ? Math.max(0, distance) : 0;
+	};
+}
+
 /**
- * Builds the function t -> half-width (about 2 sigma) of the uncertainty of an evolution: the weighted
- * average of the uncertainty (a share of the value) of each of its components.
+ * Builds the function t -> distances (about 2 sigma) of the uncertainty of an evolution below and above it: on each
+ * side, the weighted average of the distance of each of its components.
  */
-export function buildEvolutionUncertainty(components: EvolutionComponent[]): (t: number) => number {
+export function buildEvolutionUncertainty(components: EvolutionComponent[]): (t: number) => EvolutionUncertainty {
 	const parts = components.map((component) => ({
 		valueAt: buildEvolutionFunction([component]),
-		uncertainty: component.uncertainty,
+		down: buildDistance(component.uncertainty_down),
+		up: buildDistance(component.uncertainty_up),
 		weight: component.weight
 	}));
 	const totalWeight = components.reduce((sum, component) => sum + component.weight, 0);
-	return (t: number) =>
-		parts.reduce((sum, part) => sum + part.weight * part.uncertainty * Math.abs(part.valueAt(t)), 0) /
-		totalWeight;
+	return (t: number) => {
+		const uncertainty = { down: 0, up: 0 };
+		for (const part of parts) {
+			const v = part.valueAt(t);
+			uncertainty.down += (part.weight * part.down(t, v)) / totalWeight;
+			uncertainty.up += (part.weight * part.up(t, v)) / totalWeight;
+		}
+		return uncertainty;
+	};
+}
+
+/** The two sides of an uncertainty as a short text (numbers, not expressions): a single ± when they are the same. */
+export function formatUncertainty(down: string, up: string): string {
+	return down === up ? `± ${down}` : `− ${down} | + ${up}`;
 }
 
 /**
@@ -95,18 +146,24 @@ export function buildEvolutionFunction(components: EvolutionComponent[]): (t: nu
 
 /**
  * The mix of functions as one single function: the weighted average of the components, written as one expression,
- * with the weighted average of their uncertainties.
+ * with the weighted average of their uncertainties. In an uncertainty, v is the value of its own component: it is
+ * replaced by this component, since v would otherwise become the value of the whole mix.
  */
 export function combineEvolution(components: EvolutionComponent[]): EvolutionComponent {
 	if (components.length === 1) return components[0];
 	const totalWeight = components.reduce((sum, component) => sum + component.weight, 0);
+	const mix = (expressionOf: (component: EvolutionComponent) => string) =>
+		components
+			.map((component) => `${Math.round((component.weight / totalWeight) * 10000) / 10000} * (${expressionOf(component)})`)
+			.join(' + ');
+	// A side is kept at 0 or above on its own, as it is when the components are computed separately.
+	const distance = (expressionOf: (component: EvolutionComponent) => string) =>
+		mix((component) => `max(0, ${expressionOf(component).replace(/\bv\b/g, () => `(${component.function})`)})`);
 	return {
-		function: components
-			.map((component) => `${Math.round((component.weight / totalWeight) * 10000) / 10000} * (${component.function})`)
-			.join(' + '),
+		function: mix((component) => component.function),
 		weight: 1,
-		uncertainty:
-			components.reduce((sum, component) => sum + component.weight * component.uncertainty, 0) / totalWeight
+		uncertainty_down: distance((component) => component.uncertainty_down),
+		uncertainty_up: distance((component) => component.uncertainty_up)
 	};
 }
 
@@ -148,10 +205,13 @@ function toComponents(raw: unknown): EvolutionComponent[] | null {
 		const expression = (item as Record<string, unknown>).function;
 		const weight = Number((item as Record<string, unknown>).weight ?? 1);
 		if (typeof expression !== 'string' || expression.trim() === '') return null;
+		const record = item as Record<string, unknown>;
+		const legacy = legacyUncertainty(record.uncertainty);
 		components.push({
 			function: expression,
 			weight: Number.isFinite(weight) && weight > 0 ? weight : 1,
-			uncertainty: parseUncertainty((item as Record<string, unknown>).uncertainty)
+			uncertainty_down: parseDistance(record.uncertainty_down) ?? legacy,
+			uncertainty_up: parseDistance(record.uncertainty_up) ?? legacy
 		});
 	}
 	return components;
@@ -171,7 +231,9 @@ export function parseEvolutionFunction(raw: unknown): EvolutionComponent[] | nul
 				return null;
 			}
 		}
-		return text === '' ? null : [{ function: text, weight: 1, uncertainty: DEFAULT_UNCERTAINTY }];
+		if (text === '') return null;
+		const legacy = legacyUncertainty(DEFAULT_UNCERTAINTY);
+		return [{ function: text, weight: 1, uncertainty_down: legacy, uncertainty_up: legacy }];
 	}
 	if (typeof raw === 'object' && raw !== null && !Array.isArray(raw) && 'function' in raw) {
 		return toComponents([raw]);
@@ -186,12 +248,20 @@ export interface EvolutionValue {
 
 export const DEFAULT_UNCERTAINTY = 0.1;
 
-/** Reads an uncertainty (number or numeric text), falling back to the default one */
-export function parseUncertainty(raw: unknown): number {
+/** Reads one side of an uncertainty (an expression or a number), or undefined when it is not given. */
+function parseDistance(raw: unknown): string | undefined {
+	if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) return String(raw);
+	return typeof raw === 'string' && raw.trim() !== '' ? raw : undefined;
+}
+
+/**
+ * The expression of the uncertainty saved before it had two sides: one number or numeric text, a share of the value
+ * (0.1 = +-10%), falling back to the default one.
+ */
+function legacyUncertainty(raw: unknown): string {
 	const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
-	return typeof value === 'number' && Number.isFinite(value) && value >= 0
-		? Math.min(value, 1)
-		: DEFAULT_UNCERTAINTY;
+	const share = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(value, 1) : DEFAULT_UNCERTAINTY;
+	return share === 0 ? '0' : `${share} * abs(v)`;
 }
 
 /**

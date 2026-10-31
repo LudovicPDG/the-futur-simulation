@@ -49,7 +49,8 @@
 	interface CurvePoint {
 		t: number;
 		value: number;
-		width: number;
+		down: number;
+		up: number;
 	}
 
 	let svgRef = $state<SVGSVGElement | null>(null);
@@ -121,7 +122,17 @@
 		if (!components) return null;
 		const valueAt = buildEvolutionFunction(components);
 
-		const uncertaintyAt = buildEvolutionUncertainty(components);
+		const distancesAt = buildEvolutionUncertainty(components);
+		// A value with fixed bounds (a probability) has no uncertainty beyond them.
+		const uncertaintyAt = (t: number) => {
+			const { down, up } = distancesAt(t);
+			if (!bounds) return { down, up };
+			const value = valueAt(t);
+			return {
+				down: Math.min(down, Math.max(0, value - bounds[0])),
+				up: Math.min(up, Math.max(0, bounds[1] - value))
+			};
+		};
 		const values: { t: number; value: number }[] = [];
 		if (drawn && shownFrom <= shownTo) {
 			const times: number[] = [];
@@ -146,12 +157,13 @@
 
 		const [minValue, maxValue] = d3.extent(values, (d) => d.value) as [number, number];
 		const range = maxValue - minValue > 1e-9 ? maxValue - minValue : Math.max(Math.abs(maxValue), 1) * 0.2;
-		// The cloud is the uncertainty of the components (a share of their value), never thinner than a few pixels.
+		// The cloud is the uncertainty of the components on each side, never thinner than a few pixels.
 		// This minimum is only for the drawing: the readout gives the real uncertainty.
-		const curve: CurvePoint[] = values.map((d) => ({
-			...d,
-			width: Math.max(uncertaintyAt(d.t), range * MIN_WIDTH_SHARE)
-		}));
+		const minWidth = range * MIN_WIDTH_SHARE;
+		const curve: CurvePoint[] = values.map((d) => {
+			const { down, up } = uncertaintyAt(d.t);
+			return { ...d, down: Math.max(down, minWidth), up: Math.max(up, minWidth) };
+		});
 
 		return { valueAt, uncertaintyAt, curve };
 	});
@@ -163,8 +175,8 @@
 	const geometry = $derived.by(() => {
 		if (!model) return null;
 		const xScale = d3.scaleLinear().domain([lo, hi]).range([0, innerWidth]);
-		const low = d3.min(model.curve, (d) => d.value - d.width) ?? 0;
-		const high = d3.max(model.curve, (d) => d.value + d.width) ?? 1;
+		const low = d3.min(model.curve, (d) => d.value - d.down) ?? 0;
+		const high = d3.max(model.curve, (d) => d.value + d.up) ?? 1;
 
 		const yScale = bounds
 			? d3.scaleLinear().domain(bounds).range([innerHeight, 0])
@@ -175,14 +187,17 @@
 			.x((d) => xScale(d.t))
 			.y((d) => yScale(d.value))
 			.curve(d3.curveMonotoneX);
-		// The cloud is the density of a normal law of standard deviation w/2 around the curve (so that
-		// +-w is about +-2 sigma), drawn as nested bands: the denser the color, the more probable.
+		// The cloud is the density of a normal law on each side of the curve, of standard deviation w/2 with the
+		// width w of this side (so that w is about 2 sigma), drawn as nested bands: the denser the color, the more
+		// probable. It stops at the fixed bounds of the value.
+		const inBounds = (value: number) =>
+			bounds ? Math.min(bounds[1], Math.max(bounds[0], value)) : value;
 		const cloud = CLOUD_LEVELS.map((level) =>
 			d3
 				.area<CurvePoint>()
 				.x((d) => xScale(d.t))
-				.y0((d) => yScale(d.value - (level * d.width) / 2))
-				.y1((d) => yScale(d.value + (level * d.width) / 2))
+				.y0((d) => yScale(inBounds(d.value - (level * d.down) / 2)))
+				.y1((d) => yScale(inBounds(d.value + (level * d.up) / 2)))
 				.curve(d3.curveMonotoneX)(model.curve) || ''
 		);
 
@@ -276,12 +291,16 @@
 						<span class="function-expression">{component.function}</span>
 					</div>
 					<div class="function-field weight">
-						<span class="field-label">{m.simulation_evolution_uncertainty()}</span>
-						<span class="function-weight">± {Math.round(component.uncertainty * 1000) / 10}%</span>
-					</div>
-					<div class="function-field weight">
 						<span class="field-label">{m.simulation_distribution_weight()}</span>
 						<span class="function-weight">{Math.round((component.weight / totalWeight) * 1000) / 10}%</span>
+					</div>
+					<div class="function-field uncertainty">
+						<span class="field-label">{m.simulation_evolution_uncertainty_above()}</span>
+						<span class="function-weight">{component.uncertainty_up}</span>
+					</div>
+					<div class="function-field uncertainty">
+						<span class="field-label">{m.simulation_evolution_uncertainty_below()}</span>
+						<span class="function-weight">{component.uncertainty_down}</span>
 					</div>
 				</div>
 			{/each}
@@ -383,8 +402,12 @@
 					<span class="readout-value">{preciseFormatter.format(active.value)} {unit}</span>
 				</span>
 				<span>
-					{m.simulation_evolution_uncertainty()} :
-					<span class="readout-value">± {preciseFormatter.format(active.uncertainty)} {unit}</span>
+					{m.simulation_evolution_uncertainty_above()} :
+					<span class="readout-value">+{preciseFormatter.format(active.uncertainty.up)} {unit}</span>
+				</span>
+				<span>
+					{m.simulation_evolution_uncertainty_below()} :
+					<span class="readout-value">−{preciseFormatter.format(active.uncertainty.down)} {unit}</span>
 				</span>
 			{:else}
 				<span class="readout-empty">—</span>
@@ -414,6 +437,7 @@
 
 	.function-card {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		gap: 8px;
 		padding: 5px 8px;
@@ -441,6 +465,7 @@
 
 	.function-field {
 		display: flex;
+		flex: 1 1 0;
 		flex-direction: column;
 		gap: 1px;
 		min-width: 0;
@@ -449,6 +474,12 @@
 	.function-field.weight {
 		align-items: flex-end;
 		flex: none;
+	}
+
+	/* An uncertainty is an expression of its own: it takes a whole line. */
+	.function-field.uncertainty {
+		flex: 1 0 100%;
+		overflow-wrap: anywhere;
 	}
 
 	.field-label {

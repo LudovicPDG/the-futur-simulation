@@ -5,7 +5,8 @@ import { occurrenceSchema } from '../Existence';
 import { EvolutionFunctionSchema, EvolutionTypeSchema } from './EvolutionType';
 
 export {
-	UncertaintySchema,
+	UncertaintyDownSchema,
+	UncertaintyUpSchema,
 	EvolutionComponentSchema,
 	EvolutionFunctionSchema,
 	EvolutionTypeSchema

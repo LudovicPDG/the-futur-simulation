@@ -10,8 +10,8 @@ export const db = new Pool({
 	password: process.env.POSTGRES_PASSWORD
 });
 
-const DEFAULT_EXISTENCE = `ROW('[{"function":"100","weight":1,"uncertainty":0}]'::jsonb, '%')::evolution_t`;
-const DEFAULT_ZERO_EVOLUTION = `ROW('[{"function":"0","weight":1,"uncertainty":0}]'::jsonb, '')::evolution_t`;
+const DEFAULT_EXISTENCE = `ROW('[{"function":"100","weight":1,"uncertainty_down":"0","uncertainty_up":"0"}]'::jsonb, '%')::evolution_t`;
+const DEFAULT_ZERO_EVOLUTION = `ROW('[{"function":"0","weight":1,"uncertainty_down":"0","uncertainty_up":"0"}]'::jsonb, '')::evolution_t`;
 
 /**
  * Creates the whole schema from scratch (the database is expected to be empty).

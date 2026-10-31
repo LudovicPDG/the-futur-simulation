@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { OPENROUTER_API_KEY } from '$env/static/private';
-import { Genie, convertToPg } from './Genie';
+import { env } from '$env/dynamic/private';
+import { GENIE_SYSTEM_PROMPT } from './GeniePrompt';
 import { db } from '../utils/database';
 
 export abstract class BaseSimulationObject<
@@ -60,7 +60,7 @@ export abstract class BaseSimulationObject<
 		schema: S
 	): Promise<z.infer<S>> {
 		const task_prompt =
-			Genie.system_prompt +
+			GENIE_SYSTEM_PROMPT +
 			`
 
 			## Your task
@@ -76,7 +76,7 @@ export abstract class BaseSimulationObject<
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
 			headers: {
-				Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+				Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
 				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({

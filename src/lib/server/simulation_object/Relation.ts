@@ -5,7 +5,7 @@ import {
 	RelationSchema,
 	type RelationData
 } from '$lib/simulation/Relation';
-import { convertToPg } from './Genie';
+import { convertToPg } from './PgConversion';
 import { db } from '../utils/database';
 import { z } from 'zod';
 import type { RelationListField } from '$lib/simulation/Relation';
