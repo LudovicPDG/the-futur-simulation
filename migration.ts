@@ -145,10 +145,11 @@ export async function createDatabase() {
 				verification_method translation_t NOT NULL,
 				falsifiability_method translation_t NOT NULL,
 				source TEXT[] NOT NULL DEFAULT '{}',
-				veracity NUMERIC NOT NULL DEFAULT 50.0 CHECK (veracity >= 0 AND veracity <= 100),
-				uncertainty NUMERIC NOT NULL DEFAULT 50.0 CHECK (uncertainty >= 0 AND uncertainty <= 100),
+				-- Véracité, incertitude et impact : des fonctions du temps t (expressions mathjs, valeurs de 0 à 100), sans incertitude
+				veracity TEXT NOT NULL DEFAULT '50',
+				uncertainty TEXT NOT NULL DEFAULT '50',
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100),
-				impact NUMERIC NOT NULL DEFAULT 0.0,
+				impact TEXT NOT NULL DEFAULT '0',
 				value_name JSONB,
 				desired_value JSONB NOT NULL,
 				-- Les champs de desired_value que la preuve modifie vraiment : seuls eux votent

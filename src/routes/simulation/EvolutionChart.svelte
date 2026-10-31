@@ -14,6 +14,8 @@
 		unit = '',
 		existence: existenceEvolution,
 		clipToExistence = true,
+		showExistence = true,
+		showUncertainty = true,
 		bounds,
 		width = 320,
 		height = 210,
@@ -25,6 +27,10 @@
 		existence?: unknown;
 		/** False to draw the curve outside of the existence too (the existence curve itself) */
 		clipToExistence?: boolean;
+		/** False to leave out the sentence about the existence (a score does not have one) */
+		showExistence?: boolean;
+		/** False for a function without uncertainty (a score): no cloud, no uncertainty above and below */
+		showUncertainty?: boolean;
 		/** Fixed bounds of the vertical axis (a probability goes from 0 to 1) */
 		bounds?: [number, number];
 		width?: number;
@@ -294,14 +300,16 @@
 						<span class="field-label">{m.simulation_distribution_weight()}</span>
 						<span class="function-weight">{Math.round((component.weight / totalWeight) * 1000) / 10}%</span>
 					</div>
-					<div class="function-field uncertainty">
-						<span class="field-label">{m.simulation_evolution_uncertainty_above()}</span>
-						<span class="function-weight">{component.uncertainty_up}</span>
-					</div>
-					<div class="function-field uncertainty">
-						<span class="field-label">{m.simulation_evolution_uncertainty_below()}</span>
-						<span class="function-weight">{component.uncertainty_down}</span>
-					</div>
+					{#if showUncertainty}
+						<div class="function-field uncertainty">
+							<span class="field-label">{m.simulation_evolution_uncertainty_above()}</span>
+							<span class="function-weight">{component.uncertainty_up}</span>
+						</div>
+						<div class="function-field uncertainty">
+							<span class="field-label">{m.simulation_evolution_uncertainty_below()}</span>
+							<span class="function-weight">{component.uncertainty_down}</span>
+						</div>
+					{/if}
 				</div>
 			{/each}
 			{#if components.length > 1}
@@ -340,9 +348,11 @@
 						<text x={x} y={innerHeight + 14} class="axis-label x-axis">{formatTick(tick)}</text>
 					{/each}
 
-					{#each geometry.cloud as band}
-						<path d={band} class="cloud-band" />
-					{/each}
+					{#if showUncertainty}
+						{#each geometry.cloud as band}
+							<path d={band} class="cloud-band" />
+						{/each}
+					{/if}
 					<path d={geometry.linePath} class="curve" />
 
 					<!-- Existence of the fact: the evolution only exists between these two moments -->
@@ -383,16 +393,18 @@
 			</svg>
 		</div>
 
-		<p class="function-hint">
-			{#if !existence.exists}
-				{m.simulation_evolution_never_exists()}
-			{:else}
-				{m.simulation_evolution_existence({
-					start: Number.isFinite(existence.from) ? formatDate(existence.from) : '…',
-					end: Number.isFinite(existence.to) ? formatDate(existence.to) : '…'
-				})}
-			{/if}
-		</p>
+		{#if showExistence}
+			<p class="function-hint">
+				{#if !existence.exists}
+					{m.simulation_evolution_never_exists()}
+				{:else}
+					{m.simulation_evolution_existence({
+						start: Number.isFinite(existence.from) ? formatDate(existence.from) : '…',
+						end: Number.isFinite(existence.to) ? formatDate(existence.to) : '…'
+					})}
+				{/if}
+			</p>
+		{/if}
 
 		<div class="readout">
 			{#if active}
@@ -401,14 +413,16 @@
 					{m.simulation_field_value()} :
 					<span class="readout-value">{preciseFormatter.format(active.value)} {unit}</span>
 				</span>
-				<span>
-					{m.simulation_evolution_uncertainty_above()} :
-					<span class="readout-value">+{preciseFormatter.format(active.uncertainty.up)} {unit}</span>
-				</span>
-				<span>
-					{m.simulation_evolution_uncertainty_below()} :
-					<span class="readout-value">−{preciseFormatter.format(active.uncertainty.down)} {unit}</span>
-				</span>
+				{#if showUncertainty}
+					<span>
+						{m.simulation_evolution_uncertainty_above()} :
+						<span class="readout-value">+{preciseFormatter.format(active.uncertainty.up)} {unit}</span>
+					</span>
+					<span>
+						{m.simulation_evolution_uncertainty_below()} :
+						<span class="readout-value">−{preciseFormatter.format(active.uncertainty.down)} {unit}</span>
+					</span>
+				{/if}
 			{:else}
 				<span class="readout-empty">—</span>
 			{/if}
@@ -416,7 +430,9 @@
 
 		<div class="legend">
 			<span class="legend-item"><span class="swatch line"></span>{m.simulation_evolution_legend_curve()}</span>
-			<span class="legend-item"><span class="swatch cloud"></span>{m.simulation_evolution_legend_cloud()}</span>
+			{#if showUncertainty}
+				<span class="legend-item"><span class="swatch cloud"></span>{m.simulation_evolution_legend_cloud()}</span>
+			{/if}
 		</div>
 	{/if}
 </div>

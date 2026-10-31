@@ -13,7 +13,8 @@
 		"lint": "prettier --check .",
 		"format": "prettier --write .",
 		"db:init": "tsx --env-file=.env ./migration.ts",
-		"db:reset": "tsx --env-file=.env ./delete_db.ts"
+		"db:reset": "tsx --env-file=.env ./delete_db.ts",
+		"db:migrate-proof-scores": "tsx --env-file=.env ./migrate_proof_scores.ts"
 	},
 	"devDependencies": {
 		"@inlang/paraglide-js": "^2.18.2",

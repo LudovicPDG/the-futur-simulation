@@ -190,7 +190,7 @@
 
 	<TimeMachine bind:date={simulationDate} />
 
-	<MainBackground new_element={form?.result} simulation_data={$simulationStore.all_elements} />
+	<MainBackground new_element={form?.result} simulation_data={$simulationStore.all_elements} date={simulationDate} />
 
 	<!-- Prompt -->
 	<form

@@ -11,7 +11,8 @@ export abstract class BaseSimulationObject<
 		other?: any;
 		existence?: any;
 		originality?: number;
-		impact?: number;
+		/** One number for an element, a function of the time for a proof. */
+		impact?: unknown;
 	}
 > {
 	protected abstract schema: z.ZodType<T>;

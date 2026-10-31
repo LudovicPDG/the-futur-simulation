@@ -7,7 +7,7 @@
 	import { clickOutside } from '$lib/actions/clickOutside';
 	import { getLocale } from '$lib/paraglide/runtime';
 	import * as m from '$lib/paraglide/messages';
-	import EvolutionChart from './EvolutionChart.svelte';
+	import DatedValue from './DatedValue.svelte';
 	import ValueParameters, {
 		type RelationInfluenceEntry,
 		type ValueInfluence
@@ -21,7 +21,8 @@
 		type EvolutionValue
 	} from '$lib/simulation/event/EvolutionFunction';
 	import type { ProofData } from '$lib/simulation/Proof';
-	import { resolveValue } from '$lib/simulation/ProofResolution';
+	import { resolveAtDate, resolveValue, resolveValueFunctions } from '$lib/simulation/ProofResolution';
+	import { dateToYear } from '$lib/simulation/TimeAxis';
 	import { onMount } from 'svelte';
 	import {
 		addProofTarget,
@@ -35,8 +36,13 @@
 
 	let {
 		new_element,
-		simulation_data = []
-	}: { new_element?: any; simulation_data?: SimulationElementWithId[] } = $props();
+		simulation_data: storedData = [],
+		date = new Date()
+	}: { new_element?: any; simulation_data?: SimulationElementWithId[]; date?: Date } = $props();
+
+	// The date of the time machine, as a decimal year: every value is shown as it stands at this moment.
+	const year = $derived(dateToYear(date.getTime()));
+	const simulation_data = $derived(resolveAtDate(storedData, year));
 
 	let cameraX = $state(400);
 	let cameraY = $state(300);
@@ -184,12 +190,12 @@
 
 	// The entries of a list. An entry with a title (capability, willingness...) is shown by its title, which is what
 	// relations and proofs target; its description comes next.
-	// A parameter of a list entry (quantity, level of wear...) shown as its number now, its uncertainty and its unit
+	// A parameter of a list entry (quantity, level of wear...) shown as its number at the date, its uncertainty and its unit
 	function entryParameter(key: string, raw: unknown): ItemParameter | null {
 		const parsed = parseEvolutionValue(raw);
 		if (!parsed) return null;
-		const score = buildEvolutionFunction(parsed.evolution)(currentYear());
-		const { down, up } = buildEvolutionUncertainty(parsed.evolution)(currentYear());
+		const score = buildEvolutionFunction(parsed.evolution)(year);
+		const { down, up } = buildEvolutionUncertainty(parsed.evolution)(year);
 		const formatter = new Intl.NumberFormat(currentLocale, { maximumFractionDigits: 2 });
 		return {
 			label: formatLabel(key),
@@ -296,10 +302,10 @@
 		return String(value);
 	}
 
-	// The entries of a ranking, ordered by their value now (highest first), each with its rank, number and unit.
+	// The entries of a ranking, ordered by their value at the date (highest first), each with its rank, number and unit.
 	function rankingEntries(value: unknown) {
 		if (!Array.isArray(value)) return [];
-		const t = currentYear();
+		const t = year;
 		return value
 			.map((item) => {
 				const record = (item ?? {}) as Record<string, unknown>;
@@ -319,12 +325,14 @@
 			.sort((a, b) => (Number.isFinite(b.score) ? b.score : -Infinity) - (Number.isFinite(a.score) ? a.score : -Infinity));
 	}
 
-	// Text summary of an evolution, for the places where its chart does not fit (lists...)
+	// Text of an evolution at the date, for the places where a whole block does not fit (lists...)
 	function formatEvolution({ evolution, unit }: EvolutionValue): string {
-		const mix = evolution
-			.map((item) => (evolution.length > 1 ? `${item.weight} × (${item.function})` : item.function) + ` (${m.simulation_evolution_uncertainty_above()} : ${item.uncertainty_up} ; ${m.simulation_evolution_uncertainty_below()} : ${item.uncertainty_down})`)
-			.join(' + ');
-		return unit ? `${mix} [${unit}]` : mix;
+		const value = buildEvolutionFunction(evolution)(year);
+		if (!Number.isFinite(value)) return m.simulation_evolution_invalid();
+		const { down, up } = buildEvolutionUncertainty(evolution)(year);
+		const formatter = new Intl.NumberFormat(currentLocale, { maximumSignificantDigits: 4 });
+		const amount = unit ? `${formatter.format(value)} ${unit}` : formatter.format(value);
+		return down > 0 || up > 0 ? `${amount} (${formatUncertainty(formatter.format(down), formatter.format(up))})` : amount;
 	}
 
 	// The evolution drawn by the chart for a field: an evolution_t value, or the function of an evolution element
@@ -529,7 +537,11 @@
 		return { relations: renderedRelations, nodes: renderedNodes };
 	});
 
-	const activeElement = $derived(hoveredElement ?? selectedElement);
+	// The element as it stands at the date: the time machine can move while its details are open.
+	const activeElement = $derived.by(() => {
+		const source = hoveredElement ?? selectedElement;
+		return source ? (simulation_data.find((element) => element.id === source.id) ?? source) : null;
+	});
 	const activeRelation = $derived(isRelationElement(activeElement) ? activeElement : null);
 	const relationElement1 = $derived(
 		activeRelation
@@ -630,10 +642,6 @@
 		}
 		return [];
 	}
-	function currentYear(): number {
-		const year = new Date().getUTCFullYear();
-		return year + (Date.now() - Date.UTC(year, 0, 1)) / 31_557_600_000;
-	}
 	const allRelations = $derived(
 		simulation_data.filter((element): element is SimulationElementWithId & RelationData =>
 			isRelationElement(element)
@@ -708,8 +716,8 @@
 					return kept.length > 0 ? [{ relation, entries: kept }] : [];
 				});
 
-		// Scores: the ones of the best proof of the value (the founding proof among them).
-		const voted = resolveValue(proofs);
+		// Scores: the weighted average voted by the proofs of the value (the founding proof among them).
+		const voted = resolveValue(proofs, year);
 		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'originality'): number => voted[key] ?? NaN;
 		const veracityNow = score('veracity');
 		const uncertaintyNow = score('uncertainty');
@@ -735,9 +743,11 @@
 						? formatValue(impactNow)
 						: null,
 			originality: Number.isFinite(originalityNow) ? `${Math.round(originalityNow as number)}%` : null,
+			functions: resolveValueFunctions(proofs),
 			allProofs,
 			proofs,
 			relations,
+			year,
 			existence: activeExistence?.evolution,
 			accent: typeof name === 'string' ? ACCENTS[name] : undefined,
 			addProof: () => startAddProof(name),
@@ -815,9 +825,10 @@
 						{#if evolutionOfField(key, value)}
 							{@const evolution = evolutionOfField(key, value)!}
 							<dd>
-								<EvolutionChart
+								<DatedValue
 									evolution={evolution.evolution}
 									unit={evolution.unit}
+									{year}
 									accent={ACCENTS[key]}
 									existence={activeExistence?.evolution}
 								/>
@@ -1009,11 +1020,10 @@
 					{#if activeExistence}
 						<div class="distribution-block">
 							<h4>{existenceTitle()}</h4>
-							<EvolutionChart
+							<DatedValue
 								evolution={activeExistence.evolution}
 								unit={activeExistence.unit}
-								existence={activeExistence.evolution}
-								clipToExistence={false}
+								{year}
 								bounds={[0, 100]}
 							/>
 						</div>

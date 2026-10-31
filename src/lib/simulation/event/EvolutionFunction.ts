@@ -20,7 +20,20 @@ export interface EvolutionUncertainty {
 }
 
 const math = create(all);
-const compile = math.compile;
+// Taken before the import below: afterwards, math.compile would be rebuilt on the forbidden parse.
+const mathCompile = math.compile;
+
+const compiledExpressions = new Map<string, EvalFunction>();
+
+/** The values are read again at every step of the time machine: each expression is compiled only once. */
+function compile(expression: string): EvalFunction {
+	let compiled = compiledExpressions.get(expression);
+	if (!compiled) {
+		compiled = mathCompile(expression);
+		compiledExpressions.set(expression, compiled);
+	}
+	return compiled;
+}
 
 // The expressions come from the model: forbid everything that could reach outside of a pure
 // computation (recommended mathjs hardening for untrusted expressions).
@@ -115,6 +128,45 @@ export function buildEvolutionUncertainty(components: EvolutionComponent[]): (t:
 		}
 		return uncertainty;
 	};
+}
+
+/**
+ * A score of a proof (veracity, uncertainty, impact) as a function of t, from 0 to 100, without uncertainty: an
+ * expression, or a number saved before the scores were functions, which becomes a constant function.
+ */
+export function toScoreFunction(raw: unknown): string {
+	if (typeof raw === 'object' && raw !== null && 'function' in raw) return toScoreFunction(raw.function);
+	const text = String(raw ?? '').trim();
+	// A score saved with an uncertainty (a JSON text) keeps its function only.
+	if (text.startsWith('{')) {
+		try {
+			return toScoreFunction(JSON.parse(text));
+		} catch {
+			// not a JSON score: an expression
+		}
+	}
+	return text !== '' && Number.isFinite(Number(text)) ? String(Number(text)) : text;
+}
+
+/** The value of a score of a proof at the moment t, between 0 and 100; NaN where it cannot be computed. */
+export function scoreAt(score: unknown, t: number): number {
+	try {
+		const value = evaluateCompiled(compile(toScoreFunction(score)), t);
+		return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : Number.NaN;
+	} catch {
+		return Number.NaN;
+	}
+}
+
+/** True when the expression gives different values over the next decades: a constant is not a function of the time. */
+export function dependsOnTime(expression: string): boolean {
+	try {
+		const compiled = compile(expression);
+		const values = [1990, 2026.75, 2050, 2100].map((t) => evaluateCompiled(compiled, t)).filter(Number.isFinite);
+		return values.some((value) => Math.abs(value - values[0]) > 1e-9);
+	} catch {
+		return false;
+	}
 }
 
 /** The two sides of an uncertainty as a short text (numbers, not expressions): a single ± when they are the same. */

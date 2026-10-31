@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
+import { isValidEvolutionFunction } from './event/EvolutionFunction';
 import { EvolutionFunctionSchema, EvolutionTypeSchema } from './event/EvolutionType';
 
 export type ProofValueKind = 'translation' | 'number' | 'boolean' | 'evolution';
@@ -16,28 +17,29 @@ export function valueKind(value: unknown): ProofValueKind | undefined {
 	return undefined;
 }
 
+/**
+ * A score that changes over time: a function of t whose values are read between 0 and 100, without uncertainty. It is
+ * never a constant: a score is a real function of the time.
+ */
+function scoreFunction(meaning: string) {
+	return z
+		.string()
+		.refine(isValidEvolutionFunction, 'Not a valid mathjs expression of t')
+		.describe(
+			`${meaning} It is a mathjs expression of the time t, where t is the calendar year as a decimal number (2026.75 = October 2026), giving a number from 0 to 100 at each moment (a result outside of this scale is brought back to it). It has NO uncertainty: only the function. It MUST depend on t, never a constant such as "35": the score really changes over time (the proof is stronger or weaker as time passes, as the facts become known, forgotten or confirmed). Examples: "90 - 0.5 * max(0, t - 2026)", "20 + 60 * tanh(max(0, t - 2030) / 10)", "60 + 25 * exp(-(t - 2026) / 15)". Only use t, numbers, + - * / ^, and mathjs functions (exp, log, sqrt, tanh, min, max...).`
+		);
+}
+
 const scores = {
-	veracity: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe(
-			'The veracity of the proof, as a percentage from 0 to 100 (0 = certainly false, 100 = certainly true). Use the whole scale.'
-		),
-	uncertainty: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe(
-			'The uncertainty of the veracity of the proof, as a percentage from 0 to 100: 5 = the veracity is known within about +-5 points, 40 = a rough estimate.'
-		),
-	impact: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe(
-			'The impact of the proof on its value: how strongly it moves the value toward the desired value, as a number from 0 (no effect) to 100 (it decides the value). Use the whole scale, e.g. 35 or 80.'
-		),
+	veracity: scoreFunction(
+		'The veracity of the proof over time (0 = certainly false, 100 = certainly true). Use the whole scale.'
+	),
+	uncertainty: scoreFunction(
+		'The uncertainty of the veracity of the proof over time: 5 = the veracity is known within about +-5 points, 40 = a rough estimate.'
+	),
+	impact: scoreFunction(
+		'The impact of the proof on its value over time: how strongly it moves the value toward the desired value, from 0 (no effect) to 100 (it decides the value). Use the whole scale.'
+	),
 	originality: z
 		.number()
 		.min(0)
@@ -49,21 +51,9 @@ const scores = {
 
 /** The scores of a value of an element: what a founding proof adds next to the content of the value. */
 export const ValueScoresSchema = z.object({
-	veracity: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe('The veracity of the value, as a percentage from 0 (certainly false) to 100 (certainly true).'),
-	uncertainty: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe('The uncertainty of the veracity of the value, as a percentage from 0 to 100 (5 = known within about +-5 points).'),
-	impact: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe('The impact of the value, from 0 (no effect) to 100 (decisive).'),
+	veracity: scoreFunction('The veracity of the value over time, from 0 (certainly false) to 100 (certainly true).'),
+	uncertainty: scoreFunction('The uncertainty of the veracity of the value over time (5 = known within about +-5 points).'),
+	impact: scoreFunction('The impact of the value over time, from 0 (no effect) to 100 (decisive).'),
 	originality: z
 		.number()
 		.min(0)
@@ -71,7 +61,7 @@ export const ValueScoresSchema = z.object({
 		.describe('The originality of the value, as a percentage from 0 (a copy of an existing one) to 100 (completely new).')
 });
 
-/** A proof gives one single function, and the best proof of a value decides it: a value is never a mix of proofs. */
+/** A proof gives one single function: the voters of a value are what makes it a mix of functions. */
 const ProofEvolutionSchema = EvolutionTypeSchema.extend({
 	evolution: EvolutionFunctionSchema.describe(
 		'The evolution this proof wants, as a function of the time t: EXACTLY ONE component with the weight 1, never a mix of functions. A hypothesis mixing several scenarios is written as one single function.'
@@ -157,7 +147,7 @@ export const SubProofSchema = ProofSchema.extend({
  */
 export type ProofData = Omit<z.infer<typeof ProofSchema>, 'desired_value'> & {
 	desired_value: ValueEdit | ProofEdit;
-	/** The fields of the desired value the proof really changed: the others repeat what it kept. */
+	/** The fields of the desired value the proof really changed: only they vote (see ProofResolution). */
 	edited_fields?: string[] | null;
 	id?: string;
 	fact_id?: string | null;

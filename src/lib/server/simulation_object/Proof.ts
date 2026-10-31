@@ -20,9 +20,16 @@ import {
 	resolveElement,
 	resolveProofs,
 	resolveValue,
+	resolveValueFunctions,
 	valueNames
 } from '$lib/simulation/ProofResolution';
-import { combineEvolution, parseEvolutionFunction } from '$lib/simulation/event/EvolutionFunction';
+import {
+	combineEvolution,
+	dependsOnTime,
+	parseEvolutionFunction,
+	toScoreFunction
+} from '$lib/simulation/event/EvolutionFunction';
+import { dateToYear } from '$lib/simulation/TimeAxis';
 import { relationValues, type RelationData } from '$lib/simulation/Relation';
 import { RelationServer } from './Relation';
 import { convertToPg } from './PgConversion';
@@ -127,6 +134,10 @@ function toDesiredValue(
 			: {};
 	const desired = { ...kept, ...given } as Record<string, unknown>;
 	if ('value' in desired) desired.value = withOneFunction(desired.value);
+	// A score saved before the scores were functions of the time is a number.
+	for (const score of ['veracity', 'uncertainty', 'impact']) {
+		if (score in desired) desired[score] = toScoreFunction(desired[score]);
+	}
 	return desired as ProofData['desired_value'];
 }
 
@@ -211,6 +222,19 @@ function findDesiredValueError(
 		return `the value "${label}" is a ${originalKind}, but you gave a ${desiredKind ?? 'value of another type'}. The desired value must keep the type of the current value (a text stays a text translated in every language).`;
 	}
 	return undefined;
+}
+
+/** The scores of a generated proof (its own and the ones of its desired value) that do not depend on the time. */
+function constantScoreError(proof: { desired_value: object }): string | undefined {
+	const own = proof as unknown as Record<string, unknown>;
+	const desired = proof.desired_value as Record<string, unknown>;
+	const constant = ['veracity', 'uncertainty', 'impact'].filter((field) =>
+		[own[field], desired[field]].some(
+			(score) => typeof score === 'string' && !dependsOnTime(toScoreFunction(score))
+		)
+	);
+	if (constant.length === 0) return undefined;
+	return `the ${constant.join(', ')} ${constant.length > 1 ? 'are' : 'is'} a constant: a score is a real function of t (for example "90 - 0.5 * max(0, t - 2026)"), never a number such as "35". Give a function that depends on t (without any uncertainty).`;
 }
 
 /** Keys of an element that are not values to give a founding proof. */
@@ -423,14 +447,20 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			const batch = values.slice(i, i + FOUNDING_PROOF_CONCURRENCY);
 			const results = await Promise.allSettled(
 				batch.map(async (value) => {
-					const generated = await this.generateWithSchema(
-						model_name,
-						level_of_reasoning,
-						`${prompt}${context.text}
+					const generate = (extra = '') =>
+						this.generateWithSchema(
+							model_name,
+							level_of_reasoning,
+							`${prompt}${context.text}
 
-Create the founding proof of ONE value of this element: the value ${JSON.stringify(value.value_name)}, whose content is ${JSON.stringify(value.value)}. Give the source and the information this value is based on (documents, data, statements, observations). The sources must be real and verifiable. The founding proof adds this value: its desired value gives the ${value.scored ? 'veracity, uncertainty, impact and originality' : 'veracity and uncertainty'} of THIS value alone, not of the whole element: they differ from one value to another. This proof will be the starting point of the debate about this value.`,
-						value.scored ? FoundingProofSchema : PlainFoundingProofSchema
-					);
+Create the founding proof of ONE value of this element: the value ${JSON.stringify(value.value_name)}, whose content is ${JSON.stringify(value.value)}. Give the source and the information this value is based on (documents, data, statements, observations). The sources must be real and verifiable. The founding proof adds this value: its desired value gives the ${value.scored ? 'veracity, uncertainty, impact and originality' : 'veracity and uncertainty'} of THIS value alone, not of the whole element: they differ from one value to another. This proof will be the starting point of the debate about this value.${extra}`,
+							value.scored ? FoundingProofSchema : PlainFoundingProofSchema
+						);
+					let generated = await generate();
+					const constant = constantScoreError(generated);
+					if (constant) generated = await generate(`
+
+Your previous answer was rejected: ${constant}`);
 					const proof: ProofData = {
 						...generated,
 						value_name: value.value_name,
@@ -501,7 +531,8 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 	 */
 	private async targetContext(
 		target: ProofTarget,
-		proofs: ProofData[] = []
+		proofs: ProofData[] = [],
+		year: number = dateToYear(Date.now())
 	): Promise<{ text: string; element: Record<string, unknown> }> {
 		if ('factId' in target) {
 			// The facts table only holds the columns common to every fact: the values of a person, an action... are in
@@ -514,7 +545,7 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 				[target.factId]
 			);
 			if (fact.rows.length === 0) throw new Error('The debated element does not exist');
-			const element = resolveElement(fact.rows[0].element as Record<string, unknown>, proofs);
+			const element = resolveElement(fact.rows[0].element as Record<string, unknown>, proofs, year);
 			return {
 				element,
 				text: `
@@ -536,10 +567,10 @@ ${JSON.stringify(element)}`
 		);
 		if (relation.rows.length === 0) throw new Error('The debated relation does not exist');
 		const { element: raw, ...endpoints } = relation.rows[0];
-		const element = resolveElement(raw as Record<string, unknown>, proofs);
+		const element = resolveElement(raw as Record<string, unknown>, proofs, year);
 		// Each value to modify and each value to add is a value of the relation: exposed like the "other" values of a fact.
 		const relationData = (await RelationServer.get_all()).find((item) => item.id === target.relationId);
-		const stored = relationData ? resolveElement(relationData, proofs) : undefined;
+		const stored = relationData ? resolveElement(relationData, proofs, year) : undefined;
 		const values = stored
 			? relationValues(stored).map(({ name, value }) => ({ name, value }))
 			: [];
@@ -553,8 +584,8 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 	}
 
 	/**
-	 * The current state of a value of the element: its content in the (resolved) element, and its scores as decided by
-	 * its best top-level proof (the ones of the new proof itself when the value has none yet).
+	 * The current state of a value of the element: its content in the (resolved) element, and its scores as voted by
+	 * its top-level proofs (the ones of the new proof itself when the value has none yet).
 	 */
 	private currentValue(
 		target: ProofTarget,
@@ -572,7 +603,7 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 				(proof.fact_id ?? proof.relation_id) === targetId &&
 				valueNames(proof.value_name).some((name) => names.includes(name.toLowerCase()))
 		);
-		const voted = resolveValue(own);
+		const voted = resolveValueFunctions(own);
 		const raw = findOriginalValue(valueName, element);
 		const current = {
 			value: toProofValue(raw) ?? (raw as ProofValue),
@@ -583,7 +614,8 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 			? {
 					...current,
 					impact: voted.impact ?? fallback.impact,
-					originality: voted.originality ?? fallback.originality
+					// The originality is one number, the same at every moment.
+					originality: resolveValue(own, 0).originality ?? fallback.originality
 				}
 			: current;
 	}
@@ -596,8 +628,9 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 		{ parentProofId, valueName }: { parentProofId?: string; valueName?: ProofData['value_name'] } = {}
 	): Promise<ProofData> {
 		// Every proof as it stands after its debate: the genie sees the values as they are now.
-		const proofs = await ProofServer.get_all_resolved();
-		const { text, element } = await this.targetContext(target, proofs);
+		const year = dateToYear(Date.now());
+		const proofs = await ProofServer.get_all_resolved(year);
+		const { text, element } = await this.targetContext(target, proofs, year);
 		let context = text;
 
 		let parentEdit: ProofEdit | undefined;
@@ -637,9 +670,10 @@ ${
 			return valueName !== undefined ? { ...proof, value_name: valueName } : proof;
 		};
 		let generated = await generate();
-		const error = findDesiredValueError(generated, element);
+		const error = findDesiredValueError(generated, element) ?? constantScoreError(generated);
 		if (error) {
 			generated = await generate(`\n\nYour previous answer was rejected: ${error}`);
+			// A score that stays constant after the second answer is kept: only a wrong value stops the proof.
 			const secondError = findDesiredValueError(generated, element);
 			if (secondError) throw new Error(secondError);
 		}
@@ -658,7 +692,7 @@ ${
 
 		return {
 			...proof,
-			// Only the fields the genie did not leave null are a change.
+			// Only the fields the genie did not leave null vote for a change.
 			edited_fields: changedFields(generated.desired_value),
 			id: randomUUID(),
 			fact_id: 'factId' in target ? target.factId : null,
@@ -726,9 +760,9 @@ ${
 			verification_method: row.verification_method,
 			falsifiability_method: row.falsifiability_method,
 			source: row.source || [],
-			veracity: Number(row.veracity),
-			uncertainty: Number(row.uncertainty),
-			impact: Number(row.impact),
+			veracity: toScoreFunction(row.veracity),
+			uncertainty: toScoreFunction(row.uncertainty),
+			impact: toScoreFunction(row.impact),
 			originality: Number(row.originality),
 			fact_id: row.fact_id,
 			relation_id: row.relation_id,
@@ -792,9 +826,9 @@ ${
 		});
 	}
 
-	/** Every proof as it stands after its debate (see resolveProofs). */
-	static async get_all_resolved(): Promise<ProofData[]> {
-		return resolveProofs(await ProofServer.instance.get_all());
+	/** Every proof as it stands after its debate at the moment year (see resolveProofs). */
+	static async get_all_resolved(year: number): Promise<ProofData[]> {
+		return resolveProofs(await ProofServer.instance.get_all(), year);
 	}
 
 	/**

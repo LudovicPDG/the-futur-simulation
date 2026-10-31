@@ -1,13 +1,16 @@
 import { valueKind, type ProofData } from './Proof';
 import { relationValueName, type RelationConnexionData } from './Relation';
-import type { EvolutionComponent } from './event/EvolutionFunction';
+import { scoreAt, toScoreFunction, type EvolutionComponent } from './event/EvolutionFunction';
 
 /**
- * The debate of the proofs. Whatever its kind (a text, a number, a boolean, an evolution...), everything is decided
- * by one single proof: the one with the best veracity * impact, whose whole desired value wins:
- * - a debated proof becomes what its best sub-proof wants, unless the proof before its debate has the best score;
- * - a value of an element becomes what its best top-level proof wants, the founding proof among them.
- * The sub-proofs are resolved first (from the deepest), so that each proof competes with its debated scores.
+ * The votes of the proofs. Every proof gives a desired value, but only the fields it really changed (its
+ * edited_fields) vote, next to the status quo:
+ * - a debated proof is changed by its sub-proofs, next to its "original proof" copy (the proof before the debate);
+ * - a value of an element is changed by its top-level proofs, the founding proof among them.
+ * A text, a boolean... is decided by the voter with the best veracity * impact, a boolean by the weighted vote of
+ * the voters and a number or an evolution by their weighted average, with the weight veracity * impact * originality.
+ * The sub-proofs are resolved first (from the deepest), so that each proof votes with its debated scores.
+ * The veracity, the uncertainty and the impact are functions of the time: everything is decided at one moment t.
  */
 
 /** The fields of a debated proof that its sub-proofs can change (never its desired value). */
@@ -26,20 +29,124 @@ export const PROOF_EDIT_FIELDS = [
 /** The parts of a value of an element that its top-level proofs can change. */
 export const VALUE_EDIT_FIELDS = ['value', 'veracity', 'uncertainty', 'impact', 'originality'] as const;
 
-/** The score that decides which proof wins. */
-const proofScore = (proof: ProofData) => proof.veracity * proof.impact;
+const SCORE_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impact', 'originality']);
+/** The scores that are functions of the time; the originality is one single number. */
+const SCORE_FUNCTION_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impact']);
 
-/** The proofs (oldest first), the best score first; on a tie, the oldest one comes first. */
-const byScore = (proofs: ProofData[]) => [...proofs].sort((a, b) => proofScore(b) - proofScore(a));
+/** The scores of a proof at one moment. */
+type Scores = { veracity: number; uncertainty: number; impact: number; originality: number };
+type Voter<T = unknown> = { value: T; scores: Scores };
 
-const desiredField = (proof: ProofData, field: string) =>
-	(proof.desired_value as Record<string, unknown>)[field] ?? undefined;
+/** The score that decides a text or an array: the best one wins. */
+const pickScore = (scores: Scores) => scores.veracity * scores.impact;
+/** The weight of a vote: the originality keeps copies of the same proof from adding up. */
+const voteWeight = (scores: Scores) => scores.veracity * scores.impact * scores.originality;
+
+/** The value of the voter with the best veracity * impact; on a tie, the first one (the status quo). */
+function pickBest(voters: Voter[]): unknown {
+	let best = voters[0];
+	for (const voter of voters) if (pickScore(voter.scores) > pickScore(best.scores)) best = voter;
+	return best?.value;
+}
+
+/** The weighted average of the numbers, or undefined when no voter has a weight. */
+function weightedAverage(voters: Voter[]): number | undefined {
+	let sum = 0;
+	let total = 0;
+	for (const { value, scores } of voters) {
+		const weight = voteWeight(scores);
+		if (typeof value !== 'number' || !Number.isFinite(value) || weight <= 0) continue;
+		sum += weight * value;
+		total += weight;
+	}
+	return total > 0 ? sum / total : undefined;
+}
+
+/** The side (true or false) with the biggest total weight, or undefined on a tie. */
+function weightedVote(voters: Voter[]): boolean | undefined {
+	let balance = 0;
+	for (const { value, scores } of voters) {
+		if (typeof value === 'boolean') balance += value ? voteWeight(scores) : -voteWeight(scores);
+	}
+	return balance === 0 ? undefined : balance > 0;
+}
+
+type Evolution = { evolution: EvolutionComponent[]; unit: string };
 
 /**
- * Every proof as it stands after its debate: each debated proof gets the desired value of its best sub-proof
- * (resolved first, from the deepest). The original proof copies stay unchanged: they are the proof before its debate.
+ * The weighted average of the evolutions: an evolution is already the weighted average of its functions, so the
+ * functions of every voter are put together, each voter weighing as much as its vote in total.
  */
-export function resolveProofs(proofs: ProofData[]): ProofData[] {
+function mergeEvolutions(voters: Voter[]): Evolution | undefined {
+	const counted = voters.filter(({ value, scores }) => valueKind(value) === 'evolution' && voteWeight(scores) > 0);
+	const total = counted.reduce((sum, { scores }) => sum + voteWeight(scores), 0);
+	if (total <= 0) return undefined;
+	const evolution = counted.flatMap(({ value, scores }) => {
+		const components = (value as Evolution).evolution;
+		const own = components.reduce((sum, component) => sum + component.weight, 0) || 1;
+		return components.map((component) => ({
+			...component,
+			weight: (voteWeight(scores) / total) * (component.weight / own)
+		}));
+	});
+	return { evolution, unit: (counted[0].value as Evolution).unit };
+}
+
+/** The content decided by the voters, according to its kind; the first voter is the status quo. */
+function resolveContent(voters: Voter[]): unknown {
+	const fallback = voters[0]?.value;
+	switch (valueKind(fallback)) {
+		case 'number':
+			return weightedAverage(voters) ?? fallback;
+		case 'boolean':
+			return weightedVote(voters) ?? fallback;
+		case 'evolution':
+			return mergeEvolutions(voters) ?? fallback;
+		default:
+			return pickBest(voters);
+	}
+}
+
+/** The scores of the proof at the moment t: a score that cannot be computed there gives the proof no weight. */
+function scoresOf(proof: ProofData, t: number): Scores {
+	return {
+		veracity: scoreAt(proof.veracity, t) || 0,
+		uncertainty: scoreAt(proof.uncertainty, t) || 0,
+		impact: scoreAt(proof.impact, t) || 0,
+		originality: proof.originality
+	};
+}
+
+/** The weighted average of one score at the moment t. */
+function averageScore(field: string, voters: Voter[], t: number): number | undefined {
+	if (!SCORE_FUNCTION_FIELDS.has(field)) return weightedAverage(voters);
+	return weightedAverage(voters.map((voter) => ({ ...voter, value: scoreAt(voter.value, t) })));
+}
+
+/** The fields the proof really changed. Without the information, all of them. */
+function editedFields(proof: ProofData): readonly string[] {
+	if (proof.edited_fields) return proof.edited_fields;
+	return proof.parent_proof_id && !proof.original_proof_id ? PROOF_EDIT_FIELDS : VALUE_EDIT_FIELDS;
+}
+
+/** The voters of one field: the status quo first, then each proof that changed this field. */
+function votersOf(field: string, statusQuo: Voter | undefined, proofs: ProofData[], t: number): Voter[] {
+	const voters = statusQuo ? [statusQuo] : [];
+	for (const proof of proofs) {
+		const value = (proof.desired_value as Record<string, unknown>)[field];
+		if (editedFields(proof).includes(field) && value !== null && value !== undefined) {
+			voters.push({ value, scores: scoresOf(proof, t) });
+		}
+	}
+	return voters;
+}
+
+/**
+ * Every proof as it stands after its debate: each debated proof gets the fields voted by its sub-proofs (resolved
+ * first, from the deepest). The original proof copies stay unchanged: they are the status quo of the debate.
+ * A score function that a vote changed becomes its value at the moment t; one that nobody changed stays whole.
+ */
+export function resolveProofs(proofs: ProofData[], t: number): ProofData[] {
 	const children = new Map<string, ProofData[]>();
 	for (const proof of proofs) {
 		if (!proof.parent_proof_id) continue;
@@ -54,14 +161,23 @@ export function resolveProofs(proofs: ProofData[]): ProofData[] {
 		const kids = proof.id ? (children.get(proof.id) ?? []) : [];
 		// Oldest first (the proofs come newest first), so that a tie keeps the earliest proof.
 		const debaters = kids.filter((kid) => !kid.original_proof_id).map(resolve).reverse();
-		// The stored proof is the status quo: it stays as it was before its debate, like its copy.
-		const [winner] = byScore([proof, ...debaters]);
 		let result = proof;
-		if (winner !== proof) {
+		if (debaters.length > 0) {
+			// The status quo: the proof before its debate (its copy), or the proof itself before the copies existed.
+			const before = kids.find((kid) => kid.original_proof_id) ?? proof;
 			result = { ...proof };
 			for (const field of PROOF_EDIT_FIELDS) {
-				const desired = desiredField(winner, field);
-				if (desired !== undefined) (result as Record<string, unknown>)[field] = desired;
+				const statusQuo = { value: (before as Record<string, unknown>)[field], scores: scoresOf(before, t) };
+				const voters = votersOf(field, statusQuo, debaters, t);
+				let decided: unknown;
+				if (!SCORE_FIELDS.has(field)) {
+					decided = pickBest(voters);
+				} else {
+					const average = voters.length > 1 ? averageScore(field, voters, t) : undefined;
+					if (average === undefined) decided = statusQuo.value;
+					else decided = SCORE_FUNCTION_FIELDS.has(field) ? String(average) : average;
+				}
+				(result as Record<string, unknown>)[field] = decided;
 			}
 		}
 		if (proof.id) resolved.set(proof.id, result);
@@ -73,32 +189,25 @@ export function resolveProofs(proofs: ProofData[]): ProofData[] {
 
 /**
  * The parts of one value of an element decided by its top-level proofs (resolved by resolveProofs first, newest
- * first): the ones of the best proof. A part it does not give (a proof saved without it) comes from the next best
- * proof, and a part that no proof gives is undefined.
+ * first) at the moment t: its content and its scores. A part that no proof gives is undefined.
  */
-export function resolveValue(proofs: ProofData[]): {
+export function resolveValue(proofs: ProofData[], t: number): {
 	value?: unknown;
 	veracity?: number;
 	uncertainty?: number;
 	impact?: number;
 	originality?: number;
 } {
-	// Oldest first: the founding proof wins a tie.
-	const ranked = byScore([...proofs].reverse());
+	// Oldest first: the founding proof is the status quo of a tie.
+	const ordered = [...proofs].reverse();
 	const result: Record<string, unknown> = {};
 	for (const field of VALUE_EDIT_FIELDS) {
-		for (const proof of ranked) {
-			const desired = desiredField(proof, field);
-			if (desired === undefined) continue;
-			result[field] = desired;
-			break;
-		}
+		const voters = votersOf(field, undefined, ordered, t);
+		if (voters.length === 0) continue;
+		result[field] = field === 'value' ? resolveContent(voters) : averageScore(field, voters, t);
 	}
 	return result;
 }
-
-/** An evolution as a value: its functions and its unit. */
-type Evolution = { evolution: EvolutionComponent[]; unit: string };
 
 /** Every language-keyed name of a value ("description" or {fr, en, de, es}). */
 export function valueNames(name: unknown): string[] {
@@ -187,16 +296,56 @@ function proofsByValue(elementId: string, proofs: ProofData[]): ProofData[][] {
 	return groups.map((group) => group.proofs);
 }
 
-/** The element with every value decided by its proofs (resolved by resolveProofs first). */
-export function resolveElement<T extends object>(element: T, proofs: ProofData[]): T {
+/** The element with every value decided by its proofs at the moment t (resolved by resolveProofs first). */
+export function resolveElement<T extends object>(element: T, proofs: ProofData[], t: number): T {
 	const id = (element as { id?: unknown }).id;
 	if (typeof id !== 'string') return element;
 	const groups = proofsByValue(id, proofs);
 	if (groups.length === 0) return element;
 	const result = { ...element } as Record<string, unknown>;
 	for (const group of groups) {
-		const { value } = resolveValue(group);
+		const { value } = resolveValue(group, t);
 		if (value !== undefined) setValue(result, group[0].value_name, value);
 	}
 	return result as T;
+}
+
+/** The whole simulation as it stands at the moment t: every proof after its debate and every value of every element. */
+export function resolveAtDate<T extends object>(elements: T[], t: number): T[] {
+	const isProof = (element: T) => (element as { type?: unknown }).type === 'proof';
+	const stored = elements.filter(isProof) as unknown as ProofData[];
+	const proofs = resolveProofs(stored, t);
+	const resolved = new Map<unknown, ProofData>(stored.map((proof, index) => [proof, proofs[index]]));
+	return elements.map((element) =>
+		isProof(element) ? (resolved.get(element) as unknown as T) : resolveElement(element, proofs, t)
+	);
+}
+
+/**
+ * The veracity, uncertainty and impact of one value as functions of t: what resolveValue gives at one moment, written
+ * as one expression (the weighted average of the scores of the proofs that changed it, weighted like their votes).
+ */
+export function resolveValueFunctions(proofs: ProofData[]): { veracity?: string; uncertainty?: string; impact?: string } {
+	const clamp = (expression: string) => `max(0, min(100, ${expression}))`;
+	const ordered = [...proofs].reverse();
+	const result: Record<string, string> = {};
+	for (const field of SCORE_FUNCTION_FIELDS) {
+		const voters = ordered.filter((proof) => {
+			const desired = (proof.desired_value as Record<string, unknown>)[field];
+			return editedFields(proof).includes(field) && desired !== null && desired !== undefined;
+		});
+		if (voters.length === 0) continue;
+		const scores = voters.map((proof) => toScoreFunction((proof.desired_value as Record<string, unknown>)[field]));
+		if (voters.length === 1) {
+			result[field] = scores[0];
+			continue;
+		}
+		const weights = voters.map(
+			(proof) => `${clamp(toScoreFunction(proof.veracity))} * ${clamp(toScoreFunction(proof.impact))} * ${proof.originality}`
+		);
+		result[field] = `(${scores
+			.map((score, index) => `(${weights[index]}) * ${clamp(score)}`)
+			.join(' + ')}) / (${weights.map((weight) => `(${weight})`).join(' + ')})`;
+	}
+	return result;
 }

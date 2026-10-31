@@ -1,9 +1,15 @@
 <script lang="ts">
 	import type { ProofData } from '$lib/simulation/Proof';
-	import { parseEvolutionValue, type EvolutionValue } from '$lib/simulation/event/EvolutionFunction';
+	import {
+		parseEvolutionValue,
+		scoreAt,
+		toScoreFunction,
+		type EvolutionValue
+	} from '$lib/simulation/event/EvolutionFunction';
 	import { addProofTarget, addRelationTarget, addValueTarget, debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
-	import EvolutionChart from './EvolutionChart.svelte';
+	import DatedValue from './DatedValue.svelte';
+	import ScoreFunction from './ScoreFunction.svelte';
 	import ProofList from './ProofList.svelte';
 
 	const PAGE_SIZE = 5;
@@ -15,6 +21,7 @@
 		roots = [],
 		parentId = null,
 		format,
+		year,
 		existence,
 		accent
 	}: {
@@ -24,7 +31,9 @@
 		roots?: StoredProof[];
 		parentId?: string | null;
 		format: (value: unknown) => string;
-		/** Existence of the element and color of the value: an evolution of a proof is drawn like the value. */
+		/** The date of the time machine, as a decimal year: the functions are shown at this moment. */
+		year: number;
+		/** Existence of the element and color of the value: an evolution of a proof is shown like the value. */
 		existence?: unknown;
 		accent?: { dark: string; light: string };
 	} = $props();
@@ -76,14 +85,30 @@
 		['originality', m.simulation_field_originality, (value) => `${Math.round(value)}%`]
 	];
 
-	type ScoreView = { key: string; label: string; value: number; text: string; changed: boolean };
+	type ScoreView = {
+		key: string;
+		label: string;
+		value: number;
+		text: string;
+		changed: boolean;
+		/** The score as a function of t (not for the originality, which is one number). */
+		fn?: string;
+	};
+
+	const functionOf = (key: string, raw: unknown) => (key === 'originality' ? undefined : toScoreFunction(raw));
+
+	/** A score at the date: the originality is one number, the others are functions of the time. */
+	function scoreValue(key: string, raw: unknown): number {
+		return key === 'originality' ? Number(raw) : scoreAt(raw, year);
+	}
 
 	/** The own scores of the proof, shown like the scores of its desired value. */
 	function proofScores(proof: StoredProof): ScoreView[] {
 		return SCORE_FIELDS.flatMap(([key, label, text]) => {
-			const value = Number(proof[key as keyof StoredProof]);
+			const value = scoreValue(key, proof[key as keyof StoredProof]);
 			if (!Number.isFinite(value)) return [];
-			return [{ key, label: label(), value, text: text(value), changed: false }];
+			const fn = functionOf(key, proof[key as keyof StoredProof]);
+			return [{ key, label: label(), value, text: text(value), changed: false, fn }];
 		});
 	}
 
@@ -96,7 +121,7 @@
 			text: string;
 			accent?: string;
 			changed: boolean;
-			/** The content of the value when it is an evolution: drawn instead of its text. */
+			/** The content of the value when it is an evolution: shown at the date instead of its text. */
 			evolution: EvolutionValue | null;
 		}[];
 		sources: { list: string[]; changed: boolean } | null;
@@ -104,8 +129,8 @@
 	};
 
 	/**
-	 * The desired value of the proof, split into texts, sources and scores. The fields the proof really changed stand
-	 * out; the founding proof and the original proof copy give every field, so none does.
+	 * The desired value of the proof, split into texts, sources and scores. The fields the proof really changed (the
+	 * only ones that vote) stand out; the founding proof and the original proof copy give every field, so none does.
 	 */
 	function desiredView(proof: StoredProof): DesiredView {
 		const desired = proof.desired_value as Record<string, unknown>;
@@ -121,9 +146,10 @@
 		const source = desired.source;
 		const sources = Array.isArray(source) ? { list: source.map(String), changed: changed('source') } : null;
 		const scores = SCORE_FIELDS.flatMap(([key, label, text]) => {
-			const value = Number(desired[key]);
+			const value = scoreValue(key, desired[key]);
 			if (desired[key] === null || !Number.isFinite(value)) return [];
-			return [{ key, label: label(), value, text: text(value), changed: changed(key) }];
+			const fn = functionOf(key, desired[key]);
+			return [{ key, label: label(), value, text: text(value), changed: changed(key), fn }];
 		});
 		return { compared, texts, sources, scores };
 	}
@@ -148,6 +174,7 @@
 							<span style:width="{Math.min(100, Math.max(0, score.value))}%"></span>
 						</span>
 					</dd>
+					{#if score.fn}<ScoreFunction expression={score.fn} />{/if}
 				</div>
 			{/each}
 		</dl>
@@ -184,18 +211,18 @@
 								{/if}
 							</span>
 							{#if field.evolution && proof.value_name === 'existence'}
-								<!-- A proof of the existence: drawn like the existence itself, as a percentage on its whole axis. -->
-								<EvolutionChart
+								<!-- A proof of the existence: shown like the existence itself, as a percentage. -->
+								<DatedValue
 									evolution={field.evolution.evolution}
 									unit={field.evolution.unit}
-									existence={field.evolution.evolution}
-									clipToExistence={false}
+									{year}
 									bounds={[0, 100]}
 								/>
 							{:else if field.evolution}
-								<EvolutionChart
+								<DatedValue
 									evolution={field.evolution.evolution}
 									unit={field.evolution.unit}
+									{year}
 									{existence}
 									{accent}
 								/>
@@ -304,7 +331,7 @@
 			{/if}
 			{#if expanded[proof.id]}
 				{#if count > 0}
-					<ProofList {proofs} parentId={proof.id} {format} {existence} {accent} />
+					<ProofList {proofs} parentId={proof.id} {format} {year} {existence} {accent} />
 				{:else}
 					<p class="proof-empty">{m.proof_no_sub()}</p>
 				{/if}
@@ -459,6 +486,11 @@
 		font-weight: 700;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
+	}
+
+	/* A score whose function is open takes the whole row. */
+	.score:has(:global(.score-chart)) {
+		grid-column: 1 / -1;
 	}
 
 	.desired-scores {

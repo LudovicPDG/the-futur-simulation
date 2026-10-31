@@ -12,7 +12,6 @@ import type { ActionData } from '$lib/simulation/Action';
 import type { MaterialResourceData } from '$lib/simulation/Material_resouce';
 import type { ProofData } from '$lib/simulation/Proof';
 import type { RelationData } from '$lib/simulation/Relation';
-import { resolveElement } from '$lib/simulation/ProofResolution';
 
 import { GENIE_SYSTEM_PROMPT } from './GeniePrompt';
 import { Fact } from './fact';
@@ -248,17 +247,17 @@ export class Genie {
 
 	static async get_all_data() {
 		const [
-			storedFacts,
-			storedPersons,
-			storedOrganizations,
-			storedInterestGroups,
-			storedEvents,
-			storedEvolutions,
-			storedRankings,
-			storedActions,
-			storedMaterialResources,
-			resolvedProofs,
-			storedRelations
+			facts,
+			persons,
+			organizations,
+			interest_groups,
+			events,
+			evolutions,
+			rankings,
+			actions,
+			material_resources,
+			storedProofs,
+			relations
 		] = await Promise.all([
 			Fact.get_all_facts(),
 			Person.get_all(),
@@ -269,38 +268,25 @@ export class Genie {
 			Ranking.get_all(),
 			Action.get_all(),
 			MaterialResource.get_all(),
-			Proof.get_all_resolved(),
+			Proof.get_all(),
 			Relation.get_all()
 		]);
 
 		// Only the entries of the lists of a fact have an originality and an impact of their own.
-		const proofs = Proof.withoutUnusedValueScores(resolvedProofs, [
-			...storedFacts,
-			...storedPersons,
-			...storedOrganizations,
-			...storedInterestGroups,
-			...storedEvents,
-			...storedEvolutions,
-			...storedRankings,
-			...storedActions,
-			...storedMaterialResources,
-			...storedRelations
+		const proofs = Proof.withoutUnusedValueScores(storedProofs, [
+			...facts,
+			...persons,
+			...organizations,
+			...interest_groups,
+			...events,
+			...evolutions,
+			...rankings,
+			...actions,
+			...material_resources,
+			...relations
 		]);
 
-		// Every value as decided by its best proof: the stored elements keep the values they were created with.
-		const resolve = <T extends object>(elements: T[]) =>
-			elements.map((element) => resolveElement(element, proofs));
-		const facts = resolve(storedFacts);
-		const persons = resolve(storedPersons);
-		const organizations = resolve(storedOrganizations);
-		const interest_groups = resolve(storedInterestGroups);
-		const events = resolve(storedEvents);
-		const evolutions = resolve(storedEvolutions);
-		const rankings = resolve(storedRankings);
-		const actions = resolve(storedActions);
-		const material_resources = resolve(storedMaterialResources);
-		const relations = resolve(storedRelations);
-
+		// The values depend on the date of the time machine: the page decides them from the proofs (see resolveAtDate).
 		return {
 			facts,
 			persons,

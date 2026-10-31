@@ -88,7 +88,7 @@ export function yearToDate(t: number): Date | null {
 	return new Date(Math.round((start + (t - year) * (end - start)) / 1000) * 1000);
 }
 
-function dateToYear(ms: number): number {
+export function dateToYear(ms: number): number {
 	const d = new Date(ms);
 	const year = d.getUTCFullYear();
 	const start = yearStartMs(year);

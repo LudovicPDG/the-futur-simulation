@@ -3,6 +3,7 @@
 	import type { RelationData } from '$lib/simulation/Relation';
 	import * as m from '$lib/paraglide/messages';
 	import ProofList from './ProofList.svelte';
+	import ScoreFunction from './ScoreFunction.svelte';
 
 	/** A change made by a relation on the value: the property it comes from, its impact and, when it adds the value, the value. */
 	export interface RelationInfluenceEntry {
@@ -25,6 +26,10 @@
 		allProofs: (ProofData & { id: string })[];
 		proofs: (ProofData & { id: string })[];
 		relations: { relation: RelationData; entries: RelationInfluenceEntry[] }[];
+		/** The date of the time machine, as a decimal year. */
+		year: number;
+		/** Veracity, uncertainty and impact as functions of t (expressions). */
+		functions?: { veracity?: string; uncertainty?: string; impact?: string };
 		/** Existence of the element and color of the value: the evolutions of the proofs are drawn like the value. */
 		existence?: unknown;
 		accent?: { dark: string; light: string };
@@ -47,15 +52,18 @@
 		<div>
 			<dt>{m.simulation_veracity_label()}</dt>
 			<dd>{info.veracity ?? '—'}</dd>
+			{#if info.functions?.veracity}<ScoreFunction expression={info.functions.veracity} />{/if}
 		</div>
 		<div>
 			<dt>{m.simulation_uncertainty_label()}</dt>
 			<dd>{info.uncertainty ?? '—'}</dd>
+			{#if info.functions?.uncertainty}<ScoreFunction expression={info.functions.uncertainty} />{/if}
 		</div>
 		{#if info.impact}
 			<div>
 				<dt>{m.simulation_field_impact()}</dt>
 				<dd>{info.impact}</dd>
+				{#if info.functions?.impact}<ScoreFunction expression={info.functions.impact} />{/if}
 			</div>
 		{/if}
 		{#if info.originality}
@@ -73,6 +81,7 @@
 			proofs={info.allProofs}
 			roots={info.proofs}
 			{format}
+			year={info.year}
 			existence={info.existence}
 			accent={info.accent}
 		/>
