@@ -201,6 +201,8 @@
 			prompt = '';
 			debateTarget.set(null);
 			addValueTarget.set(null);
+			addProofTarget.set(null);
+			addRelationTarget.set(null);
 			return async ({ update }) => {
 				await update({ reset: false });
 			};
