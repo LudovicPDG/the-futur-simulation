@@ -112,6 +112,9 @@
 		});
 	}
 
+	/** The parts of an evolution that a proof changes: its function and each side of its uncertainty. */
+	type EditedParts = { function: boolean; above: boolean; below: boolean };
+
 	type DesiredView = {
 		/** Whether the fields are compared with a debated proof (only for a sub-proof). */
 		compared: boolean;
@@ -123,6 +126,8 @@
 			changed: boolean;
 			/** The content of the value when it is an evolution: shown at the date instead of its text. */
 			evolution: EvolutionValue | null;
+			/** The parts of the evolution this proof changes, when only some of them (the others are in the shadow). */
+			parts?: EditedParts;
 		}[];
 		sources: { list: string[]; changed: boolean } | null;
 		scores: ScoreView[];
@@ -137,15 +142,34 @@
 		const compared = proof.id !== foundingId && !proof.original_proof_id && !!proof.edited_fields;
 		const changed = (key: string) => compared && !!proof.edited_fields?.includes(key);
 
+		const isEvolution = parseEvolutionValue(desired.value) !== null;
+		// An evolution is edited part by part: its function and each side of its uncertainty vote on their own.
+		const partChanged = (part: string) => changed(part) || changed('value');
 		const texts = TEXT_FIELDS.flatMap(([key, label, accent]) => {
 			const value = desired[key];
 			if (value === null || value === undefined) return [];
 			const evolution = key === 'value' ? parseEvolutionValue(value) : null;
-			return [{ key, label: label(), text: format(value), accent, changed: changed(key), evolution }];
+			const parts = evolution
+				? { function: partChanged('function'), above: partChanged('uncertainty_above'), below: partChanged('uncertainty_below') }
+				: undefined;
+			const anyPart = !!parts && (parts.function || parts.above || parts.below);
+			return [
+				{
+					key,
+					label: label(),
+					text: format(value),
+					accent,
+					changed: parts ? anyPart : changed(key),
+					evolution,
+					parts: compared && anyPart ? parts : undefined
+				}
+			];
 		});
 		const source = desired.source;
 		const sources = Array.isArray(source) ? { list: source.map(String), changed: changed('source') } : null;
 		const scores = SCORE_FIELDS.flatMap(([key, label, text]) => {
+			// An evolution has no general uncertainty: only the one above and below its function.
+			if (isEvolution && key === 'uncertainty') return [];
 			const value = scoreValue(key, desired[key]);
 			if (desired[key] === null || !Number.isFinite(value)) return [];
 			const fn = functionOf(key, desired[key]);
@@ -217,16 +241,18 @@
 									unit={field.evolution.unit}
 									{year}
 									bounds={[0, 100]}
+									edited={field.parts}
 								/>
 							{:else if field.evolution}
 								<DatedValue
 									evolution={field.evolution.evolution}
 									unit={field.evolution.unit}
 									{year}
-									{existence}
-									{accent}
-								/>
-							{:else}
+										{existence}
+										{accent}
+										edited={field.parts}
+									/>
+								{:else}
 								<span class="field-text">{field.text}</span>
 							{/if}
 						</div>

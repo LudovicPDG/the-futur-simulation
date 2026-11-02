@@ -6,6 +6,7 @@ import {
 	SubProofSchema,
 	ProofEditSchema,
 	ValueEditSchema,
+	ProposedValueEditSchema,
 	PlainValueEditSchema,
 	ValueScoresSchema,
 	valueKind,
@@ -14,8 +15,10 @@ import {
 	type ValueEdit
 } from '$lib/simulation/Proof';
 import {
+	EVOLUTION_PARTS,
 	PROOF_EDIT_FIELDS,
 	VALUE_EDIT_FIELDS,
+	type EvolutionPart,
 	VALUE_LISTS,
 	resolveElement,
 	resolveProofs,
@@ -27,7 +30,8 @@ import {
 	combineEvolution,
 	dependsOnTime,
 	parseEvolutionFunction,
-	toScoreFunction
+	toScoreFunction,
+	type EvolutionComponent
 } from '$lib/simulation/event/EvolutionFunction';
 import { dateToYear } from '$lib/simulation/TimeAxis';
 import { relationValues, type RelationData } from '$lib/simulation/Relation';
@@ -68,6 +72,21 @@ const PlainFoundingProofSchema = FoundingProofSchema.extend({
 	)
 });
 
+/** An evolution has no general uncertainty score: only the uncertainty above and below its function. */
+const EvolutionFoundingProofSchema = FoundingProofSchema.extend({
+	desired_value: ValueScoresSchema.omit({ uncertainty: true }).describe('The scores this founding proof adds to its value.')
+});
+const PlainEvolutionFoundingProofSchema = FoundingProofSchema.extend({
+	desired_value: ValueScoresSchema.omit({ uncertainty: true, impact: true, originality: true }).describe(
+		'The scores this founding proof adds to its value.'
+	)
+});
+
+function foundingSchema(scored: boolean, evolution: boolean) {
+	if (evolution) return scored ? EvolutionFoundingProofSchema : PlainEvolutionFoundingProofSchema;
+	return scored ? FoundingProofSchema : PlainFoundingProofSchema;
+}
+
 /** The same edit with every field nullable: the genie gives only what it changes, null for what it keeps. */
 function keepable<Shape extends z.ZodRawShape>(schema: z.ZodObject<Shape>) {
 	return z.object(
@@ -82,14 +101,14 @@ function keepable<Shape extends z.ZodRawShape>(schema: z.ZodObject<Shape>) {
 
 /** A top-level proof as generated: its desired value gives only the parts of the value it changes. */
 const GeneratedProofSchema = ProofSchema.extend({
-	desired_value: keepable(ValueEditSchema).describe(
+	desired_value: keepable(ProposedValueEditSchema).describe(
 		'Only the parts of the value this proof changes (its content and its scores); null for every part it keeps.'
 	)
 });
 
 /** A top-level proof of a value without an originality and an impact of its own (see hasValueScores). */
 const GeneratedPlainProofSchema = ProofSchema.extend({
-	desired_value: keepable(PlainValueEditSchema).describe(
+	desired_value: keepable(ProposedValueEditSchema.omit({ impact: true, originality: true })).describe(
 		'Only the parts of the value this proof changes (its content, veracity and uncertainty); null for every part it keeps.'
 	)
 });
@@ -320,8 +339,53 @@ function hasValueScores(target: ProofTarget, name: unknown, element: Record<stri
 }
 
 /** The parts of a value that its proofs give: its originality and impact only when it has its own. */
-function valueEditFields(scored: boolean): string[] {
-	return VALUE_EDIT_FIELDS.filter((field) => scored || (field !== 'impact' && field !== 'originality'));
+function valueEditFields(scored: boolean, evolution = false): string[] {
+	const fields: string[] = VALUE_EDIT_FIELDS.filter(
+		(field) => scored || (field !== 'impact' && field !== 'originality')
+	);
+	// An evolution is edited part by part and has no general uncertainty.
+	return evolution
+		? fields.filter((field) => field !== 'uncertainty').flatMap((field) => (field === 'value' ? [...EVOLUTION_PARTS] : [field]))
+		: fields;
+}
+
+type Evolution = { evolution: EvolutionComponent[]; unit: string };
+
+/** Used only when an evolution to complete has no current one (a part left null must still have an expression). */
+const DEFAULT_PART = { function: '0', uncertainty_up: '0', uncertainty_down: '0' };
+
+/**
+ * The evolution a proof desires, complete: the parts it left null (the function, the uncertainty above and below)
+ * keep the current evolution. Returns the parts the proof really changed.
+ */
+function completeEvolution(
+	proposed: { evolution: Partial<Record<keyof EvolutionComponent, unknown>>[]; unit: string },
+	current: unknown
+): { value: Evolution; parts: EvolutionPart[] } {
+	const own = proposed.evolution[0] ?? {};
+	const kept = valueKind(current) === 'evolution' ? parseEvolutionFunction((current as Evolution).evolution)?.[0] : undefined;
+	const part = (key: 'function' | 'uncertainty_up' | 'uncertainty_down'): string => {
+		const given = own[key];
+		return typeof given === 'string' ? given : (kept?.[key] ?? DEFAULT_PART[key]);
+	};
+	const parts: EvolutionPart[] = [];
+	if (typeof own.function === 'string') parts.push('function');
+	if (typeof own.uncertainty_up === 'string') parts.push('uncertainty_above');
+	if (typeof own.uncertainty_down === 'string') parts.push('uncertainty_below');
+	return {
+		value: {
+			evolution: [
+				{
+					function: part('function'),
+					weight: 1,
+					uncertainty_down: part('uncertainty_down'),
+					uncertainty_up: part('uncertainty_up')
+				}
+			],
+			unit: proposed.unit || (current as Evolution | undefined)?.unit || ''
+		},
+		parts
+	};
 }
 
 export class ProofServer extends BaseSimulationObject<ProofData> {
@@ -447,14 +511,15 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			const batch = values.slice(i, i + FOUNDING_PROOF_CONCURRENCY);
 			const results = await Promise.allSettled(
 				batch.map(async (value) => {
+					const evolution = valueKind(value.value) === 'evolution';
 					const generate = (extra = '') =>
 						this.generateWithSchema(
 							model_name,
 							level_of_reasoning,
 							`${prompt}${context.text}
 
-Create the founding proof of ONE value of this element: the value ${JSON.stringify(value.value_name)}, whose content is ${JSON.stringify(value.value)}. Give the source and the information this value is based on (documents, data, statements, observations). The sources must be real and verifiable. The founding proof adds this value: its desired value gives the ${value.scored ? 'veracity, uncertainty, impact and originality' : 'veracity and uncertainty'} of THIS value alone, not of the whole element: they differ from one value to another. This proof will be the starting point of the debate about this value.${extra}`,
-							value.scored ? FoundingProofSchema : PlainFoundingProofSchema
+Create the founding proof of ONE value of this element: the value ${JSON.stringify(value.value_name)}, whose content is ${JSON.stringify(value.value)}. Give the source and the information this value is based on (documents, data, statements, observations). The sources must be real and verifiable. The founding proof adds this value: its desired value gives the ${evolution ? (value.scored ? 'veracity, impact and originality' : 'veracity') : value.scored ? 'veracity, uncertainty, impact and originality' : 'veracity and uncertainty'} of THIS value alone, not of the whole element: they differ from one value to another. This proof will be the starting point of the debate about this value.${extra}`,
+							foundingSchema(value.scored, evolution)
 						);
 					let generated = await generate();
 					const constant = constantScoreError(generated);
@@ -464,9 +529,10 @@ Your previous answer was rejected: ${constant}`);
 					const proof: ProofData = {
 						...generated,
 						value_name: value.value_name,
-						desired_value: { value: value.value, ...generated.desired_value },
+						// An evolution has no general uncertainty of its own: it keeps the one of the proof, which is not used.
+						desired_value: { value: value.value, uncertainty: generated.uncertainty, ...generated.desired_value },
 						// The founding proof adds the value: it gives every part of it.
-						edited_fields: valueEditFields(value.scored),
+						edited_fields: valueEditFields(value.scored, evolution),
 						id: randomUUID(),
 						fact_id: 'factId' in target ? target.factId : null,
 						relation_id: 'relationId' in target ? target.relationId : null,
@@ -604,7 +670,12 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 				valueNames(proof.value_name).some((name) => names.includes(name.toLowerCase()))
 		);
 		const voted = resolveValueFunctions(own);
-		const raw = findOriginalValue(valueName, element);
+		const found = findOriginalValue(valueName, element);
+		// An evolution element holds its functions and its unit side by side: they form one value.
+		const raw =
+			Array.isArray(found) && typeof element.unit === 'string' && valueNames(valueName).includes('evolution')
+				? { evolution: found, unit: element.unit }
+				: found;
 		const current = {
 			value: toProofValue(raw) ?? (raw as ProofValue),
 			veracity: voted.veracity ?? fallback.veracity,
@@ -654,7 +725,7 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 ${
 			parentProofId
 				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources, veracity, uncertainty, impact, originality) and null for every other field: they keep their current value exactly. Never rewrite a field that does not need to change. It cannot edit the desired value of the debated proof.'
-				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY the parts of the value that the request asks to change (its content, veracity, uncertainty${scored ? ', impact, originality' : ''}) and null for every other part: they keep their current value exactly. If its content is an evolution, it holds exactly ONE function (weight 1), never a mix of functions.`
+				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY the parts of the value that the request asks to change (its content, veracity, uncertainty${scored ? ', impact, originality' : ''}) and null for every other part: they keep their current value exactly. If its content is an evolution, it holds exactly ONE function (weight 1), never a mix of functions; its function, its uncertainty above and its uncertainty below are three separate parts, so change only the ones the request is about (null for the others), and leave its general uncertainty null: an evolution has only the uncertainty above and below its function.`
 		}`;
 
 		// The value must exist and the desired content must keep its type: retry once with the error.
@@ -688,12 +759,26 @@ ${
 		// The fields left null keep their current value: the desired value is always complete.
 		const kept: ValueEdit | ProofEdit =
 			parentEdit ?? this.currentValue(target, generated.value_name, element, proofs, generated);
-		const proof = { ...generated, desired_value: toDesiredValue(generated.desired_value, kept) };
+		let desired = generated.desired_value as Record<string, unknown>;
+		let edited_fields = changedFields(desired);
+		const proposed = desired.value;
+		if (!parentProofId && valueKind(proposed ?? (kept as ValueEdit).value) === 'evolution') {
+			// An evolution is edited part by part (its function, its uncertainty above and below) and has no general
+			// uncertainty: only the parts the genie did not leave null vote.
+			edited_fields = edited_fields.filter((field) => field !== 'value' && field !== 'uncertainty');
+			desired = { ...desired, uncertainty: null };
+			if (valueKind(proposed) === 'evolution') {
+				const { value, parts } = completeEvolution(proposed as Parameters<typeof completeEvolution>[0], (kept as ValueEdit).value);
+				desired = { ...desired, value };
+				edited_fields.push(...parts);
+			}
+		}
+		const proof = { ...generated, desired_value: toDesiredValue(desired, kept) };
 
 		return {
 			...proof,
 			// Only the fields the genie did not leave null vote for a change.
-			edited_fields: changedFields(generated.desired_value),
+			edited_fields,
 			id: randomUUID(),
 			fact_id: 'factId' in target ? target.factId : null,
 			relation_id: 'relationId' in target ? target.relationId : null,

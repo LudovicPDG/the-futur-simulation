@@ -1,6 +1,6 @@
 import { valueKind, type ProofData } from './Proof';
 import { relationValueName, type RelationConnexionData } from './Relation';
-import { scoreAt, toScoreFunction, type EvolutionComponent } from './event/EvolutionFunction';
+import { combineEvolution, scoreAt, toScoreFunction, type EvolutionComponent } from './event/EvolutionFunction';
 
 /**
  * The votes of the proofs. Every proof gives a desired value, but only the fields it really changed (its
@@ -28,6 +28,13 @@ export const PROOF_EDIT_FIELDS = [
 
 /** The parts of a value of an element that its top-level proofs can change. */
 export const VALUE_EDIT_FIELDS = ['value', 'veracity', 'uncertainty', 'impact', 'originality'] as const;
+
+/**
+ * The parts of an evolution that a proof changes on its own: the function and each side of its uncertainty. A proof
+ * saved with the whole "value" changed edits all of them. The evolution has no general uncertainty score.
+ */
+export const EVOLUTION_PARTS = ['function', 'uncertainty_above', 'uncertainty_below'] as const;
+export type EvolutionPart = (typeof EVOLUTION_PARTS)[number];
 
 const SCORE_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impact', 'originality']);
 /** The scores that are functions of the time; the originality is one single number. */
@@ -90,6 +97,57 @@ function mergeEvolutions(voters: Voter[]): Evolution | undefined {
 		}));
 	});
 	return { evolution, unit: (counted[0].value as Evolution).unit };
+}
+
+/** Whether the proof changed this part of its evolution, on its own or with the whole value. */
+export function editsEvolutionPart(proof: ProofData, part: EvolutionPart): boolean {
+	const fields = editedFields(proof);
+	return fields.includes(part) || fields.includes('value');
+}
+
+/** The proofs voting for a part of the evolution, with the evolution they desire. */
+function evolutionVoters(proofs: ProofData[], t: number, part?: EvolutionPart): Voter<Evolution>[] {
+	return proofs.flatMap((proof) => {
+		const value = (proof.desired_value as Record<string, unknown>).value;
+		const edits = part ? editsEvolutionPart(proof, part) : EVOLUTION_PARTS.some((each) => editsEvolutionPart(proof, each));
+		if (valueKind(value) !== 'evolution' || !edits) return [];
+		return [{ value: value as Evolution, scores: scoresOf(proof, t) }];
+	});
+}
+
+/**
+ * One side of the uncertainty decided by its voters: the average of their expressions, weighted like their votes.
+ * In it, v is the value of the function that was decided.
+ */
+function mixUncertainty(voters: Voter<Evolution>[], side: 'uncertainty_up' | 'uncertainty_down'): string | undefined {
+	const counted = voters.filter(({ scores }) => voteWeight(scores) > 0);
+	const total = counted.reduce((sum, { scores }) => sum + voteWeight(scores), 0);
+	if (total <= 0) return undefined;
+	if (counted.length === 1) return combineEvolution(counted[0].value.evolution)[side];
+	return counted
+		.map(({ value, scores }) => `${voteWeight(scores) / total} * max(0, ${combineEvolution(value.evolution)[side]})`)
+		.join(' + ');
+}
+
+/**
+ * The evolution decided by the proofs of a value: its function, its uncertainty above and its uncertainty below are
+ * three separate votes, each by the proofs that changed it, so that a proof can change one without the others.
+ */
+function resolveEvolution(proofs: ProofData[], t: number): Evolution | undefined {
+	const functionVoters = evolutionVoters(proofs, t, 'function');
+	// Without any proof of the function, the evolution of the proofs of the uncertainty gives it.
+	const merged = mergeEvolutions(functionVoters.length > 0 ? functionVoters : evolutionVoters(proofs, t));
+	if (!merged) return undefined;
+	const up = mixUncertainty(evolutionVoters(proofs, t, 'uncertainty_above'), 'uncertainty_up');
+	const down = mixUncertainty(evolutionVoters(proofs, t, 'uncertainty_below'), 'uncertainty_down');
+	return {
+		unit: merged.unit,
+		evolution: merged.evolution.map((component) => ({
+			...component,
+			uncertainty_up: up ?? component.uncertainty_up,
+			uncertainty_down: down ?? component.uncertainty_down
+		}))
+	};
 }
 
 /** The content decided by the voters, according to its kind; the first voter is the status quo. */
@@ -201,7 +259,14 @@ export function resolveValue(proofs: ProofData[], t: number): {
 	// Oldest first: the founding proof is the status quo of a tie.
 	const ordered = [...proofs].reverse();
 	const result: Record<string, unknown> = {};
+	const evolution = resolveEvolution(ordered, t);
 	for (const field of VALUE_EDIT_FIELDS) {
+		if (field === 'value' && evolution) {
+			result.value = evolution;
+			continue;
+		}
+		// An evolution has no general uncertainty: only the uncertainty above and below its function.
+		if (field === 'uncertainty' && evolution) continue;
 		const voters = votersOf(field, undefined, ordered, t);
 		if (voters.length === 0) continue;
 		result[field] = field === 'value' ? resolveContent(voters) : averageScore(field, voters, t);

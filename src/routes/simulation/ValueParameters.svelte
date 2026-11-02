@@ -18,6 +18,8 @@
 		/** Veracity now and its uncertainty, already formatted. */
 		veracity: string | null;
 		uncertainty: string | null;
+		/** True for an evolution: it has no general uncertainty, only the one above and below its function. */
+		hideUncertainty?: boolean;
 		/** Originality of the relation (for its values) or of the latest proof of the value. */
 		originality: string | null;
 		/** Impact of the value: the one of its relation, or of its latest proof. */
@@ -54,11 +56,13 @@
 			<dd>{info.veracity ?? '—'}</dd>
 			{#if info.functions?.veracity}<ScoreFunction expression={info.functions.veracity} />{/if}
 		</div>
-		<div>
-			<dt>{m.simulation_uncertainty_label()}</dt>
-			<dd>{info.uncertainty ?? '—'}</dd>
-			{#if info.functions?.uncertainty}<ScoreFunction expression={info.functions.uncertainty} />{/if}
-		</div>
+		{#if !info.hideUncertainty}
+			<div>
+				<dt>{m.simulation_uncertainty_label()}</dt>
+				<dd>{info.uncertainty ?? '—'}</dd>
+				{#if info.functions?.uncertainty}<ScoreFunction expression={info.functions.uncertainty} />{/if}
+			</div>
+		{/if}
 		{#if info.impact}
 			<div>
 				<dt>{m.simulation_field_impact()}</dt>

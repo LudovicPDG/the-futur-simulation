@@ -14,7 +14,8 @@
 		year,
 		existence: existenceEvolution,
 		bounds,
-		accent
+		accent,
+		edited
 	}: {
 		evolution?: unknown;
 		unit?: string;
@@ -26,6 +27,8 @@
 		bounds?: [number, number];
 		/** Color of the value (a character's resource or satisfaction) */
 		accent?: { dark: string; light: string };
+		/** The parts a proof changes (the function, the uncertainty above and below): the others are in the shadow */
+		edited?: { function: boolean; above: boolean; below: boolean };
 	} = $props();
 
 	const components = $derived(parseEvolutionFunction(evolution));
@@ -53,12 +56,12 @@
 	{:else if !exists}
 		<span class="message">{m.simulation_evolution_not_at_date()}</span>
 	{:else}
-		<span class="amount">{formatter.format(value)} {unit}</span>
-		<span>
+		<span class="amount" class:shadow={edited && !edited.function}>{formatter.format(value)} {unit}</span>
+		<span class:shadow={edited && !edited.above}>
 			{m.simulation_evolution_uncertainty_above()} :
 			<span class="spread">+{formatter.format(uncertainty.up)} {unit}</span>
 		</span>
-		<span>
+		<span class:shadow={edited && !edited.below}>
 			{m.simulation_evolution_uncertainty_below()} :
 			<span class="spread">−{formatter.format(uncertainty.down)} {unit}</span>
 		</span>
@@ -84,6 +87,7 @@
 				clipToExistence={!bounds}
 				{bounds}
 				{accent}
+				{edited}
 			/>
 		</div>
 	{/if}
@@ -135,6 +139,10 @@
 	:global(body.light) .amount,
 	:global(body.light) .spread {
 		color: var(--accent-light, #047857);
+	}
+
+	.shadow {
+		opacity: 0.35;
 	}
 
 	.message {

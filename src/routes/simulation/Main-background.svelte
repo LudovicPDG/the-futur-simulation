@@ -20,7 +20,7 @@
 		formatUncertainty,
 		type EvolutionValue
 	} from '$lib/simulation/event/EvolutionFunction';
-	import type { ProofData } from '$lib/simulation/Proof';
+	import { valueKind, type ProofData } from '$lib/simulation/Proof';
 	import { resolveAtDate, resolveValue, resolveValueFunctions } from '$lib/simulation/ProofResolution';
 	import { dateToYear } from '$lib/simulation/TimeAxis';
 	import { onMount } from 'svelte';
@@ -736,6 +736,7 @@
 		return {
 			veracity: Number.isFinite(veracityNow) ? `${Math.round(veracityNow)}%` : null,
 			uncertainty: Number.isFinite(uncertaintyNow) ? `±${Math.round(uncertaintyNow)}%` : null,
+			hideUncertainty: proofs.some((proof) => valueKind((proof.desired_value as { value?: unknown }).value) === 'evolution'),
 			impact:
 				relationImpact !== undefined
 					? formatValue(relationImpact)

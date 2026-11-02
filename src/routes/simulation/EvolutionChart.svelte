@@ -16,6 +16,7 @@
 		clipToExistence = true,
 		showExistence = true,
 		showUncertainty = true,
+		edited,
 		bounds,
 		width = 320,
 		height = 210,
@@ -31,6 +32,8 @@
 		showExistence?: boolean;
 		/** False for a function without uncertainty (a score): no cloud, no uncertainty above and below */
 		showUncertainty?: boolean;
+		/** The parts a proof changes: the others are in the shadow (undefined: nothing is in the shadow) */
+		edited?: { function: boolean; above: boolean; below: boolean };
 		/** Fixed bounds of the vertical axis (a probability goes from 0 to 1) */
 		bounds?: [number, number];
 		width?: number;
@@ -198,12 +201,21 @@
 		// probable. It stops at the fixed bounds of the value.
 		const inBounds = (value: number) =>
 			bounds ? Math.min(bounds[1], Math.max(bounds[0], value)) : value;
-		const cloud = CLOUD_LEVELS.map((level) =>
+		// Each side has its own bands, so that the side a proof changes can stand out.
+		const above = CLOUD_LEVELS.map((level) =>
+			d3
+				.area<CurvePoint>()
+				.x((d) => xScale(d.t))
+				.y0((d) => yScale(inBounds(d.value)))
+				.y1((d) => yScale(inBounds(d.value + (level * d.up) / 2)))
+				.curve(d3.curveMonotoneX)(model.curve) || ''
+		);
+		const below = CLOUD_LEVELS.map((level) =>
 			d3
 				.area<CurvePoint>()
 				.x((d) => xScale(d.t))
 				.y0((d) => yScale(inBounds(d.value - (level * d.down) / 2)))
-				.y1((d) => yScale(inBounds(d.value + (level * d.up) / 2)))
+				.y1((d) => yScale(inBounds(d.value)))
 				.curve(d3.curveMonotoneX)(model.curve) || ''
 		);
 
@@ -211,7 +223,8 @@
 			xScale,
 			yScale,
 			linePath: line(model.curve) || '',
-			cloud,
+			cloudAbove: above,
+			cloudBelow: below,
 			xTicks: xScale.ticks(6),
 			yTicks: yScale.ticks(5)
 		};
@@ -292,20 +305,20 @@
 		<div class="function-list">
 			{#each shownComponents as component}
 				<div class="function-card">
-					<div class="function-field">
+					<div class="function-field" class:shadow={edited && !edited.function}>
 						<span class="field-label">{m.simulation_evolution_function_label()}</span>
 						<span class="function-expression">{component.function}</span>
 					</div>
-					<div class="function-field weight">
+					<div class="function-field weight" class:shadow={edited && !edited.function}>
 						<span class="field-label">{m.simulation_distribution_weight()}</span>
 						<span class="function-weight">{Math.round((component.weight / totalWeight) * 1000) / 10}%</span>
 					</div>
 					{#if showUncertainty}
-						<div class="function-field uncertainty">
+						<div class="function-field uncertainty" class:shadow={edited && !edited.above}>
 							<span class="field-label">{m.simulation_evolution_uncertainty_above()}</span>
 							<span class="function-weight">{component.uncertainty_up}</span>
 						</div>
-						<div class="function-field uncertainty">
+						<div class="function-field uncertainty" class:shadow={edited && !edited.below}>
 							<span class="field-label">{m.simulation_evolution_uncertainty_below()}</span>
 							<span class="function-weight">{component.uncertainty_down}</span>
 						</div>
@@ -349,11 +362,14 @@
 					{/each}
 
 					{#if showUncertainty}
-						{#each geometry.cloud as band}
-							<path d={band} class="cloud-band" />
+						{#each geometry.cloudAbove as band}
+							<path d={band} class="cloud-band" class:shadow={edited && !edited.above} />
+						{/each}
+						{#each geometry.cloudBelow as band}
+							<path d={band} class="cloud-band" class:shadow={edited && !edited.below} />
 						{/each}
 					{/if}
-					<path d={geometry.linePath} class="curve" />
+					<path d={geometry.linePath} class="curve" class:shadow={edited && !edited.function} />
 
 					<!-- Existence of the fact: the evolution only exists between these two moments -->
 					{#each [existence.from, existence.to] as bound}
@@ -611,6 +627,18 @@
 	.cloud-band {
 		fill: var(--accent, #10b981);
 		fill-opacity: 0.1;
+	}
+
+	.cloud-band.shadow {
+		fill-opacity: 0.02;
+	}
+
+	.curve.shadow {
+		opacity: 0.25;
+	}
+
+	.function-field.shadow {
+		opacity: 0.35;
 	}
 
 	.curve {

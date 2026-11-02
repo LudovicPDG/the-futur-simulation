@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
 import { isValidEvolutionFunction } from './event/EvolutionFunction';
-import { EvolutionFunctionSchema, EvolutionTypeSchema } from './event/EvolutionType';
+import { EvolutionComponentSchema, EvolutionFunctionSchema, EvolutionTypeSchema } from './event/EvolutionType';
 
 export type ProofValueKind = 'translation' | 'number' | 'boolean' | 'evolution';
 
@@ -83,6 +83,37 @@ export const ValueEditSchema = z.object({
 	uncertainty: ValueScoresSchema.shape.uncertainty.describe('The uncertainty this proof wants for the value.'),
 	impact: ValueScoresSchema.shape.impact.describe('The impact this proof wants for the value.'),
 	originality: ValueScoresSchema.shape.originality.describe('The originality this proof wants for the value.')
+});
+
+/** Gives null to a part of an evolution that a proof keeps as it is. */
+function keepPart<Part extends z.ZodType>(part: Part) {
+	return part.nullable().describe(`${part.description ?? ''} Null to keep the current one unchanged.`);
+}
+
+/**
+ * The evolution a proof proposes: its function and each side of its uncertainty are changed on their own, so that a
+ * proof can edit the uncertainty above without touching the function (or the contrary).
+ */
+const ProposedEvolutionSchema = EvolutionTypeSchema.extend({
+	evolution: z
+		.array(
+			EvolutionComponentSchema.extend({
+				function: keepPart(EvolutionComponentSchema.shape.function),
+				uncertainty_down: keepPart(EvolutionComponentSchema.shape.uncertainty_down),
+				uncertainty_up: keepPart(EvolutionComponentSchema.shape.uncertainty_up)
+			})
+		)
+		.min(1)
+		.describe(
+			'The evolution this proof wants, as EXACTLY ONE component with the weight 1, never a mix of functions. The function, the uncertainty above and the uncertainty below are three separate parts: give ONLY the ones the request asks to change and null for the others (changing the uncertainty above alone leaves the function and the uncertainty below as they are).'
+		)
+});
+
+/** A value edit as proposed by the genie: the parts of an evolution it keeps are null. */
+export const ProposedValueEditSchema = ValueEditSchema.extend({
+	value: z
+		.union([TranslationSchema, z.number(), z.boolean(), ProposedEvolutionSchema])
+		.describe(ValueEditSchema.shape.value.description ?? '')
 });
 
 /**
