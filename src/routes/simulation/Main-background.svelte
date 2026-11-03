@@ -741,7 +741,7 @@
 				relationImpact !== undefined
 					? formatValue(relationImpact)
 					: hasValueScores && Number.isFinite(impactNow)
-						? formatValue(impactNow)
+						? `${Math.round(impactNow)}`
 						: null,
 			originality: Number.isFinite(originalityNow) ? `${Math.round(originalityNow as number)}%` : null,
 			functions: resolveValueFunctions(proofs),

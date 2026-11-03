@@ -43,6 +43,23 @@
 	let { info, format }: { info: ValueInfluence; format: (value: unknown) => string } = $props();
 </script>
 
+<!-- A score as a card with a gauge from 0 to 100, like the scores of a desired value in the proofs. -->
+{#snippet score(key: string, label: string, text: string | null | undefined, fn: string | undefined)}
+	{@const value = parseFloat(text?.match(/-?\d+(\.\d+)?/)?.[0] ?? '')}
+	<div class="score {key}">
+		<dt>{label}</dt>
+		<dd>
+			<strong>{text ?? '—'}</strong>
+			{#if Number.isFinite(value)}
+				<span class="gauge" aria-hidden="true">
+					<span style:width="{Math.min(100, Math.max(0, value))}%"></span>
+				</span>
+			{/if}
+		</dd>
+		{#if fn}<ScoreFunction expression={fn} />{/if}
+	</div>
+{/snippet}
+
 <details class="value-parameters">
 	<summary>
 		<span>{m.simulation_value_parameters()}</span>
@@ -51,31 +68,15 @@
 		{/if}
 	</summary>
 	<dl class="value-scores">
-		<div>
-			<dt>{m.simulation_veracity_label()}</dt>
-			<dd>{info.veracity ?? '—'}</dd>
-			{#if info.functions?.veracity}<ScoreFunction expression={info.functions.veracity} />{/if}
-		</div>
+		{@render score('veracity', m.simulation_veracity_label(), info.veracity, info.functions?.veracity)}
 		{#if !info.hideUncertainty}
-			<div>
-				<dt>{m.simulation_uncertainty_label()}</dt>
-				<dd>{info.uncertainty ?? '—'}</dd>
-				{#if info.functions?.uncertainty}<ScoreFunction expression={info.functions.uncertainty} />{/if}
-			</div>
+			{@render score('uncertainty', m.simulation_uncertainty_label(), info.uncertainty, info.functions?.uncertainty)}
 		{/if}
 		{#if info.impact}
-			<div>
-				<dt>{m.simulation_field_impact()}</dt>
-				<dd>{info.impact}</dd>
-				{#if info.functions?.impact}<ScoreFunction expression={info.functions.impact} />{/if}
-			</div>
+			{@render score('impact', m.simulation_field_impact(), info.impact, info.functions?.impact)}
 		{/if}
 		{#if info.originality}
-			<div>
-				<dt>{m.simulation_originality_label()}</dt>
-				<dd>{info.originality}</dd>
-				{#if info.functions?.originality}<ScoreFunction expression={info.functions.originality} />{/if}
-			</div>
+			{@render score('originality', m.simulation_originality_label(), info.originality, info.functions?.originality)}
 		{/if}
 	</dl>
 
@@ -197,22 +198,72 @@
 	}
 
 	.value-scores {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px 16px;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+		gap: 6px;
 		margin: 0 0 8px;
 	}
 
-	.value-scores dt {
+	.score {
+		--accent: #7dd3fc;
+		padding: 6px 8px;
+		border: 1px solid rgb(148 163 184 / 18%);
+		border-radius: 6px;
+		background: rgb(15 23 42 / 30%);
+	}
+
+	/* A score whose function is open takes the whole row. */
+	.score:has(:global(.score-chart)) {
+		grid-column: 1 / -1;
+	}
+
+	.score.veracity {
+		--accent: #22c55e;
+	}
+
+	.score.uncertainty {
+		--accent: #f59e0b;
+	}
+
+	.score.impact {
+		--accent: #a78bfa;
+	}
+
+	.score.originality {
+		--accent: #38bdf8;
+	}
+
+	.score dt {
 		color: #94a3b8;
 		font-size: 10px;
 		font-weight: 600;
 	}
 
-	.value-scores dd {
-		margin: 0;
+	.score dd {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		margin: 2px 0 0;
+	}
+
+	.score strong {
 		color: #f1f5f9;
+		font-size: 15px;
 		font-variant-numeric: tabular-nums;
+	}
+
+	.gauge {
+		height: 4px;
+		overflow: hidden;
+		border-radius: 999px;
+		background: rgb(148 163 184 / 20%);
+	}
+
+	.gauge span {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--accent);
 	}
 
 	h5,
@@ -304,8 +355,12 @@
 		white-space: nowrap;
 	}
 
-	:global(body.light) .value-scores dd {
+	:global(body.light) .score strong {
 		color: #0f172a;
+	}
+
+	:global(body.light) .score {
+		background: rgb(255 255 255 / 60%);
 	}
 
 	:global(body.light) .influence-list p {
@@ -317,7 +372,7 @@
 		border-color: rgb(8 126 139 / 40%);
 	}
 
-	:global(body.light) .value-scores dt,
+	:global(body.light) .score dt,
 	:global(body.light) h6,
 	:global(body.light) .influence-empty,
 	:global(body.light) .relation-impact,
