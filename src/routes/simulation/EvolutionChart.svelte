@@ -7,6 +7,7 @@
 		parseEvolutionFunction,
 		parseSpline,
 		splineDates,
+		splineSides,
 		type EvolutionComponent,
 		type TimeRange
 	} from '$lib/simulation/event/EvolutionFunction';
@@ -82,14 +83,31 @@
 
 	const locale = $derived(getLocale());
 	const components = $derived(parseEvolutionFunction(evolution));
-	const totalWeight = $derived(components?.reduce((sum, item) => sum + item.weight, 0) ?? 1);
-	// The most weighted function comes first, the others are shown on demand
-	const sortedComponents = $derived([...(components ?? [])].sort((a, b) => b.weight - a.weight));
-	// The functions that were expanded: another evolution shown by this chart starts collapsed
-	const componentsKey = $derived(JSON.stringify(components));
-	let expandedKey = $state<string | null>(null);
-	const expanded = $derived(expandedKey === componentsKey);
-	const shownComponents = $derived(expanded ? sortedComponents : sortedComponents.slice(0, 1));
+
+	/**
+	 * The curves as they are listed: for each one, the weighted sum of the mixed functions at the dates of ALL their
+	 * interpolation points (the sum lies exactly on the curve), and what they do before and after their points.
+	 */
+	const summary = $derived.by(() => {
+		if (!components) return [];
+		const valueAt = buildEvolutionFunction(components);
+		const distancesAt = buildEvolutionUncertainty(components);
+		const readers: Record<Part, (t: number) => number> = {
+			function: valueAt,
+			above: (t) => distancesAt(t).up,
+			below: (t) => distancesAt(t).down
+		};
+		const parts: Part[] = showUncertainty ? ['function', 'above', 'below'] : ['function'];
+		return parts.map((part) => {
+			const expressions = components.map((component) => component[PART_KEYS[part]] as string);
+			const dates = [...new Set(expressions.flatMap(splineDates))].sort((a, b) => a - b);
+			const points = dates.flatMap((t) => {
+				const value = readers[part](t);
+				return Number.isFinite(value) ? [{ t, value }] : [];
+			});
+			return { part, points, sides: splineSides(expressions), expression: expressions[0] };
+		});
+	});
 
 	const today = (() => {
 		const now = new Date();
@@ -364,30 +382,29 @@
 	}
 </script>
 
-<!-- A function as it is shown: the interpolation points of a spline and its extrapolations, else the expression. -->
-{#snippet curveText(expression: string)}
-	{@const spline = parseSpline(expression)}
-	{#if spline}
+<!-- The curves as they are listed: the (weighted) interpolation points and what happens outside of them. -->
+{#snippet curveSummary(item: (typeof summary)[number])}
+	{#if item.points.length > 0}
 		<ul class="spline-points" aria-label={m.simulation_evolution_points()}>
-			{#each spline.points as [date, value]}
-				<li class="spline-point" title={preciseFormatter.format(value)}>
-					<span class="spline-date">{formatPointDate(date)}</span>
-					<span class="spline-value">{formatter.format(value)}</span>
+			{#each item.points as point}
+				<li class="spline-point" title={preciseFormatter.format(point.value)}>
+					<span class="spline-date">{formatPointDate(point.t)}</span>
+					<span class="spline-value">{formatter.format(point.value)}</span>
 				</li>
 			{/each}
 		</ul>
 		<div class="spline-sides">
 			<span class="spline-side">
 				<span class="spline-side-label">← {m.simulation_evolution_before()}</span>
-				<code>{spline.before ?? m.simulation_evolution_flat()}</code>
+				<code>{item.sides.before.join(' | ') || m.simulation_evolution_flat()}</code>
 			</span>
 			<span class="spline-side">
 				<span class="spline-side-label">{m.simulation_evolution_after()} →</span>
-				<code>{spline.after ?? m.simulation_evolution_flat()}</code>
+				<code>{item.sides.after.join(' | ') || m.simulation_evolution_flat()}</code>
 			</span>
 		</div>
 	{:else}
-		<span class="function-expression">{expression}</span>
+		<span class="function-expression">{item.expression}</span>
 	{/if}
 {/snippet}
 
@@ -410,38 +427,24 @@
 		<div class="error-badge">{m.simulation_evolution_invalid()}</div>
 	{:else}
 		<div class="function-list">
-			{#each shownComponents as component}
-				<div class="function-card">
-					<div class="function-field" class:shadow={edited && !edited.function}>
-						<span class="field-label">{m.simulation_evolution_function_label()}</span>
-						{@render curveText(component.function)}
+			<div class="function-card">
+				{#each summary as item (item.part)}
+					<div
+						class="function-field"
+						class:uncertainty={item.part !== 'function'}
+						class:shadow={edited && !edited[item.part]}
+					>
+						<span class="field-label">
+							{item.part === 'function'
+								? m.simulation_evolution_function_label()
+								: item.part === 'above'
+									? m.simulation_evolution_uncertainty_above()
+									: m.simulation_evolution_uncertainty_below()}
+						</span>
+						{@render curveSummary(item)}
 					</div>
-					<div class="function-field weight" class:shadow={edited && !edited.function}>
-						<span class="field-label">{m.simulation_distribution_weight()}</span>
-						<span class="function-weight">{Math.round((component.weight / totalWeight) * 1000) / 10}%</span>
-					</div>
-					{#if showUncertainty}
-						<div class="function-field uncertainty" class:shadow={edited && !edited.above}>
-							<span class="field-label">{m.simulation_evolution_uncertainty_above()}</span>
-							{@render curveText(component.uncertainty_up)}
-						</div>
-						<div class="function-field uncertainty" class:shadow={edited && !edited.below}>
-							<span class="field-label">{m.simulation_evolution_uncertainty_below()}</span>
-							{@render curveText(component.uncertainty_down)}
-						</div>
-					{/if}
-				</div>
-			{/each}
-			{#if components.length > 1}
-				<button
-					type="button"
-					class="functions-toggle"
-					aria-expanded={expanded}
-					onclick={() => (expandedKey = expanded ? null : componentsKey)}
-				>
-					{expanded ? m.simulation_evolution_see_less() : m.simulation_evolution_see_more()}
-				</button>
-			{/if}
+				{/each}
+			</div>
 			<p class="function-hint">
 				{m.simulation_evolution_function_hint()}{#if unit}&nbsp;· {m.simulation_field_unit()} : {unit}{/if}
 			</p>
@@ -625,8 +628,7 @@
 
 	.function-card {
 		display: flex;
-		flex-wrap: wrap;
-		justify-content: space-between;
+		flex-direction: column;
 		gap: 8px;
 		padding: 5px 8px;
 		background: rgb(15 23 42 / 55%);

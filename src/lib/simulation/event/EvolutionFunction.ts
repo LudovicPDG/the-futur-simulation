@@ -770,3 +770,27 @@ export function changedRange(
 	const end = differs.lastIndexOf(true);
 	return [start === 0 ? null : times[start], end === times.length - 1 ? null : times[end]];
 }
+
+/**
+ * The extrapolations of every spline in the expressions (a mix of proofs holds several): the distinct expressions
+ * before the first point and after the last one. Empty lists when every curve stays at the value of its end point.
+ */
+export function splineSides(expressions: string[]): { before: string[]; after: string[] } {
+	const before = new Set<string>();
+	const after = new Set<string>();
+	for (const expression of expressions) {
+		for (const node of pchipNodes(expression)) {
+			const args = (node as unknown as { args: MathNode[] }).args;
+			for (const [arg, sides] of [
+				[args[3], before],
+				[args[4], after]
+			] as const) {
+				if (!arg || extrapolation(arg) === null) continue;
+				let content = arg;
+				while (content.type === 'ParenthesisNode') content = (content as unknown as { content: MathNode }).content;
+				sides.add(content.toString());
+			}
+		}
+	}
+	return { before: [...before], after: [...after] };
+}
