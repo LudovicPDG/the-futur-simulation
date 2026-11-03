@@ -12,7 +12,7 @@ export const CharacterSchema = FactSchema.extend({
 				'A currency (e.g. "EUR", "USD"). It must NEVER be an index, a score or a level of influence/power/popularity.'
 			)
 	}).describe(
-		'The money the character owns or controls (personal wealth, treasury, budget, funds), as an amount of money over time, in a currency. It is NOT the influence, power, popularity or political weight of the character (that belongs to "power"). Estimate it from real-world knowledge for a real character (e.g. the net worth/assets of a person, the budget of an organization or state). The function must return a realistic amount in the currency, never a constant like 1 or a dimensionless index.'
+		'The money the character owns or controls (personal wealth, treasury, budget, funds), as an amount of money over time, in a currency. It is NOT the influence, power, popularity or political weight of the character (that belongs to "power"). Estimate it from real-world knowledge for a real character (e.g. the net worth/assets of a person, the budget of an organization or state). Each interpolation point gives a realistic amount in the currency for ITS date (what the character really owned at that moment, e.g. almost nothing before a person earns money), never a constant like 1 or a dimensionless index.'
 	),
 	power: z
 		.array(TitledItemSchema)

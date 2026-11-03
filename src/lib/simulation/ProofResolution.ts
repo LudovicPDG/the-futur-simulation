@@ -10,7 +10,8 @@ import { combineEvolution, scoreAt, toScoreFunction, type EvolutionComponent } f
  * A text, a boolean... is decided by the voter with the best veracity * impact, a boolean by the weighted vote of
  * the voters and a number or an evolution by their weighted average, with the weight veracity * impact * originality.
  * The sub-proofs are resolved first (from the deepest), so that each proof votes with its debated scores.
- * The veracity, the uncertainty and the impact are functions of the time: everything is decided at one moment t.
+ * The veracity, the uncertainty, the impact and the originality are functions of the time: everything is decided at
+ * one moment t.
  */
 
 /** The fields of a debated proof that its sub-proofs can change (never its desired value). */
@@ -37,8 +38,8 @@ export const EVOLUTION_PARTS = ['function', 'uncertainty_above', 'uncertainty_be
 export type EvolutionPart = (typeof EVOLUTION_PARTS)[number];
 
 const SCORE_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impact', 'originality']);
-/** The scores that are functions of the time; the originality is one single number. */
-const SCORE_FUNCTION_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impact']);
+/** The scores that are functions of the time: all of them. */
+const SCORE_FUNCTION_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impact', 'originality']);
 
 /** The scores of a proof at one moment. */
 type Scores = { veracity: number; uncertainty: number; impact: number; originality: number };
@@ -171,7 +172,7 @@ function scoresOf(proof: ProofData, t: number): Scores {
 		veracity: scoreAt(proof.veracity, t) || 0,
 		uncertainty: scoreAt(proof.uncertainty, t) || 0,
 		impact: scoreAt(proof.impact, t) || 0,
-		originality: proof.originality
+		originality: scoreAt(proof.originality, t) || 0
 	};
 }
 
@@ -387,10 +388,15 @@ export function resolveAtDate<T extends object>(elements: T[], t: number): T[] {
 }
 
 /**
- * The veracity, uncertainty and impact of one value as functions of t: what resolveValue gives at one moment, written
+ * The veracity, uncertainty, impact and originality of one value as functions of t: what resolveValue gives at one moment, written
  * as one expression (the weighted average of the scores of the proofs that changed it, weighted like their votes).
  */
-export function resolveValueFunctions(proofs: ProofData[]): { veracity?: string; uncertainty?: string; impact?: string } {
+export function resolveValueFunctions(proofs: ProofData[]): {
+	veracity?: string;
+	uncertainty?: string;
+	impact?: string;
+	originality?: string;
+} {
 	const clamp = (expression: string) => `max(0, min(100, ${expression}))`;
 	const ordered = [...proofs].reverse();
 	const result: Record<string, string> = {};
@@ -406,7 +412,8 @@ export function resolveValueFunctions(proofs: ProofData[]): { veracity?: string;
 			continue;
 		}
 		const weights = voters.map(
-			(proof) => `${clamp(toScoreFunction(proof.veracity))} * ${clamp(toScoreFunction(proof.impact))} * ${proof.originality}`
+			(proof) =>
+				`${clamp(toScoreFunction(proof.veracity))} * ${clamp(toScoreFunction(proof.impact))} * ${clamp(toScoreFunction(proof.originality))}`
 		);
 		result[field] = `(${scores
 			.map((score, index) => `(${weights[index]}) * ${clamp(score)}`)

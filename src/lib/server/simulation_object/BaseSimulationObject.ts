@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { env } from '$env/dynamic/private';
 import { GENIE_SYSTEM_PROMPT } from './GeniePrompt';
 import { db } from '../utils/database';
+import { toStrictJSONSchema } from './JsonSchema';
 
 export abstract class BaseSimulationObject<
 	T extends {
@@ -10,7 +11,8 @@ export abstract class BaseSimulationObject<
 		description?: any;
 		other?: any;
 		existence?: any;
-		originality?: number;
+		/** One number for an element, a function of the time for a proof. */
+		originality?: unknown;
 		/** One number for an element, a function of the time for a proof. */
 		impact?: unknown;
 	}
@@ -94,7 +96,7 @@ export abstract class BaseSimulationObject<
 					json_schema: {
 						name: `create_${this.typeName}`,
 						strict: true,
-						schema: z.toJSONSchema(schema)
+						schema: toStrictJSONSchema(schema)
 					}
 				}
 			})

@@ -30,8 +30,8 @@
 		relations: { relation: RelationData; entries: RelationInfluenceEntry[] }[];
 		/** The date of the time machine, as a decimal year. */
 		year: number;
-		/** Veracity, uncertainty and impact as functions of t (expressions). */
-		functions?: { veracity?: string; uncertainty?: string; impact?: string };
+		/** Veracity, uncertainty, impact and originality as functions of t (expressions). */
+		functions?: { veracity?: string; uncertainty?: string; impact?: string; originality?: string };
 		/** Existence of the element and color of the value: the evolutions of the proofs are drawn like the value. */
 		existence?: unknown;
 		accent?: { dark: string; light: string };
@@ -74,6 +74,7 @@
 			<div>
 				<dt>{m.simulation_originality_label()}</dt>
 				<dd>{info.originality}</dd>
+				{#if info.functions?.originality}<ScoreFunction expression={info.functions.originality} />{/if}
 			</div>
 		{/if}
 	</dl>

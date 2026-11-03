@@ -2,37 +2,46 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
 import {
+	CURVE_FIELDS,
 	ProofSchema,
-	SubProofSchema,
-	ProofEditSchema,
-	ValueEditSchema,
-	ProposedValueEditSchema,
-	PlainValueEditSchema,
-	ValueScoresSchema,
+	SCORE_COLUMNS,
+	SCORE_FIELDS,
+	valueColumns,
 	valueKind,
+	type EditedRanges,
 	type ProofData,
 	type ProofEdit,
 	type ValueEdit
 } from '$lib/simulation/Proof';
+import { TranslationSchema } from '$lib/simulation/Translation';
 import {
 	EVOLUTION_PARTS,
 	PROOF_EDIT_FIELDS,
 	VALUE_EDIT_FIELDS,
-	type EvolutionPart,
 	VALUE_LISTS,
 	resolveElement,
 	resolveProofs,
-	resolveValue,
 	resolveValueFunctions,
 	valueNames
 } from '$lib/simulation/ProofResolution';
 import {
+	buildEvolutionFunction,
+	changedRange,
 	combineEvolution,
-	dependsOnTime,
+	editSpline,
+	isValidUncertaintyFunction,
 	parseEvolutionFunction,
+	parseSpline,
 	toScoreFunction,
 	type EvolutionComponent
 } from '$lib/simulation/event/EvolutionFunction';
+import {
+	curveEdit,
+	curveExpression,
+	curvesSchema,
+	type CurveColumns,
+	type CurvesInput
+} from '$lib/simulation/event/EvolutionType';
 import { dateToYear } from '$lib/simulation/TimeAxis';
 import { relationValues, type RelationData } from '$lib/simulation/Relation';
 import { RelationServer } from './Relation';
@@ -58,67 +67,194 @@ const FACT_TYPE_TABLES = [
 /** How many founding proofs are generated at the same time. */
 const FOUNDING_PROOF_CONCURRENCY = 4;
 
-/**
- * The content of a founding proof: the value itself is added afterwards, the proof gives the scores it adds with it.
- */
-const FoundingProofSchema = ProofSchema.omit({ value_name: true, desired_value: true }).extend({
-	desired_value: ValueScoresSchema.describe('The scores this founding proof adds to its value.')
+/** The texts of a proof, as the genie writes them. */
+const ProofTextSchema = ProofSchema.pick({
+	type: true,
+	name: true,
+	description: true,
+	verification_method: true,
+	falsifiability_method: true,
+	source: true
 });
 
-/** The founding proof of a value without an originality and an impact of its own (see hasValueScores). */
-const PlainFoundingProofSchema = FoundingProofSchema.extend({
-	desired_value: ValueScoresSchema.omit({ impact: true, originality: true }).describe(
-		'The scores this founding proof adds to its value.'
-	)
-});
+/** The own scores of a proof over time, given as interpolation points. */
+const OwnScoresSchema = curvesSchema(SCORE_COLUMNS).describe(
+	'The scores of THIS proof over time (its veracity, the uncertainty of its veracity, its impact and its originality), as interpolation points at the dates that matter: a proof is stronger or weaker as time passes, as the facts become known, forgotten or confirmed.'
+);
 
-/** An evolution has no general uncertainty score: only the uncertainty above and below its function. */
-const EvolutionFoundingProofSchema = FoundingProofSchema.extend({
-	desired_value: ValueScoresSchema.omit({ uncertainty: true }).describe('The scores this founding proof adds to its value.')
-});
-const PlainEvolutionFoundingProofSchema = FoundingProofSchema.extend({
-	desired_value: ValueScoresSchema.omit({ uncertainty: true, impact: true, originality: true }).describe(
-		'The scores this founding proof adds to its value.'
-	)
-});
+/** The own scores of a generated proof, as functions of the time. */
+function ownScores(scores: CurvesInput): Pick<ProofData, 'veracity' | 'uncertainty' | 'impact' | 'originality'> {
+	return {
+		veracity: curveExpression(scores, 'veracity'),
+		uncertainty: curveExpression(scores, 'uncertainty'),
+		impact: curveExpression(scores, 'impact'),
+		originality: curveExpression(scores, 'originality')
+	};
+}
 
+/** The scores of a value as curves (an evolution has no general uncertainty, see valueColumns). */
+function scoreColumns(evolution: boolean, scored: boolean): CurveColumns {
+	return Object.fromEntries(
+		Object.entries(valueColumns(evolution, scored)).filter(([key]) => (SCORE_FIELDS as string[]).includes(key))
+	);
+}
+
+/** The content of a founding proof: the value itself is added afterwards, the proof gives the scores it adds with it. */
 function foundingSchema(scored: boolean, evolution: boolean) {
-	if (evolution) return scored ? EvolutionFoundingProofSchema : PlainEvolutionFoundingProofSchema;
-	return scored ? FoundingProofSchema : PlainFoundingProofSchema;
-}
-
-/** The same edit with every field nullable: the genie gives only what it changes, null for what it keeps. */
-function keepable<Shape extends z.ZodRawShape>(schema: z.ZodObject<Shape>) {
-	return z.object(
-		Object.fromEntries(
-			Object.entries(schema.shape).map(([key, field]) => {
-				const type = field as z.ZodType;
-				return [key, type.nullable().describe(`${type.description ?? ''} Null to keep the current one unchanged.`)];
-			})
+	return ProofTextSchema.extend({
+		scores: OwnScoresSchema,
+		desired_value: curvesSchema(scoreColumns(evolution, scored)).describe(
+			'The scores this founding proof adds to its value over time, as interpolation points at the dates that matter.'
 		)
-	) as unknown as z.ZodObject<{ [Key in keyof Shape]: z.ZodNullable<Shape[Key]> }>;
+	});
 }
 
-/** A top-level proof as generated: its desired value gives only the parts of the value it changes. */
-const GeneratedProofSchema = ProofSchema.extend({
-	desired_value: keepable(ProposedValueEditSchema).describe(
-		'Only the parts of the value this proof changes (its content and its scores); null for every part it keeps.'
-	)
-});
+/** The fields of a debated proof that a sub-proof changes as a whole (its scores are curves, changed by period). */
+const TEXT_EDIT_FIELDS = ['name', 'description', 'verification_method', 'falsifiability_method', 'source'] as const;
 
-/** A top-level proof of a value without an originality and an impact of its own (see hasValueScores). */
-const GeneratedPlainProofSchema = ProofSchema.extend({
-	desired_value: keepable(ProposedValueEditSchema.omit({ impact: true, originality: true })).describe(
-		'Only the parts of the value this proof changes (its content, veracity and uncertainty); null for every part it keeps.'
-	)
-});
+type GeneratedText = z.infer<typeof ProofTextSchema> & { value_name: ProofData['value_name']; scores: CurvesInput };
+
+/** A top-level proof as generated: its desired value gives only what it changes of the value. */
+type GeneratedProof = GeneratedText & {
+	desired_value: { content?: unknown; unit?: string | null; curves: CurvesInput };
+};
 
 /** A sub-proof as generated: its desired value gives only the fields of the debated proof it changes. */
-const GeneratedSubProofSchema = SubProofSchema.extend({
-	desired_value: keepable(ProofEditSchema).describe(
-		'Only the fields of the debated proof this sub-proof changes (never its desired value); null for every field it keeps.'
-	)
+type GeneratedSubProof = GeneratedText & {
+	desired_value: Partial<Record<(typeof TEXT_EDIT_FIELDS)[number], unknown>> & { scores: CurvesInput };
+};
+
+/** The kind of a value, as far as its curves go: an evolution, another content, or not known yet (free prompt). */
+type ValueShape = 'evolution' | 'other' | 'any';
+
+/**
+ * A top-level proof as the genie writes it: its desired value gives the content it changes (null to keep it) and, in
+ * "curves", the interpolation points of the period it changes for the curves it changes.
+ */
+function generatedProofSchema(shape: ValueShape, scored: boolean) {
+	const columns =
+		shape === 'any'
+			? { ...valueColumns(true, scored), uncertainty: SCORE_COLUMNS.uncertainty }
+			: valueColumns(shape === 'evolution', scored);
+	const desired: Record<string, z.ZodType> = {};
+	if (shape !== 'evolution') {
+		desired.content = z
+			.union([TranslationSchema, z.number(), z.boolean()])
+			.nullable()
+			.describe(
+				`The content this proof wants the value to have, or null to keep the current one. It MUST have the same type as the current value: a number replaces a number, a boolean a boolean, a translated text a translated text (never a plain string).${shape === 'any' ? ' Null for an evolution: its curves are in "curves".' : ''}`
+			);
+	}
+	if (shape !== 'other') {
+		desired.unit = z.string().nullable().describe('The unit of the evolution, or null to keep the current one.');
+	}
+	desired.curves = curvesSchema(columns, true).describe(
+		`What this proof changes in the curves of the value over time${shape === 'other' ? ' (its scores)' : ' (the value of the evolution, its uncertainty above and below, and the scores of the value)'}: the interpolation points of the period it changes, with a number only for the curves it changes. A proof about the 1990s gives points in the 1990s only; the rest of every curve stays as it is.`
+	);
+	return ProofTextSchema.extend({
+		value_name: ProofSchema.shape.value_name,
+		scores: OwnScoresSchema,
+		desired_value: z
+			.object(desired)
+			.describe(
+				'Only what this proof changes in its value; everything it leaves null or does not give keeps its current value exactly.'
+			)
+	});
+}
+
+const GeneratedSubProofSchema = ProofTextSchema.extend({
+	value_name: ProofSchema.shape.value_name,
+	scores: OwnScoresSchema,
+	desired_value: z
+		.object({
+			name: TranslationSchema.nullable().describe('The name this sub-proof wants for the debated proof, or null to keep it.'),
+			description: TranslationSchema.nullable().describe(
+				'The description this sub-proof wants for the debated proof, or null to keep it.'
+			),
+			verification_method: TranslationSchema.nullable().describe(
+				'The verification method this sub-proof wants for the debated proof, or null to keep it.'
+			),
+			falsifiability_method: TranslationSchema.nullable().describe(
+				'The falsifiability method this sub-proof wants for the debated proof, or null to keep it.'
+			),
+			source: z
+				.array(z.string())
+				.nullable()
+				.describe('The whole list of sources this sub-proof wants for the debated proof, or null to keep them.'),
+			scores: curvesSchema(SCORE_COLUMNS, true).describe(
+				'What this sub-proof changes in the scores of the DEBATED proof over time: the interpolation points of the period it changes, with a number only for the scores it changes. The rest of every score stays as it is.'
+			)
+		})
+		.describe(
+			'Only the fields of the debated proof this sub-proof changes (never its desired value); null for every field it keeps.'
+		)
 });
+
+/** The function of an evolution (an expression of t), to compute the value v of its uncertainty. */
+function valueFunction(expression: string | undefined): ((t: number) => number) | undefined {
+	if (!expression) return undefined;
+	return buildEvolutionFunction([{ function: expression, weight: 1, uncertainty_down: '0', uncertainty_up: '0' }]);
+}
+
+/**
+ * The curves after a proof: each curve it gives points for is edited over their period (see editSpline). Returns the
+ * new functions, the fields they are (see CURVE_FIELDS) and the period each one really changes.
+ */
+function applyCurves(
+	curves: CurvesInput,
+	columns: CurveColumns,
+	current: Record<string, string>
+): { functions: Record<string, string>; fields: string[]; ranges: EditedRanges } {
+	const functions = { ...current };
+	const fields: string[] = [];
+	const ranges: EditedRanges = {};
+	// The value first: an uncertainty is read with the value of the function at each moment.
+	const keys = Object.keys(columns).sort((a, b) => Number(b === 'value') - Number(a === 'value'));
+	for (const key of keys) {
+		const edit = curveEdit(curves, key);
+		if (!edit || current[key] === undefined) continue;
+		const distance = columns[key].kind === 'distance';
+		const next = editSpline(current[key], edit, distance ? isValidUncertaintyFunction : undefined);
+		const range = changedRange(current[key], next, distance ? valueFunction(functions.value) : undefined);
+		if (!range) continue;
+		functions[key] = next;
+		fields.push(CURVE_FIELDS[key]);
+		ranges[CURVE_FIELDS[key]] = range;
+	}
+	return { functions, fields, ranges };
+}
+
+/** The curves of a value or of a debated proof as they stand, by column: the function of an evolution and the scores. */
+function currentCurves(kept: ValueEdit | ProofEdit): Record<string, string> {
+	const curves: Record<string, string> = {};
+	const value = (kept as { value?: unknown }).value;
+	if (valueKind(value) === 'evolution') {
+		const components = parseEvolutionFunction((value as Evolution).evolution);
+		if (components) {
+			const one = combineEvolution(components);
+			curves.value = one.function;
+			curves.uncertainty_above = one.uncertainty_up;
+			curves.uncertainty_below = one.uncertainty_down;
+		}
+	}
+	for (const field of SCORE_FIELDS) {
+		const score = (kept as Record<string, unknown>)[field];
+		if (score !== null && score !== undefined) curves[field] = toScoreFunction(score);
+	}
+	return curves;
+}
+
+/** The curves as the genie reads them: the points and the extrapolations of a spline, the expression of a mix. */
+function describeCurves(curves: Record<string, string>): string {
+	return JSON.stringify(
+		Object.fromEntries(
+			Object.entries(curves).map(([key, expression]) => {
+				const spline = parseSpline(expression);
+				return [key, spline ? { points: spline.points, before: spline.before, after: spline.after } : { expression }];
+			})
+		)
+	);
+}
 
 type ProofValue = NonNullable<ValueEdit['value']>;
 
@@ -154,7 +290,7 @@ function toDesiredValue(
 	const desired = { ...kept, ...given } as Record<string, unknown>;
 	if ('value' in desired) desired.value = withOneFunction(desired.value);
 	// A score saved before the scores were functions of the time is a number.
-	for (const score of ['veracity', 'uncertainty', 'impact']) {
+	for (const score of SCORE_FIELDS) {
 		if (score in desired) desired[score] = toScoreFunction(desired[score]);
 	}
 	return desired as ProofData['desired_value'];
@@ -223,6 +359,17 @@ function findOriginalValue(name: unknown, element: Record<string, unknown>): unk
 	return findListEntry(name, element)?.value;
 }
 
+/** The current content of the value. An evolution element holds its functions and its unit side by side: one value. */
+function rawValue(name: unknown, element: Record<string, unknown>): unknown {
+	const found = findOriginalValue(name, element);
+	return Array.isArray(found) && typeof element.unit === 'string' && valueNames(name).includes('evolution')
+		? { evolution: found, unit: element.unit }
+		: found;
+}
+
+/** The scores of a value that has no proof yet, only to show its curves to the genie. */
+const DEFAULT_SCORES = { veracity: '50', uncertainty: '50', impact: '50', originality: '50' };
+
 /** Describes why the value of a proof does not fit its element: an unknown value or a desired content of another type. */
 function findDesiredValueError(
 	proof: { value_name: ProofData['value_name']; desired_value: object },
@@ -241,19 +388,6 @@ function findDesiredValueError(
 		return `the value "${label}" is a ${originalKind}, but you gave a ${desiredKind ?? 'value of another type'}. The desired value must keep the type of the current value (a text stays a text translated in every language).`;
 	}
 	return undefined;
-}
-
-/** The scores of a generated proof (its own and the ones of its desired value) that do not depend on the time. */
-function constantScoreError(proof: { desired_value: object }): string | undefined {
-	const own = proof as unknown as Record<string, unknown>;
-	const desired = proof.desired_value as Record<string, unknown>;
-	const constant = ['veracity', 'uncertainty', 'impact'].filter((field) =>
-		[own[field], desired[field]].some(
-			(score) => typeof score === 'string' && !dependsOnTime(toScoreFunction(score))
-		)
-	);
-	if (constant.length === 0) return undefined;
-	return `the ${constant.join(', ')} ${constant.length > 1 ? 'are' : 'is'} a constant: a score is a real function of t (for example "90 - 0.5 * max(0, t - 2026)"), never a number such as "35". Give a function that depends on t (without any uncertainty).`;
 }
 
 /** Keys of an element that are not values to give a founding proof. */
@@ -351,42 +485,6 @@ function valueEditFields(scored: boolean, evolution = false): string[] {
 
 type Evolution = { evolution: EvolutionComponent[]; unit: string };
 
-/** Used only when an evolution to complete has no current one (a part left null must still have an expression). */
-const DEFAULT_PART = { function: '0', uncertainty_up: '0', uncertainty_down: '0' };
-
-/**
- * The evolution a proof desires, complete: the parts it left null (the function, the uncertainty above and below)
- * keep the current evolution. Returns the parts the proof really changed.
- */
-function completeEvolution(
-	proposed: { evolution: Partial<Record<keyof EvolutionComponent, unknown>>[]; unit: string },
-	current: unknown
-): { value: Evolution; parts: EvolutionPart[] } {
-	const own = proposed.evolution[0] ?? {};
-	const kept = valueKind(current) === 'evolution' ? parseEvolutionFunction((current as Evolution).evolution)?.[0] : undefined;
-	const part = (key: 'function' | 'uncertainty_up' | 'uncertainty_down'): string => {
-		const given = own[key];
-		return typeof given === 'string' ? given : (kept?.[key] ?? DEFAULT_PART[key]);
-	};
-	const parts: EvolutionPart[] = [];
-	if (typeof own.function === 'string') parts.push('function');
-	if (typeof own.uncertainty_up === 'string') parts.push('uncertainty_above');
-	if (typeof own.uncertainty_down === 'string') parts.push('uncertainty_below');
-	return {
-		value: {
-			evolution: [
-				{
-					function: part('function'),
-					weight: 1,
-					uncertainty_down: part('uncertainty_down'),
-					uncertainty_up: part('uncertainty_up')
-				}
-			],
-			unit: proposed.unit || (current as Evolution | undefined)?.unit || ''
-		},
-		parts
-	};
-}
 
 export class ProofServer extends BaseSimulationObject<ProofData> {
 	protected schema = ProofSchema;
@@ -512,25 +610,29 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			const results = await Promise.allSettled(
 				batch.map(async (value) => {
 					const evolution = valueKind(value.value) === 'evolution';
-					const generate = (extra = '') =>
-						this.generateWithSchema(
-							model_name,
-							level_of_reasoning,
-							`${prompt}${context.text}
+					const columns = scoreColumns(evolution, value.scored);
+					const generated = (await this.generateWithSchema(
+						model_name,
+						level_of_reasoning,
+						`${prompt}${context.text}
 
-Create the founding proof of ONE value of this element: the value ${JSON.stringify(value.value_name)}, whose content is ${JSON.stringify(value.value)}. Give the source and the information this value is based on (documents, data, statements, observations). The sources must be real and verifiable. The founding proof adds this value: its desired value gives the ${evolution ? (value.scored ? 'veracity, impact and originality' : 'veracity') : value.scored ? 'veracity, uncertainty, impact and originality' : 'veracity and uncertainty'} of THIS value alone, not of the whole element: they differ from one value to another. This proof will be the starting point of the debate about this value.${extra}`,
-							foundingSchema(value.scored, evolution)
-						);
-					let generated = await generate();
-					const constant = constantScoreError(generated);
-					if (constant) generated = await generate(`
-
-Your previous answer was rejected: ${constant}`);
+Create the founding proof of ONE value of this element: the value ${JSON.stringify(value.value_name)}, whose content is ${JSON.stringify(value.value)}. Give the source and the information this value is based on (documents, data, statements, observations). The sources must be real and verifiable. The founding proof adds this value: its desired value gives the ${Object.keys(columns).join(', ')} of THIS value alone over time, not of the whole element: they differ from one value to another, and from one period to another (a well documented period is more certain than a forecast). This proof will be the starting point of the debate about this value.`,
+						foundingSchema(value.scored, evolution)
+					)) as z.infer<ReturnType<typeof foundingSchema>> & { scores: CurvesInput; desired_value: CurvesInput };
+					const { scores, desired_value: curves, ...texts } = generated;
+					const own = ownScores(scores);
 					const proof: ProofData = {
-						...generated,
+						...texts,
+						...own,
 						value_name: value.value_name,
 						// An evolution has no general uncertainty of its own: it keeps the one of the proof, which is not used.
-						desired_value: { value: value.value, uncertainty: generated.uncertainty, ...generated.desired_value },
+						desired_value: {
+							value: value.value,
+							uncertainty: own.uncertainty,
+							...Object.fromEntries(
+								Object.entries(columns).map(([key, column]) => [key, curveExpression(curves, key, column)])
+							)
+						} as ValueEdit,
 						// The founding proof adds the value: it gives every part of it.
 						edited_fields: valueEditFields(value.scored, evolution),
 						id: randomUUID(),
@@ -670,12 +772,7 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 				valueNames(proof.value_name).some((name) => names.includes(name.toLowerCase()))
 		);
 		const voted = resolveValueFunctions(own);
-		const found = findOriginalValue(valueName, element);
-		// An evolution element holds its functions and its unit side by side: they form one value.
-		const raw =
-			Array.isArray(found) && typeof element.unit === 'string' && valueNames(valueName).includes('evolution')
-				? { evolution: found, unit: element.unit }
-				: found;
+		const raw = rawValue(valueName, element);
 		const current = {
 			value: toProofValue(raw) ?? (raw as ProofValue),
 			veracity: voted.veracity ?? fallback.veracity,
@@ -685,8 +782,7 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 			? {
 					...current,
 					impact: voted.impact ?? fallback.impact,
-					// The originality is one number, the same at every moment.
-					originality: resolveValue(own, 0).originality ?? fallback.originality
+					originality: voted.originality ?? fallback.originality
 				}
 			: current;
 	}
@@ -711,74 +807,120 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 			parentEdit = proofFields(parent);
 			context += `\n\nThis proof is a sub-proof: it debates (supports, questions or refutes) the following existing proof:\n${JSON.stringify(
 				{ ...parentEdit, value_name: parent.value_name, desired_value: parent.desired_value }
-			)}`;
-		}
-		if (valueName !== undefined) {
-			context += `\n\nThis proof is about the value ${JSON.stringify(valueName)} of the element: use exactly this value_name.`;
+			)}\n\nThe current scores of the debated proof over time, each given by its interpolation points [date, score] and its expressions before the first and after the last point:\n${describeCurves(currentCurves(parentEdit))}`;
 		}
 
 		// Only an entry of a list of a fact has an originality and an impact of its own. When the value is not known
-		// yet (free prompt), the genie may give them, and they are dropped below if the value has none.
+		// yet (free prompt), the genie may give them, and they are left out below if the value has none.
 		const scored = valueName === undefined || hasValueScores(target, valueName, element);
+		let shape: ValueShape = 'any';
+		if (valueName !== undefined) {
+			context += `\n\nThis proof is about the value ${JSON.stringify(valueName)} of the element: use exactly this value_name.`;
+			shape = valueKind(toProofValue(rawValue(valueName, element))) === 'evolution' ? 'evolution' : 'other';
+			if (!parentProofId) {
+				const preview = this.currentValue(target, valueName, element, proofs, DEFAULT_SCORES);
+				context += `\n\nThe current curves of this value over time, each given by its interpolation points [date, value] and its expressions before the first and after the last point (or by its expression when it mixes several proofs):\n${describeCurves(currentCurves(preview))}`;
+			}
+		}
 		const basePrompt = `${prompt}${context}
 
 ${
 			parentProofId
-				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources, veracity, uncertainty, impact, originality) and null for every other field: they keep their current value exactly. Never rewrite a field that does not need to change. It cannot edit the desired value of the debated proof.'
-				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY the parts of the value that the request asks to change (its content, veracity, uncertainty${scored ? ', impact, originality' : ''}) and null for every other part: they keep their current value exactly. If its content is an evolution, it holds exactly ONE function (weight 1), never a mix of functions; its function, its uncertainty above and its uncertainty below are three separate parts, so change only the ones the request is about (null for the others), and leave its general uncertainty null: an evolution has only the uncertainty above and below its function.`
+				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources) and null for every other field: they keep their current value exactly. The scores of the debated proof (veracity, uncertainty, impact, originality) are curves of the time: change them in "scores" with the interpolation points of the period the request is about, and a number only for the scores it changes. Never rewrite what does not need to change. It cannot edit the desired value of the debated proof.'
+				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY what the request asks to change: its content (null to keep it) and, in "curves", the interpolation points of the period it is about, with a number only for the curves it changes (${
+						shape === 'evolution'
+							? 'the value of the evolution, its uncertainty above, its uncertainty below'
+							: shape === 'other'
+								? 'the scores of the value'
+								: 'the value of an evolution and its uncertainty above and below, or the scores of the value'
+					}) and null for the others. Everything else keeps its current value exactly: a proof about the uncertainty above in the 1990s gives points in the 1990s with only "uncertainty_above".`
 		}`;
 
 		// The value must exist and the desired content must keep its type: retry once with the error.
+		const schema = parentProofId ? GeneratedSubProofSchema : generatedProofSchema(shape, scored);
 		const generate = async (extra = '') => {
-			const proof: z.infer<
-				typeof GeneratedProofSchema | typeof GeneratedPlainProofSchema | typeof GeneratedSubProofSchema
-			> = await this.generateWithSchema(
-				model_name,
-				level_of_reasoning,
-				basePrompt + extra,
-				parentProofId ? GeneratedSubProofSchema : scored ? GeneratedProofSchema : GeneratedPlainProofSchema
-			);
+			const proof = (await this.generateWithSchema(model_name, level_of_reasoning, basePrompt + extra, schema)) as
+				| GeneratedProof
+				| GeneratedSubProof;
 			return valueName !== undefined ? { ...proof, value_name: valueName } : proof;
 		};
+		const checked = (proof: GeneratedProof | GeneratedSubProof) => ({
+			value_name: proof.value_name,
+			desired_value: { value: parentProofId ? undefined : (proof as GeneratedProof).desired_value.content }
+		});
 		let generated = await generate();
-		const error = findDesiredValueError(generated, element) ?? constantScoreError(generated);
+		const error = findDesiredValueError(checked(generated), element);
 		if (error) {
 			generated = await generate(`\n\nYour previous answer was rejected: ${error}`);
-			// A score that stays constant after the second answer is kept: only a wrong value stops the proof.
-			const secondError = findDesiredValueError(generated, element);
+			const secondError = findDesiredValueError(checked(generated), element);
 			if (secondError) throw new Error(secondError);
 		}
-		if (!parentProofId && !hasValueScores(target, generated.value_name, element)) {
-			const { impact: _impact, originality: _originality, ...plain } = generated.desired_value as Record<
-				string,
-				unknown
-			>;
-			generated = { ...generated, desired_value: plain } as typeof generated;
-		}
 
-		// The fields left null keep their current value: the desired value is always complete.
-		const kept: ValueEdit | ProofEdit =
-			parentEdit ?? this.currentValue(target, generated.value_name, element, proofs, generated);
-		let desired = generated.desired_value as Record<string, unknown>;
-		let edited_fields = changedFields(desired);
-		const proposed = desired.value;
-		if (!parentProofId && valueKind(proposed ?? (kept as ValueEdit).value) === 'evolution') {
-			// An evolution is edited part by part (its function, its uncertainty above and below) and has no general
-			// uncertainty: only the parts the genie did not leave null vote.
-			edited_fields = edited_fields.filter((field) => field !== 'value' && field !== 'uncertainty');
-			desired = { ...desired, uncertainty: null };
-			if (valueKind(proposed) === 'evolution') {
-				const { value, parts } = completeEvolution(proposed as Parameters<typeof completeEvolution>[0], (kept as ValueEdit).value);
-				desired = { ...desired, value };
-				edited_fields.push(...parts);
+		const { scores, desired_value: proposed, ...texts } = generated;
+		const own = ownScores(scores);
+		let desired_value: ProofData['desired_value'];
+		const edited_fields: string[] = [];
+		let edited_ranges: EditedRanges = {};
+
+		if (parentEdit) {
+			// The fields left null keep their current value: the desired value is always complete.
+			const edit = proposed as GeneratedSubProof['desired_value'];
+			const desired: Record<string, unknown> = { ...parentEdit };
+			for (const field of TEXT_EDIT_FIELDS) {
+				if (edit[field] === null || edit[field] === undefined) continue;
+				desired[field] = edit[field];
+				edited_fields.push(field);
 			}
+			const curves = applyCurves(edit.scores, SCORE_COLUMNS, currentCurves(parentEdit));
+			for (const field of SCORE_FIELDS) desired[field] = curves.functions[field];
+			edited_fields.push(...curves.fields);
+			edited_ranges = curves.ranges;
+			desired_value = desired as ProofEdit;
+		} else {
+			const edit = proposed as GeneratedProof['desired_value'];
+			const kept = this.currentValue(target, generated.value_name, element, proofs, own);
+			const evolution = valueKind(kept.value) === 'evolution';
+			const curves = applyCurves(
+				edit.curves,
+				valueColumns(evolution, hasValueScores(target, generated.value_name, element)),
+				currentCurves(kept)
+			);
+			const desired: Record<string, unknown> = { ...kept };
+			if (evolution) {
+				// An evolution is edited curve by curve (its function, its uncertainty above and below) and has no
+				// general uncertainty: only the curves the proof really changed vote.
+				const { functions } = curves;
+				desired.value = {
+					evolution: [
+						{
+							function: functions.value,
+							weight: 1,
+							uncertainty_down: functions.uncertainty_below,
+							uncertainty_up: functions.uncertainty_above
+						}
+					],
+					unit: edit.unit || (kept.value as Evolution).unit
+				};
+			} else if (edit.content !== null && edit.content !== undefined) {
+				desired.value = edit.content;
+				edited_fields.push('value');
+			}
+			for (const field of SCORE_FIELDS) {
+				if (field in kept) desired[field] = curves.functions[field];
+			}
+			edited_fields.push(...curves.fields);
+			edited_ranges = curves.ranges;
+			desired_value = desired as ValueEdit;
 		}
-		const proof = { ...generated, desired_value: toDesiredValue(desired, kept) };
 
 		return {
-			...proof,
-			// Only the fields the genie did not leave null vote for a change.
+			...texts,
+			...own,
+			type: 'proof',
+			desired_value,
+			// Only the fields the proof really changed vote for a change, and only the period it changes stands out.
 			edited_fields,
+			edited_ranges,
 			id: randomUUID(),
 			fact_id: 'factId' in target ? target.factId : null,
 			relation_id: 'relationId' in target ? target.relationId : null,
@@ -804,8 +946,9 @@ ${
 				fact_id,
 				relation_id,
 				parent_proof_id,
-				edited_fields
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+				edited_fields,
+				edited_ranges
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
 			[
 				proof.id ?? randomUUID(),
 				convertToPg(proof.name),
@@ -822,7 +965,8 @@ ${
 				proof.fact_id ?? null,
 				proof.relation_id ?? null,
 				proof.parent_proof_id ?? null,
-				proof.edited_fields ?? null
+				proof.edited_fields ?? null,
+				proof.edited_ranges ? JSON.stringify(proof.edited_ranges) : null
 			]
 		);
 	}
@@ -848,12 +992,13 @@ ${
 			veracity: toScoreFunction(row.veracity),
 			uncertainty: toScoreFunction(row.uncertainty),
 			impact: toScoreFunction(row.impact),
-			originality: Number(row.originality),
+			originality: toScoreFunction(row.originality),
 			fact_id: row.fact_id,
 			relation_id: row.relation_id,
 			parent_proof_id: row.parent_proof_id,
 			original_proof_id: row.original_proof_id ?? null,
-			edited_fields: row.edited_fields ?? null
+			edited_fields: row.edited_fields ?? null,
+			edited_ranges: row.edited_ranges ?? null
 		}));
 
 		// The fields a desired value kept: the scores of the proof itself, or the fields of the debated proof.

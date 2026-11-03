@@ -145,15 +145,18 @@ export async function createDatabase() {
 				verification_method translation_t NOT NULL,
 				falsifiability_method translation_t NOT NULL,
 				source TEXT[] NOT NULL DEFAULT '{}',
-				-- Véracité, incertitude et impact : des fonctions du temps t (expressions mathjs, valeurs de 0 à 100), sans incertitude
+				-- Véracité, incertitude, impact et originalité : des fonctions du temps t (expressions mathjs, valeurs de 0 à 100),
+				-- sans incertitude
 				veracity TEXT NOT NULL DEFAULT '50',
 				uncertainty TEXT NOT NULL DEFAULT '50',
-				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100),
+				originality TEXT NOT NULL DEFAULT '0',
 				impact TEXT NOT NULL DEFAULT '0',
 				value_name JSONB,
 				desired_value JSONB NOT NULL,
 				-- Les champs de desired_value que la preuve modifie vraiment : seuls eux votent
 				edited_fields TEXT[],
+				-- Pour chaque courbe modifiée, la période qu'elle modifie vraiment ([début, fin], null : sans fin)
+				edited_ranges JSONB,
 				fact_id UUID REFERENCES facts(id) ON DELETE CASCADE,
 				relation_id UUID REFERENCES relations(id) ON DELETE CASCADE,
 				parent_proof_id UUID REFERENCES proofs(id) ON DELETE CASCADE,

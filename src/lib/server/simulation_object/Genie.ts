@@ -14,6 +14,7 @@ import type { ProofData } from '$lib/simulation/Proof';
 import type { RelationData } from '$lib/simulation/Relation';
 
 import { GENIE_SYSTEM_PROMPT } from './GeniePrompt';
+import { toStrictJSONSchema } from './JsonSchema';
 import { Fact } from './fact';
 import { Person } from './character/Person';
 import { Organization } from './character/Organization';
@@ -138,7 +139,7 @@ export class Genie {
 		- create_organisation (for create an organisation)
 		- create_person (for create a person)
 		- create_interest_group (for create an interest group. An interest group it's a thing that describe the will of certain person or organization, an interest group dosn't have structre like an organization it's simply a thing that represent interest of people like anti abortion, anti AI person etc.)
-		- create_evolution (for create an evolution. Create a evolution for all the things that can be dependant of a time variable like the price of a material resource, the level of accessible ressource of  a material resource,  etc. Its evolution is a mathematical function of the year t, usually one single function.)
+		- create_evolution (for create an evolution. Create a evolution for all the things that can be dependant of a time variable like the price of a material resource, the level of accessible ressource of  a material resource,  etc. Its evolution is given by interpolation points at precise dates.)
 		- create_fact (for create a fact)
 		- create_event (for create an event)
 		- create_ranking (for create a ranking. Create a ranking for all the things that can be dependant of a ranking system like a political election, a competition, etc.)
@@ -169,7 +170,7 @@ export class Genie {
 					json_schema: {
 						name: 'simulation_action',
 						strict: true,
-						schema: z.toJSONSchema(ActionSchema)
+						schema: toStrictJSONSchema(ActionSchema)
 					}
 				}
 			})

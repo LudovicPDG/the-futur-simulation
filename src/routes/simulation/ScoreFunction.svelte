@@ -1,8 +1,16 @@
 <script lang="ts">
+	import type { TimeRange } from '$lib/simulation/event/EvolutionFunction';
 	import * as m from '$lib/paraglide/messages';
 	import EvolutionChart from './EvolutionChart.svelte';
 
-	let { expression }: { expression: string } = $props();
+	let {
+		expression,
+		range
+	}: {
+		expression: string;
+		/** The period of the score that a proof really changes: only this portion stands out. */
+		range?: TimeRange;
+	} = $props();
 
 	let shown = $state(false);
 	// A score is a function of t from 0 to 100 without uncertainty: drawn on its whole axis.
@@ -22,6 +30,8 @@
 				showExistence={false}
 				showUncertainty={false}
 				bounds={[0, 100]}
+				edited={range ? { function: true, above: false, below: false } : undefined}
+				ranges={range ? { function: range } : undefined}
 			/>
 		</div>
 	{/if}

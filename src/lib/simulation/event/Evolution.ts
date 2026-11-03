@@ -4,13 +4,7 @@ import type { SvgShapeOptions } from '../fact';
 import { occurrenceSchema } from '../Existence';
 import { EvolutionFunctionSchema, EvolutionTypeSchema } from './EvolutionType';
 
-export {
-	UncertaintyDownSchema,
-	UncertaintyUpSchema,
-	EvolutionComponentSchema,
-	EvolutionFunctionSchema,
-	EvolutionTypeSchema
-} from './EvolutionType';
+export { EvolutionFunctionSchema, EvolutionTypeSchema } from './EvolutionType';
 
 export type EvolutionTypeData = z.infer<typeof EvolutionTypeSchema>;
 export type EvolutionType = EvolutionTypeData;

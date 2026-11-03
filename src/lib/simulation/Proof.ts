@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
-import { isValidEvolutionFunction } from './event/EvolutionFunction';
-import { EvolutionComponentSchema, EvolutionFunctionSchema, EvolutionTypeSchema } from './event/EvolutionType';
+import type { TimeRange } from './event/EvolutionFunction';
+import { evolutionColumns, type CurveColumns } from './event/EvolutionType';
 
 export type ProofValueKind = 'translation' | 'number' | 'boolean' | 'evolution';
 
@@ -18,102 +18,92 @@ export function valueKind(value: unknown): ProofValueKind | undefined {
 }
 
 /**
- * A score that changes over time: a function of t whose values are read between 0 and 100, without uncertainty. It is
- * never a constant: a score is a real function of the time.
+ * A score as it is stored: a function of the time t (the spline of the points the genie gave, as a mathjs
+ * expression), whose values are read between 0 and 100, without uncertainty.
  */
-function scoreFunction(meaning: string) {
-	return z
-		.string()
-		.refine(isValidEvolutionFunction, 'Not a valid mathjs expression of t')
-		.describe(
-			`${meaning} It is a mathjs expression of the time t, where t is the calendar year as a decimal number (2026.75 = October 2026), giving a number from 0 to 100 at each moment (a result outside of this scale is brought back to it). It has NO uncertainty: only the function. It MUST depend on t, never a constant such as "35": the score really changes over time (the proof is stronger or weaker as time passes, as the facts become known, forgotten or confirmed). Examples: "90 - 0.5 * max(0, t - 2026)", "20 + 60 * tanh(max(0, t - 2030) / 10)", "60 + 25 * exp(-(t - 2026) / 15)". Only use t, numbers, + - * / ^, and mathjs functions (exp, log, sqrt, tanh, min, max...).`
-		);
-}
+const StoredScoreSchema = z.string();
 
-const scores = {
-	veracity: scoreFunction(
-		'The veracity of the proof over time (0 = certainly false, 100 = certainly true). Use the whole scale.'
+/** An evolution as it is stored: its functions (splines) and its unit. A proof gives one single function. */
+const StoredEvolutionSchema = z.object({
+	evolution: z.array(
+		z.object({
+			function: z.string(),
+			weight: z.number(),
+			uncertainty_down: z.string(),
+			uncertainty_up: z.string()
+		})
 	),
-	uncertainty: scoreFunction(
-		'The uncertainty of the veracity of the proof over time: 5 = the veracity is known within about +-5 points, 40 = a rough estimate.'
-	),
-	impact: scoreFunction(
-		'The impact of the proof on its value over time: how strongly it moves the value toward the desired value, from 0 (no effect) to 100 (it decides the value). Use the whole scale.'
-	),
-	originality: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe(
-			'Originality of the proof compared with other proofs, as a percentage from 0 to 100 (NOT a ratio between 0 and 1): 0 = a copy of something that already exists, 50 = moderately original, 100 = completely new. Use the whole scale, e.g. 35 or 80, never 0.35 or 0.8. It avoids that people spam the same thing and increase the probability of certain things.'
-		)
-};
-
-/** The scores of a value of an element: what a founding proof adds next to the content of the value. */
-export const ValueScoresSchema = z.object({
-	veracity: scoreFunction('The veracity of the value over time, from 0 (certainly false) to 100 (certainly true).'),
-	uncertainty: scoreFunction('The uncertainty of the veracity of the value over time (5 = known within about +-5 points).'),
-	impact: scoreFunction('The impact of the value over time, from 0 (no effect) to 100 (decisive).'),
-	originality: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe('The originality of the value, as a percentage from 0 (a copy of an existing one) to 100 (completely new).')
+	unit: z.string()
 });
 
-/** A proof gives one single function: the voters of a value are what makes it a mix of functions. */
-const ProofEvolutionSchema = EvolutionTypeSchema.extend({
-	evolution: EvolutionFunctionSchema.describe(
-		'The evolution this proof wants, as a function of the time t: EXACTLY ONE component with the weight 1, never a mix of functions. A hypothesis mixing several scenarios is written as one single function.'
-	)
-});
+/** The scores of a proof and of a value: each one is a curve of the time, given by the genie as points. */
+export const SCORE_COLUMNS = {
+	veracity: {
+		description: 'The veracity at this date, from 0 (certainly false) to 100 (certainly true). Use the whole scale.',
+		min: 0,
+		max: 100
+	},
+	uncertainty: {
+		description:
+			'The uncertainty of the veracity at this date: 5 = the veracity is known within about +-5 points, 40 = a rough estimate.',
+		min: 0,
+		max: 100
+	},
+	impact: {
+		description:
+			'The impact at this date: how strongly it moves the value toward the desired value, from 0 (no effect) to 100 (it decides the value). Use the whole scale.',
+		min: 0,
+		max: 100
+	},
+	originality: {
+		description:
+			'The originality at this date compared with the other proofs, as a percentage from 0 to 100 (NOT a ratio between 0 and 1): 0 = a copy of something that already exists, 100 = completely new. It keeps people from spamming the same thing to make it more probable.',
+		min: 0,
+		max: 100
+	}
+} satisfies CurveColumns;
+
+export type ScoreField = keyof typeof SCORE_COLUMNS;
+export const SCORE_FIELDS = Object.keys(SCORE_COLUMNS) as ScoreField[];
 
 /**
- * Every part of its value of the element that a top-level proof wants: its content and its scores.
+ * The curves of a value given as points: the value and its uncertainty above and below for an evolution (it has no
+ * general uncertainty), then its scores, the impact and the originality only for a value that has its own.
+ */
+export function valueColumns(evolution: boolean, scored: boolean): CurveColumns {
+	const columns: CurveColumns = evolution ? evolutionColumns() : {};
+	for (const field of SCORE_FIELDS) {
+		if (evolution && field === 'uncertainty') continue;
+		if (!scored && (field === 'impact' || field === 'originality')) continue;
+		columns[field] = SCORE_COLUMNS[field];
+	}
+	return columns;
+}
+
+/** The field of a value or of a proof that a curve is: the curve "value" of an evolution is its function. */
+export const CURVE_FIELDS: Record<string, string> = {
+	value: 'function',
+	uncertainty_above: 'uncertainty_above',
+	uncertainty_below: 'uncertainty_below',
+	veracity: 'veracity',
+	uncertainty: 'uncertainty',
+	impact: 'impact',
+	originality: 'originality'
+};
+
+/** For each curve a proof changes, the period it really changes (see changedRange). */
+export type EditedRanges = Record<string, TimeRange>;
+
+/**
+ * Every part of its value of the element that a top-level proof wants: its content and its scores (functions of t).
  * All of them are always given (a part the proof keeps repeats the current one).
  */
 export const ValueEditSchema = z.object({
-	// Not z.any(): its JSON schema has no "type", which strict structured outputs reject.
-	value: z
-		.union([TranslationSchema, z.number(), z.boolean(), ProofEvolutionSchema])
-		.describe(
-			'The content this proof wants the value to have (the current content if it keeps it). A text is translated in every language (never a plain string). It MUST have the same type as the current value: a number replaces a number, a boolean a boolean, a translated text a translated text, an evolution (ONE mathjs function of the time t and its unit) an evolution. For the existence of the element, the evolution is a percentage between 0 and 100 with the unit "%".'
-		),
-	veracity: ValueScoresSchema.shape.veracity.describe('The veracity this proof wants for the value.'),
-	uncertainty: ValueScoresSchema.shape.uncertainty.describe('The uncertainty this proof wants for the value.'),
-	impact: ValueScoresSchema.shape.impact.describe('The impact this proof wants for the value.'),
-	originality: ValueScoresSchema.shape.originality.describe('The originality this proof wants for the value.')
-});
-
-/** Gives null to a part of an evolution that a proof keeps as it is. */
-function keepPart<Part extends z.ZodType>(part: Part) {
-	return part.nullable().describe(`${part.description ?? ''} Null to keep the current one unchanged.`);
-}
-
-/**
- * The evolution a proof proposes: its function and each side of its uncertainty are changed on their own, so that a
- * proof can edit the uncertainty above without touching the function (or the contrary).
- */
-const ProposedEvolutionSchema = EvolutionTypeSchema.extend({
-	evolution: z
-		.array(
-			EvolutionComponentSchema.extend({
-				function: keepPart(EvolutionComponentSchema.shape.function),
-				uncertainty_down: keepPart(EvolutionComponentSchema.shape.uncertainty_down),
-				uncertainty_up: keepPart(EvolutionComponentSchema.shape.uncertainty_up)
-			})
-		)
-		.min(1)
-		.describe(
-			'The evolution this proof wants, as EXACTLY ONE component with the weight 1, never a mix of functions. The function, the uncertainty above and the uncertainty below are three separate parts: give ONLY the ones the request asks to change and null for the others (changing the uncertainty above alone leaves the function and the uncertainty below as they are).'
-		)
-});
-
-/** A value edit as proposed by the genie: the parts of an evolution it keeps are null. */
-export const ProposedValueEditSchema = ValueEditSchema.extend({
-	value: z
-		.union([TranslationSchema, z.number(), z.boolean(), ProposedEvolutionSchema])
-		.describe(ValueEditSchema.shape.value.description ?? '')
+	value: z.union([TranslationSchema, z.number(), z.boolean(), StoredEvolutionSchema]),
+	veracity: StoredScoreSchema,
+	uncertainty: StoredScoreSchema,
+	impact: StoredScoreSchema,
+	originality: StoredScoreSchema
 });
 
 /**
@@ -121,15 +111,15 @@ export const ProposedValueEditSchema = ValueEditSchema.extend({
  * All of them are always given (a field the sub-proof keeps repeats the current one).
  */
 export const ProofEditSchema = z.object({
-	name: TranslationSchema.describe('The name this sub-proof wants for the debated proof (the current one if it keeps it).'),
-	description: TranslationSchema.describe('The description this sub-proof wants for the debated proof (the current one if it keeps it).'),
-	verification_method: TranslationSchema.describe('The verification method this sub-proof wants for the debated proof (the current one if it keeps it).'),
-	falsifiability_method: TranslationSchema.describe('The falsifiability method this sub-proof wants for the debated proof (the current one if it keeps it).'),
-	source: z.array(z.string()).describe('The whole list of sources this sub-proof wants for the debated proof (the current ones if it keeps them).'),
-	veracity: scores.veracity.describe('The veracity this sub-proof wants for the debated proof.'),
-	uncertainty: scores.uncertainty.describe('The uncertainty this sub-proof wants for the debated proof.'),
-	impact: scores.impact.describe('The impact this sub-proof wants for the debated proof.'),
-	originality: scores.originality.describe('The originality this sub-proof wants for the debated proof.')
+	name: TranslationSchema,
+	description: TranslationSchema,
+	verification_method: TranslationSchema,
+	falsifiability_method: TranslationSchema,
+	source: z.array(z.string()),
+	veracity: StoredScoreSchema,
+	uncertainty: StoredScoreSchema,
+	impact: StoredScoreSchema,
+	originality: StoredScoreSchema
 });
 
 /**
@@ -155,20 +145,14 @@ export const ProofSchema = z.object({
 		.describe(
 			'The ONE existing value of the element this proof is about. For a primary property of the element, the exact property key as a plain string (e.g. "description"). For an "other information", its name translated in every language, exactly as in the element.'
 		),
-	desired_value: ValueEditSchema.describe(
-		'Every part this proof wants for its value: its content and its scores. Give all of them, never leave one out.'
-	),
+	desired_value: ValueEditSchema,
 	verification_method: TranslationSchema.describe('How to verify the truth of the proof'),
 	falsifiability_method: TranslationSchema.describe('How to falsify the truth of the proof'),
 	source: z.array(z.string()).default([]).describe('Sources for the proof'),
-	...scores
-});
-
-/** A sub-proof debates a proof: its desired value holds every field of the debated proof it edits. */
-export const SubProofSchema = ProofSchema.extend({
-	desired_value: ProofEditSchema.describe(
-		'Every field this sub-proof wants for the debated proof (never its desired value). Give all of them, never leave one out.'
-	)
+	veracity: StoredScoreSchema,
+	uncertainty: StoredScoreSchema,
+	impact: StoredScoreSchema,
+	originality: StoredScoreSchema
 });
 
 /**
@@ -180,6 +164,8 @@ export type ProofData = Omit<z.infer<typeof ProofSchema>, 'desired_value'> & {
 	desired_value: ValueEdit | ProofEdit;
 	/** The fields of the desired value the proof really changed: only they vote (see ProofResolution). */
 	edited_fields?: string[] | null;
+	/** For the curves it changes, the period it really changes: only this part of the curve stands out. */
+	edited_ranges?: EditedRanges | null;
 	id?: string;
 	fact_id?: string | null;
 	relation_id?: string | null;

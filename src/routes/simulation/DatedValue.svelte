@@ -2,7 +2,8 @@
 	import {
 		buildEvolutionFunction,
 		buildEvolutionUncertainty,
-		parseEvolutionFunction
+		parseEvolutionFunction,
+		type TimeRange
 	} from '$lib/simulation/event/EvolutionFunction';
 	import * as m from '$lib/paraglide/messages';
 	import EvolutionChart from './EvolutionChart.svelte';
@@ -15,7 +16,8 @@
 		existence: existenceEvolution,
 		bounds,
 		accent,
-		edited
+		edited,
+		ranges
 	}: {
 		evolution?: unknown;
 		unit?: string;
@@ -29,6 +31,8 @@
 		accent?: { dark: string; light: string };
 		/** The parts a proof changes (the function, the uncertainty above and below): the others are in the shadow */
 		edited?: { function: boolean; above: boolean; below: boolean };
+		/** The period of each changed part that the proof really changes: only this portion stands out */
+		ranges?: { function?: TimeRange; above?: TimeRange; below?: TimeRange };
 	} = $props();
 
 	const components = $derived(parseEvolutionFunction(evolution));
@@ -88,6 +92,7 @@
 				{bounds}
 				{accent}
 				{edited}
+				{ranges}
 			/>
 		</div>
 	{/if}

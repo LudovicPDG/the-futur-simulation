@@ -4,7 +4,8 @@
 		parseEvolutionValue,
 		scoreAt,
 		toScoreFunction,
-		type EvolutionValue
+		type EvolutionValue,
+		type TimeRange
 	} from '$lib/simulation/event/EvolutionFunction';
 	import { addProofTarget, addRelationTarget, addValueTarget, debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
@@ -91,29 +92,26 @@
 		value: number;
 		text: string;
 		changed: boolean;
-		/** The score as a function of t (not for the originality, which is one number). */
-		fn?: string;
+		/** The score as a function of t. */
+		fn: string;
+		/** The period of the score the proof really changes: only this portion of its curve stands out. */
+		range?: TimeRange;
 	};
-
-	const functionOf = (key: string, raw: unknown) => (key === 'originality' ? undefined : toScoreFunction(raw));
-
-	/** A score at the date: the originality is one number, the others are functions of the time. */
-	function scoreValue(key: string, raw: unknown): number {
-		return key === 'originality' ? Number(raw) : scoreAt(raw, year);
-	}
 
 	/** The own scores of the proof, shown like the scores of its desired value. */
 	function proofScores(proof: StoredProof): ScoreView[] {
 		return SCORE_FIELDS.flatMap(([key, label, text]) => {
-			const value = scoreValue(key, proof[key as keyof StoredProof]);
+			const value = scoreAt(proof[key as keyof StoredProof], year);
 			if (!Number.isFinite(value)) return [];
-			const fn = functionOf(key, proof[key as keyof StoredProof]);
+			const fn = toScoreFunction(proof[key as keyof StoredProof]);
 			return [{ key, label: label(), value, text: text(value), changed: false, fn }];
 		});
 	}
 
 	/** The parts of an evolution that a proof changes: its function and each side of its uncertainty. */
 	type EditedParts = { function: boolean; above: boolean; below: boolean };
+	/** The period of each changed part that the proof really changes. */
+	type EditedPartRanges = { function?: TimeRange; above?: TimeRange; below?: TimeRange };
 
 	type DesiredView = {
 		/** Whether the fields are compared with a debated proof (only for a sub-proof). */
@@ -128,6 +126,8 @@
 			evolution: EvolutionValue | null;
 			/** The parts of the evolution this proof changes, when only some of them (the others are in the shadow). */
 			parts?: EditedParts;
+			/** The portion of each changed part that the proof really changes. */
+			ranges?: EditedPartRanges;
 		}[];
 		sources: { list: string[]; changed: boolean } | null;
 		scores: ScoreView[];
@@ -141,6 +141,8 @@
 		const desired = proof.desired_value as Record<string, unknown>;
 		const compared = proof.id !== foundingId && !proof.original_proof_id && !!proof.edited_fields;
 		const changed = (key: string) => compared && !!proof.edited_fields?.includes(key);
+		// Saved before the periods were stored: the whole curve stands out.
+		const rangeOf = (key: string) => (changed(key) ? (proof.edited_ranges?.[key] ?? undefined) : undefined);
 
 		const isEvolution = parseEvolutionValue(desired.value) !== null;
 		// An evolution is edited part by part: its function and each side of its uncertainty vote on their own.
@@ -161,7 +163,14 @@
 					accent,
 					changed: parts ? anyPart : changed(key),
 					evolution,
-					parts: compared && anyPart ? parts : undefined
+					parts: compared && anyPart ? parts : undefined,
+					ranges: compared && anyPart
+						? {
+								function: rangeOf('function'),
+								above: rangeOf('uncertainty_above'),
+								below: rangeOf('uncertainty_below')
+							}
+						: undefined
 				}
 			];
 		});
@@ -170,10 +179,10 @@
 		const scores = SCORE_FIELDS.flatMap(([key, label, text]) => {
 			// An evolution has no general uncertainty: only the one above and below its function.
 			if (isEvolution && key === 'uncertainty') return [];
-			const value = scoreValue(key, desired[key]);
+			const value = scoreAt(desired[key], year);
 			if (desired[key] === null || !Number.isFinite(value)) return [];
-			const fn = functionOf(key, desired[key]);
-			return [{ key, label: label(), value, text: text(value), changed: changed(key), fn }];
+			const fn = toScoreFunction(desired[key]);
+			return [{ key, label: label(), value, text: text(value), changed: changed(key), fn, range: rangeOf(key) }];
 		});
 		return { compared, texts, sources, scores };
 	}
@@ -198,7 +207,7 @@
 							<span style:width="{Math.min(100, Math.max(0, score.value))}%"></span>
 						</span>
 					</dd>
-					{#if score.fn}<ScoreFunction expression={score.fn} />{/if}
+					<ScoreFunction expression={score.fn} range={score.range} />
 				</div>
 			{/each}
 		</dl>
@@ -242,6 +251,7 @@
 									{year}
 									bounds={[0, 100]}
 									edited={field.parts}
+									ranges={field.ranges}
 								/>
 							{:else if field.evolution}
 								<DatedValue
@@ -251,6 +261,7 @@
 										{existence}
 										{accent}
 										edited={field.parts}
+										ranges={field.ranges}
 									/>
 								{:else}
 								<span class="field-text">{field.text}</span>

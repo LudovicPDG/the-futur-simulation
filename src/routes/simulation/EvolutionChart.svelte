@@ -4,7 +4,11 @@
 		buildEvolutionFunction,
 		buildEvolutionUncertainty,
 		existenceInterval,
-		parseEvolutionFunction
+		parseEvolutionFunction,
+		parseSpline,
+		splineDates,
+		type EvolutionComponent,
+		type TimeRange
 	} from '$lib/simulation/event/EvolutionFunction';
 	import * as m from '$lib/paraglide/messages';
 	import { getLocale } from '$lib/paraglide/runtime';
@@ -17,6 +21,7 @@
 		showExistence = true,
 		showUncertainty = true,
 		edited,
+		ranges,
 		bounds,
 		width = 320,
 		height = 210,
@@ -34,6 +39,8 @@
 		showUncertainty?: boolean;
 		/** The parts a proof changes: the others are in the shadow (undefined: nothing is in the shadow) */
 		edited?: { function: boolean; above: boolean; below: boolean };
+		/** The period of each changed part that the proof really changes: only this portion stands out */
+		ranges?: { function?: TimeRange; above?: TimeRange; below?: TimeRange };
 		/** Fixed bounds of the vertical axis (a probability goes from 0 to 1) */
 		bounds?: [number, number];
 		width?: number;
@@ -62,6 +69,14 @@
 		up: number;
 	}
 
+	type Part = 'function' | 'above' | 'below';
+	const PART_KEYS: Record<Part, keyof EvolutionComponent> = {
+		function: 'function',
+		above: 'uncertainty_up',
+		below: 'uncertainty_down'
+	};
+
+	const uid = $props.id();
 	let svgRef = $state<SVGSVGElement | null>(null);
 	let hoverT = $state<number | null>(null);
 
@@ -219,15 +234,65 @@
 				.curve(d3.curveMonotoneX)(model.curve) || ''
 		);
 
+		// The interpolation points of the curves: exact on a single spline, at the dates of the points of each proof on
+		// a mix of proofs (the mixed curve does not go through them).
+		const shown = (t: number) => drawn && t >= shownFrom && t <= shownTo;
+		const knotsOf = (part: Part) => {
+			const key = PART_KEYS[part];
+			const exact = components!.length === 1 && parseSpline(components![0][key]) !== null;
+			const dates = [...new Set(components!.flatMap((component) => splineDates(component[key])))].filter(shown);
+			const points = dates.flatMap((t) => {
+				const value = model.valueAt(t);
+				if (!Number.isFinite(value)) return [];
+				const { down, up } = model.uncertaintyAt(t);
+				const at = part === 'function' ? value : part === 'above' ? value + up : value - down;
+				return [{ t, value: at, x: xScale(t), y: yScale(inBounds(at)) }];
+			});
+			return { exact, points };
+		};
+		const knots = { function: knotsOf('function'), above: knotsOf('above'), below: knotsOf('below') };
+
+		// The portion a proof really changes, for each part it changes: drawn in full light, the rest in the shadow.
+		const spanOf = (range: TimeRange) => {
+			const from = xScale(Math.max(lo, range[0] ?? lo));
+			const to = xScale(Math.min(hi, range[1] ?? hi));
+			return to > from ? { x: from, width: to - from } : null;
+		};
+		const highlights = Object.fromEntries(
+			(['function', 'above', 'below'] as Part[]).flatMap((part) => {
+				const range = ranges?.[part];
+				const span = edited?.[part] && range ? spanOf(range) : null;
+				return span ? [[part, span]] : [];
+			})
+		) as Partial<Record<Part, { x: number; width: number }>>;
+
 		return {
 			xScale,
 			yScale,
 			linePath: line(model.curve) || '',
 			cloudAbove: above,
 			cloudBelow: below,
+			knots,
+			highlights,
 			xTicks: xScale.ticks(6),
 			yTicks: yScale.ticks(5)
 		};
+	});
+
+	/** How a part is drawn: in the light, in the shadow, or in the shadow with the portion the proof changes in the light. */
+	function partState(part: Part): 'light' | 'shadow' | 'portion' {
+		if (!edited) return 'light';
+		if (!edited[part]) return 'shadow';
+		return geometry?.highlights[part] ? 'portion' : 'light';
+	}
+
+	/** The span of every portion a proof changes, drawn behind the curves (once when several parts share it). */
+	const editedSpans = $derived.by(() => {
+		const spans = new Map<string, { x: number; width: number }>();
+		for (const span of Object.values(geometry?.highlights ?? {})) {
+			if (span) spans.set(`${span.x.toFixed(1)}:${span.width.toFixed(1)}`, span);
+		}
+		return [...spans.values()];
 	});
 
 	const formatter = $derived(
@@ -282,6 +347,12 @@
 		return new Date(start.getTime() + (t - year) * (end.getTime() - start.getTime()));
 	}
 
+	/** The date of an interpolation point: its year when it is a round year, else its month. */
+	function formatPointDate(t: number): string {
+		if (Math.abs(t - Math.round(t)) < 1e-6) return String(Math.round(t));
+		return yearToDate(t).toLocaleDateString(locale, { month: 'short', year: 'numeric', timeZone: 'UTC' });
+	}
+
 	function formatDate(t: number): string {
 		const year = Math.floor(t);
 		const month = Math.min(11, Math.floor((t - year) * 12));
@@ -292,6 +363,42 @@
 		});
 	}
 </script>
+
+<!-- A function as it is shown: the interpolation points of a spline and its extrapolations, else the expression. -->
+{#snippet curveText(expression: string)}
+	{@const spline = parseSpline(expression)}
+	{#if spline}
+		<ul class="spline-points" aria-label={m.simulation_evolution_points()}>
+			{#each spline.points as [date, value]}
+				<li class="spline-point" title={preciseFormatter.format(value)}>
+					<span class="spline-date">{formatPointDate(date)}</span>
+					<span class="spline-value">{formatter.format(value)}</span>
+				</li>
+			{/each}
+		</ul>
+		<div class="spline-sides">
+			<span class="spline-side">
+				<span class="spline-side-label">← {m.simulation_evolution_before()}</span>
+				<code>{spline.before ?? m.simulation_evolution_flat()}</code>
+			</span>
+			<span class="spline-side">
+				<span class="spline-side-label">{m.simulation_evolution_after()} →</span>
+				<code>{spline.after ?? m.simulation_evolution_flat()}</code>
+			</span>
+		</div>
+	{:else}
+		<span class="function-expression">{expression}</span>
+	{/if}
+{/snippet}
+
+<!-- One part of the curve (the curve, or a band of the cloud): its portion changed by a proof stands out. -->
+{#snippet partPath(d: string, kind: string, part: Part)}
+	{@const state = partState(part)}
+	<path {d} class={kind} class:shadow={state !== 'light'} />
+	{#if state === 'portion'}
+		<path {d} class={kind} clip-path="url(#{uid}-{part})" />
+	{/if}
+{/snippet}
 
 <div
 	class="evolution-container"
@@ -307,7 +414,7 @@
 				<div class="function-card">
 					<div class="function-field" class:shadow={edited && !edited.function}>
 						<span class="field-label">{m.simulation_evolution_function_label()}</span>
-						<span class="function-expression">{component.function}</span>
+						{@render curveText(component.function)}
 					</div>
 					<div class="function-field weight" class:shadow={edited && !edited.function}>
 						<span class="field-label">{m.simulation_distribution_weight()}</span>
@@ -316,11 +423,11 @@
 					{#if showUncertainty}
 						<div class="function-field uncertainty" class:shadow={edited && !edited.above}>
 							<span class="field-label">{m.simulation_evolution_uncertainty_above()}</span>
-							<span class="function-weight">{component.uncertainty_up}</span>
+							{@render curveText(component.uncertainty_up)}
 						</div>
 						<div class="function-field uncertainty" class:shadow={edited && !edited.below}>
 							<span class="field-label">{m.simulation_evolution_uncertainty_below()}</span>
-							<span class="function-weight">{component.uncertainty_down}</span>
+							{@render curveText(component.uncertainty_down)}
 						</div>
 					{/if}
 				</div>
@@ -349,7 +456,18 @@
 				onpointermove={handlePointerMove}
 				onpointerleave={() => (hoverT = null)}
 			>
+				<defs>
+					{#each Object.entries(geometry.highlights) as [part, span] (part)}
+						<clipPath id="{uid}-{part}">
+							<rect x={span.x} y={-margin.top} width={span.width} height={innerHeight + margin.top + margin.bottom} />
+						</clipPath>
+					{/each}
+				</defs>
 				<g transform="translate({margin.left}, {margin.top})">
+					<!-- The period a proof really changes -->
+					{#each editedSpans as span}
+						<rect x={span.x} y="0" width={span.width} height={innerHeight} class="edited-band" />
+					{/each}
 					{#each geometry.yTicks as tick}
 						{@const y = geometry.yScale(tick)}
 						<line x1="0" y1={y} x2={innerWidth} y2={y} class="grid-line" />
@@ -363,13 +481,42 @@
 
 					{#if showUncertainty}
 						{#each geometry.cloudAbove as band}
-							<path d={band} class="cloud-band" class:shadow={edited && !edited.above} />
+							{@render partPath(band, 'cloud-band', 'above')}
 						{/each}
 						{#each geometry.cloudBelow as band}
-							<path d={band} class="cloud-band" class:shadow={edited && !edited.below} />
+							{@render partPath(band, 'cloud-band', 'below')}
 						{/each}
 					{/if}
-					<path d={geometry.linePath} class="curve" class:shadow={edited && !edited.function} />
+					{@render partPath(geometry.linePath, 'curve', 'function')}
+
+					<!-- The interpolation points: of the curve, and of each side of the uncertainty -->
+					{#each (showUncertainty ? (['above', 'below'] as Part[]) : []) as part}
+						{#each geometry.knots[part].points as point}
+							<line
+								x1={point.x - 3}
+								x2={point.x + 3}
+								y1={point.y}
+								y2={point.y}
+								class="knot-side"
+								class:mixed={!geometry.knots[part].exact}
+								class:shadow={partState(part) === 'shadow'}
+							>
+								<title>{formatDate(point.t)} : {preciseFormatter.format(point.value)} {unit}</title>
+							</line>
+						{/each}
+					{/each}
+					{#each geometry.knots.function.points as point}
+						<circle
+							cx={point.x}
+							cy={point.y}
+							r="3"
+							class="knot"
+							class:mixed={!geometry.knots.function.exact}
+							class:shadow={partState('function') === 'shadow'}
+						>
+							<title>{formatDate(point.t)} : {preciseFormatter.format(point.value)} {unit}</title>
+						</circle>
+					{/each}
 
 					<!-- Existence of the fact: the evolution only exists between these two moments -->
 					{#each [existence.from, existence.to] as bound}
@@ -448,6 +595,15 @@
 			<span class="legend-item"><span class="swatch line"></span>{m.simulation_evolution_legend_curve()}</span>
 			{#if showUncertainty}
 				<span class="legend-item"><span class="swatch cloud"></span>{m.simulation_evolution_legend_cloud()}</span>
+			{/if}
+			{#if geometry.knots.function.points.length > 0}
+				<span class="legend-item">
+					<span class="swatch knot" class:mixed={!geometry.knots.function.exact}></span>
+					{geometry.knots.function.exact ? m.simulation_evolution_legend_points() : m.simulation_evolution_legend_mixed_points()}
+				</span>
+			{/if}
+			{#if editedSpans.length > 0}
+				<span class="legend-item"><span class="swatch edited"></span>{m.simulation_evolution_legend_edited()}</span>
 			{/if}
 		</div>
 	{/if}
@@ -757,6 +913,139 @@
 
 	.swatch.cloud {
 		background: color-mix(in srgb, var(--accent, #10b981) 40%, transparent);
+	}
+
+	.knot {
+		fill: var(--accent, #10b981);
+		stroke: #ffffff;
+		stroke-width: 1.2;
+	}
+
+	.knot.mixed {
+		fill: rgb(8 14 29 / 85%);
+		stroke: var(--accent, #10b981);
+	}
+
+	:global(body.light) .knot.mixed {
+		fill: #ffffff;
+	}
+
+	.knot-side {
+		stroke: var(--accent, #10b981);
+		stroke-width: 1.6;
+		stroke-linecap: round;
+	}
+
+	.knot-side.mixed {
+		stroke-dasharray: 1 1.5;
+	}
+
+	.knot.shadow,
+	.knot-side.shadow {
+		opacity: 0.3;
+	}
+
+	.edited-band {
+		fill: #fbbf24;
+		fill-opacity: 0.08;
+		stroke: #fbbf24;
+		stroke-opacity: 0.35;
+		stroke-dasharray: 3 3;
+	}
+
+	.swatch.knot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--accent, #10b981);
+	}
+
+	.swatch.knot.mixed {
+		background: transparent;
+		border: 1.5px solid var(--accent, #10b981);
+	}
+
+	.swatch.edited {
+		background: rgb(251 191 36 / 18%);
+		border: 1px dashed rgb(251 191 36 / 70%);
+	}
+
+	/* The interpolation points: one small card per point, date above and value below. */
+	.spline-points {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+		gap: 4px;
+		margin: 2px 0 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.spline-point {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		padding: 3px 6px;
+		border-left: 2px solid var(--accent, #34d399);
+		border-radius: 3px;
+		background: color-mix(in srgb, var(--accent, #34d399) 9%, transparent);
+		font-variant-numeric: tabular-nums;
+		line-height: 1.25;
+	}
+
+	.spline-date {
+		color: #94a3b8;
+		font-size: 9px;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+	}
+
+	.spline-value {
+		color: var(--accent, #34d399);
+		font-size: 12px;
+		font-weight: 700;
+	}
+
+	:global(body.light) .spline-value {
+		color: var(--accent-light, #047857);
+	}
+
+	:global(body.light) .spline-date {
+		color: #64748b;
+	}
+
+	/* What the curve does before the first point and after the last one. */
+	.spline-sides {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		margin-top: 4px;
+	}
+
+	.spline-side {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 5px;
+		max-width: 100%;
+		padding: 1px 8px;
+		border: 1px dashed rgb(148 163 184 / 35%);
+		border-radius: 999px;
+		color: #cbd5e1;
+		font-size: 10px;
+		overflow-wrap: anywhere;
+	}
+
+	:global(body.light) .spline-side {
+		color: #334155;
+	}
+
+	.spline-side-label {
+		color: #94a3b8;
+		font-weight: 600;
+		white-space: nowrap;
+	}
+
+	.spline-side code {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 	}
 
 	.error-badge {
