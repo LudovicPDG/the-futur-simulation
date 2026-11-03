@@ -39,13 +39,13 @@ const StoredEvolutionSchema = z.object({
 /** The scores of a proof and of a value: each one is a curve of the time, given by the genie as points. */
 export const SCORE_COLUMNS = {
 	veracity: {
-		description: 'The veracity at this date, from 0 (certainly false) to 100 (certainly true). Use the whole scale.',
+		description: 'The veracity at this date: how likely the claim is to be true, from 0 (certainly false) to 100 (certainly true), whatever the confidence of its author. Use the whole scale.',
 		min: 0,
 		max: 100
 	},
 	uncertainty: {
 		description:
-			'The uncertainty of the veracity at this date: 5 = the veracity is known within about +-5 points, 40 = a rough estimate.',
+			'The uncertainty of the AUTHOR of the proof at this date: how confident the author is in the claim they make, from 0 (the author is completely certain) to 100 (the author is very unsure, a pure guess). It is completely INDEPENDENT of the veracity: a plausible claim can come from an unsure author (high veracity, high uncertainty), and an absurd claim can come from an author who is completely sure of it (very low veracity, low uncertainty). Never deduce one from the other.',
 		min: 0,
 		max: 100
 	},

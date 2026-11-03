@@ -79,7 +79,7 @@ const ProofTextSchema = ProofSchema.pick({
 
 /** The own scores of a proof over time, given as interpolation points. */
 const OwnScoresSchema = curvesSchema(SCORE_COLUMNS).describe(
-	'The scores of THIS proof over time (its veracity, the uncertainty of its veracity, its impact and its originality), as interpolation points at the dates that matter: a proof is stronger or weaker as time passes, as the facts become known, forgotten or confirmed.'
+	'The scores of THIS proof over time (its veracity, the uncertainty of its author, independent of the veracity, its impact and its originality), as interpolation points at the dates that matter: a proof is stronger or weaker as time passes, as the facts become known, forgotten or confirmed.'
 );
 
 /** The own scores of a generated proof, as functions of the time. */
