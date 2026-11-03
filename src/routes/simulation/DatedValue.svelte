@@ -113,9 +113,9 @@
 
 	.dated-value {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		gap: 4px 14px;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
 		padding: 6px 10px;
 		border-radius: 6px;
 		background: rgb(8 14 29 / 60%);
