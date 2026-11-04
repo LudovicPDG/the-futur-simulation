@@ -25,6 +25,8 @@ export const GENIE_SYSTEM_PROMPT = `
 
 	Although four types of facts are predefined, you may create additional types of facts when you consider them necessary to accurately represent an important element of reality.
 
+	The **title** (the name) of a fact must stay brief, a few words at most (for example a person's name, not a sentence), so that it is easily displayed. Put the details in its description or in its other values, never in the title.
+
 	### Relationships Between Facts
 
 	All elements of the simulation can be connected to one another through **relationships**.
