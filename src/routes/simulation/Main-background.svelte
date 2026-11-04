@@ -804,6 +804,7 @@
 			use:clickOutside={handleDetailsOutsideClick}
 			onpointerleave={handleDetailsPointerLeave}
 		>
+			<div class="details-title">
 			<header class="details-header">
 				<div>
 					<p class="element-type">{formatType(activeElement.type || 'fact')}</p>
@@ -818,6 +819,10 @@
 					×
 				</button>
 			</header>
+			{#each [valueInfluence('name', false)] as titleInfluence}
+				{#if titleInfluence}<div class="title-parameters"><ValueParameters info={titleInfluence} format={formatValue} /></div>{/if}
+			{/each}
+			</div>
 			<dl>
 				{#each displayedFields as [key, value]}
 					{@const influence = valueInfluence(key, false)}
@@ -1142,10 +1147,14 @@
 		justify-content: space-between;
 		gap: 12px;
 		padding-bottom: 12px;
+	}
+
+	.details-title {
+		padding-bottom: 12px;
 		border-bottom: 1px solid rgb(148 163 184 / 22%);
 	}
 
-	:global(body.light) .details-header,
+	:global(body.light) .details-title,
 	:global(body.light) .other-details,
 	:global(body.light) .parameter-details {
 		border-color: rgb(71 85 105 / 18%);
