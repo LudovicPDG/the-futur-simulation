@@ -110,6 +110,8 @@ export async function createDatabase() {
 				element1_type TEXT NOT NULL,
 				element2_id UUID NOT NULL REFERENCES facts(id) ON DELETE CASCADE,
 				element2_type TEXT NOT NULL,
+				symmetric_connexions JSONB NOT NULL DEFAULT '[]',
+				symmetric_new_value JSONB NOT NULL DEFAULT '[]',
 				element1_element2_connexions relation_connexion_t[] NOT NULL DEFAULT '{}',
 				element2_element1_connexions relation_connexion_t[] NOT NULL DEFAULT '{}',
 				element1_element2_new_value JSONB NOT NULL DEFAULT '[]',

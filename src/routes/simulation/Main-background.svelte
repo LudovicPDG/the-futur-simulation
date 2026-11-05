@@ -686,6 +686,24 @@
 			: allRelations.flatMap((relation) => {
 					const other = (otherId: string) => simulation_data.find((element) => element.id === otherId);
 					const entries: RelationInfluenceEntry[] = [];
+					// A symmetric relation works both ways: the influence on the active element comes from the other one.
+					for (const [active, otherId, activeKey, otherKey] of [
+						[relation.Element2ID, relation.Element1ID, 'Element2Property', 'Element1Property'],
+						[relation.Element1ID, relation.Element2ID, 'Element1Property', 'Element2Property']
+					] as const) {
+						if (active !== id) continue;
+						const source = other(otherId);
+						for (const c of relation.symmetric_value_to_modify ?? []) {
+							if (matches(c[activeKey])) {
+								entries.push({ from: formatRelationProperty(c[otherKey], source), to: formatLabel(c[activeKey]), impact: c.impact, added: false });
+							}
+						}
+						for (const c of relation.symmetric_new_value ?? []) {
+							if (matches(c[activeKey])) {
+								entries.push({ from: formatRelationProperty(c[otherKey], source), to: c[activeKey], impact: c.impact, value: c.value, added: true });
+							}
+						}
+					}
 					if (relation.Element2ID === id) {
 						const source = other(relation.Element1ID);
 						for (const c of relation.element1_element2_value_to_modify ?? []) {
@@ -907,6 +925,49 @@
 			</dl>
 			{#if activeRelation}
 				<section class="relation-details">
+					<h2 class="relation-kind">{m.simulation_relation_symmetric()}</h2>
+					<h3>
+						{formatValue(relationElement1?.name) || m.simulation_field_element1_name()}
+						{m.simulation_relation_and()}
+						{formatValue(relationElement2?.name) || m.simulation_field_element2_name()}
+					</h3>
+					<h4>{m.simulation_field_value_to_modify()}</h4>
+					{#if (activeRelation.symmetric_value_to_modify ?? []).length === 0}<p class="relation-empty">—</p>{/if}
+					{#each activeRelation.symmetric_value_to_modify ?? [] as connexion}
+						<div class="relation-connexion">
+							<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
+							<span class="relation-arrow" aria-hidden="true">↔</span>
+							<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
+							<span class="relation-impact">
+								{m.simulation_field_impact()}: {formatValue(connexion.impact)}
+							</span>
+							{#each [valueInfluence(relationValueName('symmetric', 'modify', connexion), false, undefined, connexion.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+						</div>
+					{/each}
+					<button type="button" class="add-value" onclick={() => startAddValue('symmetric_value_to_modify')}>
+						+ {m.relation_add()}
+					</button>
+					<h4>{m.simulation_field_new_value()}</h4>
+					{#if (activeRelation.symmetric_new_value ?? []).length === 0}<p class="relation-empty">—</p>{/if}
+					{#each activeRelation.symmetric_new_value ?? [] as added}
+						<div class="relation-connexion">
+							<span>{formatRelationProperty(added.Element1Property, relationElement1)}</span>
+							<span class="relation-arrow" aria-hidden="true">↔</span>
+							<span class="relation-new-value">
+								<span class="relation-new-name">{added.Element2Property}</span>
+								<span class="relation-new-content">{formatValue(added.value)}</span>
+							</span>
+							<span class="relation-impact">
+								{m.simulation_field_impact()}: {formatValue(added.impact)}
+							</span>
+							{#each [valueInfluence(relationValueName('symmetric', 'add', added), false, undefined, added.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+						</div>
+					{/each}
+					<button type="button" class="add-value" onclick={() => startAddValue('symmetric_new_value')}>
+						+ {m.relation_add()}
+					</button>
+
+					<h2 class="relation-kind">{m.simulation_relation_asymmetric()}</h2>
 					{#if true}
 						<h3>
 							{formatValue(relationElement1?.name) || m.simulation_field_element1_name()}
@@ -1400,6 +1461,19 @@
 		margin-top: 12px;
 		padding-top: 12px;
 		border-top: 1px solid rgb(148 163 184 / 22%);
+	}
+
+	.relation-details .relation-kind {
+		margin: 20px 0 0;
+		font-size: 13px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		opacity: 0.75;
+	}
+
+	.relation-details .relation-kind:first-child {
+		margin-top: 0;
 	}
 
 	.relation-details h3 {

@@ -403,6 +403,8 @@ const NOT_A_VALUE = new Set([
 
 /** The lists of a relation whose entries are values on their own (see relationValues). */
 const RELATION_VALUE_LISTS = new Set([
+	'symmetric_value_to_modify',
+	'symmetric_new_value',
 	'element1_element2_value_to_modify',
 	'element1_element2_new_value',
 	'element2_element1_value_to_modify',

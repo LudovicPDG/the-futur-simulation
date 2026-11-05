@@ -54,6 +54,18 @@ export const RelationSchema = z.object({
 		.array(RelationNewValueSchema)
 		.default([])
 		.describe('Values added, from element 2 to element 1: existing property, name of the new value, its value, impact'),
+	symmetric_value_to_modify: z
+		.array(RelationConnexionSchema)
+		.default([])
+		.describe(
+			'SYMMETRIC relation, the same from element 1 to element 2 and from element 2 to element 1. Existing values modified: property of element 1, property of element 2, impact. Only for effects that really work both ways.'
+		),
+	symmetric_new_value: z
+		.array(RelationNewValueSchema)
+		.default([])
+		.describe(
+			'SYMMETRIC relation, the same from element 1 to element 2 and from element 2 to element 1. Values added: existing property of element 1, name of the new value on element 2 (and reversed), its value, impact.'
+		),
 	existence: existenceSchema('relation'),
 	originality: z
 		.number()
@@ -73,6 +85,8 @@ export const RelationSchema = z.object({
 
 /** The lists of a relation to which the user can ask the genie to add an entry. */
 export const RELATION_LIST_FIELDS = [
+	'symmetric_value_to_modify',
+	'symmetric_new_value',
 	'element1_element2_value_to_modify',
 	'element1_element2_new_value',
 	'element2_element1_value_to_modify',
@@ -90,6 +104,7 @@ export function relationValues(
 	relation: Partial<RelationData>
 ): { name: string; value: number | string | boolean }[] {
 	const sides = [
+		['symmetric', relation.symmetric_value_to_modify, relation.symmetric_new_value],
 		['element1_element2', relation.element1_element2_value_to_modify, relation.element1_element2_new_value],
 		['element2_element1', relation.element2_element1_value_to_modify, relation.element2_element1_new_value]
 	] as const;
@@ -104,7 +119,7 @@ export function relationValues(
 
 /** The value_name of one value to modify or to add of a relation. */
 export function relationValueName(
-	direction: 'element1_element2' | 'element2_element1',
+	direction: 'symmetric' | 'element1_element2' | 'element2_element1',
 	kind: 'modify' | 'add',
 	connexion: RelationConnexionData
 ): string {

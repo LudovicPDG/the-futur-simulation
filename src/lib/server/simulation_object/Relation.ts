@@ -168,6 +168,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			Element1Type: z.literal(element1.type),
 			Element2ID: z.literal(element2.id),
 			Element2Type: z.literal(element2.type),
+			symmetric_value_to_modify: z.array(connexionSchema),
+			symmetric_new_value: z.array(connexionSchema.extend({ value: valueSchema })),
 			element1_element2_value_to_modify: z.array(connexionSchema),
 			element2_element1_value_to_modify: z.array(connexionSchema),
 			element1_element2_new_value: z.array(connexionSchema.extend({ value: valueSchema })),
@@ -177,11 +179,13 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		const generated = await this.generateWithSchema(
 			model_name,
 			level_of_reasoning,
-			`${prompt}\n\nCreate the relation between these already-selected elements. Do not change their IDs or types.\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nelement1_element2_value_to_modify lists the existing values of element 2 that element 1 modifies: Element1Property is selected from element 1 properties and Element2Property from element 2 properties; impact is the strength of that property-to-property relation. element1_element2_new_value lists values element 1 adds to element 2: Element1Property is an existing element 1 property, Element2Property is the name of the new value (it may be a new name), value is the created value and impact its strength. For the element2_element1_* fields, reverse those choices.`,
+			`${prompt}\n\nCreate the relation between these already-selected elements. Do not change their IDs or types.\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nelement1_element2_value_to_modify lists the existing values of element 2 that element 1 modifies: Element1Property is selected from element 1 properties and Element2Property from element 2 properties; impact is the strength of that property-to-property relation. element1_element2_new_value lists values element 1 adds to element 2: Element1Property is an existing element 1 property, Element2Property is the name of the new value (it may be a new name), value is the created value and impact its strength. For the element2_element1_* fields, reverse those choices. The symmetric_* fields have the same format as the element1_element2_* ones, but describe an effect that works identically in BOTH directions (element 1 on element 2 and element 2 on element 1): put there only what is really mutual, and put in the element1_element2_* / element2_element1_* fields only what is one-way (asymmetric). Never repeat an entry in both.`,
 			generatedSchema
 		);
 
-		return RelationSchema.parse(generated);
+		// `generated` is already parsed: its schema transforms the interpolation points of the existence into
+		// functions, so parsing it again with RelationSchema would fail (it expects points, not functions).
+		return generated as RelationData;
 	}
 
 	async insert_in_db(relation: RelationData): Promise<string> {
@@ -199,8 +203,10 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				element2_element1_new_value,
 				existence,
 				originality,
-				impact
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+				impact,
+				symmetric_connexions,
+				symmetric_new_value
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
 			[
 				convertToPg(relation.name),
 				convertToPg(relation.description),
@@ -226,7 +232,9 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				JSON.stringify(relation.element2_element1_new_value ?? []),
 				convertToPg(relation.existence),
 				relation.originality,
-				relation.impact
+				relation.impact,
+				JSON.stringify(relation.symmetric_value_to_modify ?? []),
+				JSON.stringify(relation.symmetric_new_value ?? [])
 			]
 		);
 		return result.rows[0].id;
@@ -250,6 +258,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			Element1Type: row.element1_type,
 			Element2ID: row.element2_id,
 			Element2Type: row.element2_type,
+			symmetric_value_to_modify: row.symmetric_connexions ?? [],
+			symmetric_new_value: row.symmetric_new_value ?? [],
 			element1_element2_value_to_modify: mapDatabaseConnexions(row.element1_connexions_json),
 			element2_element1_value_to_modify: mapDatabaseConnexions(row.element2_connexions_json, true),
 			element1_element2_new_value: row.element1_element2_new_value ?? [],
@@ -277,6 +287,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		if (!element1 || !element2) throw new Error('The elements of this relation do not exist');
 
 		const reversed = field.startsWith('element2_element1');
+		const symmetric = field.startsWith('symmetric');
 		const source = reversed ? element2 : element1;
 		const target = reversed ? element1 : element2;
 		const isNew = field.endsWith('new_value');
@@ -295,18 +306,22 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				isNew
 					? `It is a value that ${JSON.stringify(source.name)} adds to ${JSON.stringify(target.name)}: the property of the source is an existing property, the property of the target is the name of the new value (it may be a new name), value is the created value and impact its strength.`
 					: `It is an existing value of ${JSON.stringify(target.name)} that ${JSON.stringify(source.name)} modifies: one property of each element and the impact of that relation.`
-			} Element1Property always belongs to element 1 and Element2Property to element 2.`,
+			} Element1Property always belongs to element 1 and Element2Property to element 2.${
+				symmetric ? ' The entry is SYMMETRIC: it works identically from element 1 to element 2 and from element 2 to element 1.' : ''
+			}`,
 			schema
 		);
 
 		const entries = [...relation[field], generated];
 		const column = {
+			symmetric_value_to_modify: 'symmetric_connexions',
+			symmetric_new_value: 'symmetric_new_value',
 			element1_element2_value_to_modify: 'element1_element2_connexions',
 			element2_element1_value_to_modify: 'element2_element1_connexions',
 			element1_element2_new_value: 'element1_element2_new_value',
 			element2_element1_new_value: 'element2_element1_new_value'
 		}[field];
-		const value = isNew
+		const value = isNew || symmetric
 			? JSON.stringify(entries)
 			: convertToPg(
 					entries.map((connexion) =>

@@ -295,6 +295,8 @@ export const VALUE_LISTS = [
 ] as const;
 
 const RELATION_SIDES = [
+	['symmetric', 'modify', 'symmetric_value_to_modify'],
+	['symmetric', 'add', 'symmetric_new_value'],
 	['element1_element2', 'modify', 'element1_element2_value_to_modify'],
 	['element1_element2', 'add', 'element1_element2_new_value'],
 	['element2_element1', 'modify', 'element2_element1_value_to_modify'],
