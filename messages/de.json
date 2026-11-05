@@ -181,5 +181,8 @@
 	"simulation_existence_title_relation": "Entwicklung der Gewissheit über die Existenz der Beziehung",
 	"simulation_occurrence_title_event": "Entwicklung der Gewissheit über die Existenz des Ereignisses",
 	"simulation_occurrence_title_ranking": "Entwicklung der Gewissheit über die Existenz der Rangliste",
-	"simulation_occurrence_title_evolution": "Entwicklung der Gewissheit über die Existenz der Entwicklung"
+	"simulation_occurrence_title_evolution": "Entwicklung der Gewissheit über die Existenz der Entwicklung",
+	"genie_say_1": "Hey, was willst du?",
+	"genie_say_2": "Ich bin der Geist, der Meister dieser Simulation!",
+	"genie_say_3": "Was willst du wissen? Du kannst mich alles in der Prompt-Leiste fragen."
 }

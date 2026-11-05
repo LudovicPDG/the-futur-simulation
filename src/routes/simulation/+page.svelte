@@ -64,8 +64,28 @@
 		}
 	}
 
+	let genieMessage = $state<string | null>(null);
+	let lastGenieIndex = -1;
+	let genieMessageTimeout: ReturnType<typeof setTimeout>;
+
+	function sayRandomMessage() {
+		const messages = [m.genie_say_1(), m.genie_say_2(), m.genie_say_3()];
+		let index = Math.floor(Math.random() * messages.length);
+		if (messages.length > 1 && index === lastGenieIndex) {
+			index = (index + 1) % messages.length;
+		}
+		lastGenieIndex = index;
+		genieMessage = messages[index];
+
+		clearTimeout(genieMessageTimeout);
+		genieMessageTimeout = setTimeout(() => {
+			genieMessage = null;
+		}, 5000);
+	}
+
 	function handleClick() {
 		isClicked = true;
+		sayRandomMessage();
 
 		// Forte agitation
 		agitation_level = 10;
@@ -187,6 +207,16 @@
 	>
 		<CrystalBall {agitation_level} />
 	</button>
+
+	{#if genieMessage}
+		<div class="genie-cloud" style={`right: ${ballSize + 40}px;`} role="status">
+			{#key genieMessage}
+				<span>{genieMessage}</span>
+			{/key}
+			<i class="tail tail-1"></i>
+			<i class="tail tail-2"></i>
+		</div>
+	{/if}
 
 	<TimeMachine bind:date={simulationDate} />
 
@@ -318,6 +348,59 @@
 		transition:
 			width 0.3s ease,
 			height 0.3s ease;
+	}
+
+	.genie-cloud {
+		position: absolute;
+		top: calc(10vh + 20px);
+		z-index: 11;
+		max-width: 260px;
+		padding: 16px 24px;
+		background: #fff;
+		color: #222;
+		border: 3px solid #222;
+		border-radius: 50% / 45%;
+		font-size: 0.95rem;
+		font-weight: 600;
+		line-height: 1.3;
+		text-align: center;
+		box-shadow: 3px 4px 0 rgba(0, 0, 0, 0.25);
+		animation: cloud-pop 0.25s ease-out;
+		transform-origin: right center;
+		pointer-events: none;
+	}
+
+	/* Petites bulles qui relient le nuage à la boule (style bande dessinée) */
+	.genie-cloud .tail {
+		position: absolute;
+		background: #fff;
+		border: 3px solid #222;
+		border-radius: 50%;
+	}
+
+	.genie-cloud .tail-1 {
+		width: 16px;
+		height: 16px;
+		right: -22px;
+		top: 50%;
+	}
+
+	.genie-cloud .tail-2 {
+		width: 9px;
+		height: 9px;
+		right: -36px;
+		top: calc(50% + 14px);
+	}
+
+	@keyframes cloud-pop {
+		from {
+			opacity: 0;
+			transform: scale(0.6);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
 	}
 
 	.prompt-container {

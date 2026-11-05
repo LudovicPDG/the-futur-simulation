@@ -181,5 +181,8 @@
 	"simulation_existence_title_relation": "Évolution de la certitude de l'existence de la relation",
 	"simulation_occurrence_title_event": "Évolution de la certitude de l'existence de l'événement",
 	"simulation_occurrence_title_ranking": "Évolution de la certitude de l'existence du classement",
-	"simulation_occurrence_title_evolution": "Évolution de la certitude de l'existence de l'évolution"
+	"simulation_occurrence_title_evolution": "Évolution de la certitude de l'existence de l'évolution",
+	"genie_say_1": "Salut, que veux-tu ?",
+	"genie_say_2": "Je suis le génie, le maître de cette simulation !",
+	"genie_say_3": "Que veux-tu savoir ? Tu peux tout me demander dans la barre de prompt."
 }
