@@ -184,5 +184,7 @@
 	"simulation_occurrence_title_evolution": "Évolution de la certitude de l'existence de l'évolution",
 	"genie_say_1": "Salut, que veux-tu ?",
 	"genie_say_2": "Je suis le génie, le maître de cette simulation !",
-	"genie_say_3": "Que veux-tu savoir ? Tu peux tout me demander dans la barre de prompt."
+	"genie_say_3": "Que veux-tu savoir ? Tu peux tout me demander dans la barre de prompt.",
+	"genie_relation_not_relatable": "Ce n'est pas possible : seuls les fonctions, les nombres et les booléens peuvent être en relation. Un texte ou un tableau ne le peut pas.",
+	"genie_relation_symmetry_conflict": "Ce n'est pas possible : une relation ne peut pas être symétrique et asymétrique en même temps."
 }

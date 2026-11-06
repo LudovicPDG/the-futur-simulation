@@ -184,5 +184,7 @@
 	"simulation_occurrence_title_evolution": "Evolución de la certeza de la existencia de la evolución",
 	"genie_say_1": "Hola, ¿qué quieres?",
 	"genie_say_2": "¡Soy el genio, el amo de esta simulación!",
-	"genie_say_3": "¿Qué quieres saber? Puedes preguntarme lo que sea en la barra de prompt."
+	"genie_say_3": "¿Qué quieres saber? Puedes preguntarme lo que sea en la barra de prompt.",
+	"genie_relation_not_relatable": "No es posible: solo las funciones, los números y los booleanos pueden estar relacionados. Un texto o una matriz no.",
+	"genie_relation_symmetry_conflict": "No es posible: una relación no puede ser simétrica y asimétrica al mismo tiempo."
 }

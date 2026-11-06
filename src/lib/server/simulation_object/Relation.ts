@@ -21,6 +21,71 @@ const commonElementProperties = [
 	'originality'
 ];
 
+/** The kind of value a property holds: only a function (evolution), a number or a boolean can be related. */
+export type PropertyKind = 'function' | 'number' | 'boolean' | 'text' | 'array';
+
+/** Why the genie refuses a relation: it links a text or an array, or a relation is both symmetric and asymmetric. */
+export class RelationRefusal extends Error {
+	constructor(public code: 'not_relatable' | 'symmetry_conflict') {
+		super(code);
+		this.name = 'RelationRefusal';
+	}
+}
+
+const FUNCTION_PROPERTIES = [
+	'impossibility',
+	'end_impossibility',
+	'start_probability_distribution',
+	'end_probability_distribution',
+	'financial_resource',
+	'human_resource',
+	'satisfaction',
+	'fund_used',
+	'fund_necessary',
+	'human_mobilized',
+	'human_necessary',
+	'evolution',
+	'number_of_units',
+	'financial_value'
+];
+
+const baseKinds: Record<string, PropertyKind> = {
+	name: 'text',
+	description: 'text',
+	unit: 'text',
+	originality: 'number',
+	other: 'array',
+	power: 'array',
+	rankings: 'array',
+	material_resource_used: 'array',
+	material_resource_necessary: 'array',
+	...Object.fromEntries(FUNCTION_PROPERTIES.map((name) => [name, 'function' as PropertyKind]))
+};
+
+function valueKind(value: unknown): PropertyKind {
+	if (typeof value === 'number') return 'number';
+	if (typeof value === 'boolean') return 'boolean';
+	if (Array.isArray(value)) return 'array';
+	if (typeof value === 'object' && value !== null && 'evolution' in value) return 'function';
+	return 'text';
+}
+
+const isRelatable = (kind: PropertyKind | undefined) =>
+	kind === undefined || kind === 'function' || kind === 'number' || kind === 'boolean';
+
+/** The kind of each entry of a list, by every name of the entry (the quantity of a material is a function). */
+function entryKinds(list: unknown, kindOf: (entry: Record<string, unknown>) => PropertyKind) {
+	const kinds: Record<string, PropertyKind> = {};
+	if (!Array.isArray(list)) return kinds;
+	for (const entry of list) {
+		if (typeof entry !== 'object' || entry === null) continue;
+		for (const name of getAdditionalPropertyNames([entry])) {
+			kinds[name] = kindOf(entry as Record<string, unknown>);
+		}
+	}
+	return kinds;
+}
+
 const propertiesByType: Record<string, string[]> = {
 	fact: [],
 	person: ['financial_resource', 'power'],
@@ -87,6 +152,39 @@ function mapDatabaseConnexions(
 	});
 }
 
+function visibleElement<T extends { kinds: unknown }>({ kinds: _kinds, ...visible }: T) {
+	return visible;
+}
+
+type Linked = { Element1Property: string; Element2Property: string; value?: unknown };
+type Kinds = Record<string, PropertyKind>;
+
+/** Throws a refusal when an entry links a text or an array (a property of an element, or a created text value). */
+function assertRelatable(entries: Linked[], kinds1: Kinds, kinds2: Kinds) {
+	for (const entry of entries) {
+		if (
+			!isRelatable(kinds1[entry.Element1Property]) ||
+			!isRelatable(kinds2[entry.Element2Property]) ||
+			(entry.value !== undefined && !isRelatable(valueKind(entry.value)))
+		) {
+			throw new RelationRefusal('not_relatable');
+		}
+	}
+}
+
+const pairKey = (entry: Linked) => `${entry.Element1Property}|${entry.Element2Property}`;
+
+const asymmetricPairs = (relation: Partial<RelationData>) =>
+	[
+		...(relation.element1_element2_value_to_modify ?? []),
+		...(relation.element1_element2_new_value ?? []),
+		...(relation.element2_element1_value_to_modify ?? []),
+		...(relation.element2_element1_new_value ?? [])
+	].map(pairKey);
+
+const symmetricPairs = (relation: Partial<RelationData>) =>
+	[...(relation.symmetric_value_to_modify ?? []), ...(relation.symmetric_new_value ?? [])].map(pairKey);
+
 /** Every element a relation can link, with the names of the properties a relation can target. */
 async function loadElements(ids?: string[]) {
 	const result = await db.query(
@@ -107,6 +205,13 @@ async function loadElements(ids?: string[]) {
 		id: row.id as string,
 		type: row.type as string,
 		name: { fr: row.name_fr, en: row.name_en },
+		kinds: {
+			...baseKinds,
+			...entryKinds(row.other, (entry) => valueKind(entry.value)),
+			...entryKinds(row.power, () => 'text'),
+			...entryKinds(row.willing, () => 'text'),
+			...entryKinds(row.action_materials, () => 'function')
+		} as Record<string, PropertyKind>,
 		properties: [
 			...commonElementProperties,
 			...(propertiesByType[row.type] || []),
@@ -182,6 +287,29 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			`${prompt}\n\nCreate the relation between these already-selected elements. Do not change their IDs or types.\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nelement1_element2_value_to_modify lists the existing values of element 2 that element 1 modifies: Element1Property is selected from element 1 properties and Element2Property from element 2 properties; impact is the strength of that property-to-property relation. element1_element2_new_value lists values element 1 adds to element 2: Element1Property is an existing element 1 property, Element2Property is the name of the new value (it may be a new name), value is the created value and impact its strength. For the element2_element1_* fields, reverse those choices. The symmetric_* fields have the same format as the element1_element2_* ones, but describe an effect that works identically in BOTH directions (element 1 on element 2 and element 2 on element 1): put there only what is really mutual, and put in the element1_element2_* / element2_element1_* fields only what is one-way (asymmetric). Never repeat an entry in both.`,
 			generatedSchema
 		);
+
+		assertRelatable(
+			[
+				...generated.symmetric_value_to_modify,
+				...generated.symmetric_new_value,
+				...generated.element1_element2_value_to_modify,
+				...generated.element1_element2_new_value,
+				...generated.element2_element1_value_to_modify,
+				...generated.element2_element1_new_value
+			],
+			element1.kinds,
+			element2.kinds
+		);
+		// A relation cannot be symmetric and asymmetric at once: the symmetric one wins.
+		const symmetric = new Set(symmetricPairs(generated));
+		for (const key of [
+			'element1_element2_value_to_modify',
+			'element1_element2_new_value',
+			'element2_element1_value_to_modify',
+			'element2_element1_new_value'
+		] as const) {
+			generated[key] = generated[key].filter((entry) => !symmetric.has(pairKey(entry))) as never;
+		}
 
 		// `generated` is already parsed: its schema transforms the interpolation points of the existence into
 		// functions, so parsing it again with RelationSchema would fail (it expects points, not functions).
@@ -311,6 +439,10 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			}`,
 			schema
 		);
+
+		assertRelatable([generated], element1.kinds, element2.kinds);
+		const opposite = new Set(symmetric ? asymmetricPairs(relation) : symmetricPairs(relation));
+		if (opposite.has(pairKey(generated))) throw new RelationRefusal('symmetry_conflict');
 
 		const entries = [...relation[field], generated];
 		const column = {

@@ -1,6 +1,7 @@
 import type { Actions } from './$types';
 import { Genie } from '$lib/server/simulation_object/Genie';
 import { fail } from '@sveltejs/kit';
+import { RelationRefusal } from '$lib/server/simulation_object/Relation';
 import { isValueListField } from '$lib/server/simulation_object/Value';
 
 export const actions: Actions = {
@@ -45,8 +46,14 @@ export const actions: Actions = {
 			: undefined;
 
 		const genie = new Genie();
-		const result = await genie.ask(prompt, { debateProofId, addValue, addProof, addRelation });
-		return { success: true, result };
+		try {
+			const result = await genie.ask(prompt, { debateProofId, addValue, addProof, addRelation });
+			return { success: true, result };
+		} catch (error) {
+			// The genie says in its bubble why this relation is impossible
+			if (error instanceof RelationRefusal) return { success: false, refusal: error.code };
+			throw error;
+		}
 	}
 };
 

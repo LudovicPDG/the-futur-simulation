@@ -184,5 +184,7 @@
 	"simulation_occurrence_title_evolution": "Evolution of the certainty of the existence of the evolution",
 	"genie_say_1": "Hey, what do you want?",
 	"genie_say_2": "I am the genie, the master of this simulation!",
-	"genie_say_3": "What do you want to know? You can ask me anything in the prompt bar."
+	"genie_say_3": "What do you want to know? You can ask me anything in the prompt bar.",
+	"genie_relation_not_relatable": "It's not possible: only functions, numbers and booleans can be related. A text or an array cannot.",
+	"genie_relation_symmetry_conflict": "It's not possible: a relation cannot be symmetric and asymmetric at the same time."
 }

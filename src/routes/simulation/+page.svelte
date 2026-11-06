@@ -68,6 +68,14 @@
 	let lastGenieIndex = -1;
 	let genieMessageTimeout: ReturnType<typeof setTimeout>;
 
+	function sayMessage(text: string, duration = 5000) {
+		genieMessage = text;
+		clearTimeout(genieMessageTimeout);
+		genieMessageTimeout = setTimeout(() => {
+			genieMessage = null;
+		}, duration);
+	}
+
 	function sayRandomMessage() {
 		const messages = [m.genie_say_1(), m.genie_say_2(), m.genie_say_3()];
 		let index = Math.floor(Math.random() * messages.length);
@@ -75,13 +83,15 @@
 			index = (index + 1) % messages.length;
 		}
 		lastGenieIndex = index;
-		genieMessage = messages[index];
-
-		clearTimeout(genieMessageTimeout);
-		genieMessageTimeout = setTimeout(() => {
-			genieMessage = null;
-		}, 5000);
+		sayMessage(messages[index]);
 	}
+
+	// The genie refused a relation: it tells why in its bubble
+	$effect(() => {
+		const refusal = form?.refusal;
+		if (refusal === 'not_relatable') sayMessage(m.genie_relation_not_relatable(), 8000);
+		else if (refusal === 'symmetry_conflict') sayMessage(m.genie_relation_symmetry_conflict(), 8000);
+	});
 
 	function handleClick() {
 		isClicked = true;

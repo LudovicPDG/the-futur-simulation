@@ -184,5 +184,7 @@
 	"simulation_occurrence_title_evolution": "Entwicklung der Gewissheit über die Existenz der Entwicklung",
 	"genie_say_1": "Hey, was willst du?",
 	"genie_say_2": "Ich bin der Geist, der Meister dieser Simulation!",
-	"genie_say_3": "Was willst du wissen? Du kannst mich alles in der Prompt-Leiste fragen."
+	"genie_say_3": "Was willst du wissen? Du kannst mich alles in der Prompt-Leiste fragen.",
+	"genie_relation_not_relatable": "Das ist nicht möglich: Nur Funktionen, Zahlen und Booleans können in Beziehung stehen. Ein Text oder ein Array nicht.",
+	"genie_relation_symmetry_conflict": "Das ist nicht möglich: Eine Beziehung kann nicht gleichzeitig symmetrisch und asymmetrisch sein."
 }

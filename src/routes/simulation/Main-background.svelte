@@ -562,7 +562,7 @@
 						key !== 'type' &&
 						key !== 'other' &&
 						!(activeElement.type === 'evolution' && key === 'unit') &&
-						!/^element[12]_element[12]_(new_value|value_to_modify)$/.test(key) &&
+						!/^(element[12]_element[12]|symmetric)_(new_value|value_to_modify)$/.test(key) &&
 						!(
 							activeRelation &&
 							[
