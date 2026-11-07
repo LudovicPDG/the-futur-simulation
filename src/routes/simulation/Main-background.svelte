@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { RelationData } from '$lib/simulation/Relation';
+	import type { RelationConnexionData, RelationData } from '$lib/simulation/Relation';
 	import type { SimulationElementWithId } from '$lib/stores/simulation';
 	import { renderSimulationElementSvg } from '$lib/simulation/renderSvg';
 	import { svg_shape as relation_svg_shape, relationValueName } from '$lib/simulation/Relation';
@@ -22,6 +22,7 @@
 	} from '$lib/simulation/event/EvolutionFunction';
 	import { valueKind, type ProofData } from '$lib/simulation/Proof';
 	import { resolveAtDate, resolveValue, resolveValueFunctions } from '$lib/simulation/ProofResolution';
+	import { applyRelations, relationImpact } from '$lib/simulation/RelationApplication';
 	import { dateToYear } from '$lib/simulation/TimeAxis';
 	import { onMount } from 'svelte';
 	import {
@@ -42,7 +43,8 @@
 
 	// The date of the time machine, as a decimal year: every value is shown as it stands at this moment.
 	const year = $derived(dateToYear(date.getTime()));
-	const simulation_data = $derived(resolveAtDate(storedData, year));
+	// The proofs decide each value, then the relations move the values that are linked to one another.
+	const simulation_data = $derived(applyRelations(resolveAtDate(storedData, year), year, storedData));
 
 	let cameraX = $state(400);
 	let cameraY = $state(300);
@@ -647,6 +649,12 @@
 			isRelationElement(element)
 		)
 	);
+	// The impact of a value to modify of the active relation: Ii = Pi(Vi) / Vi at the date, and its function of the time.
+	function impactOf(connexion: RelationConnexionData) {
+		return activeRelation
+			? relationImpact(activeRelation, connexion, simulation_data, storedData, year)
+			: ({} as { now?: number; expression?: string });
+	}
 	// Value parameters of a value of the active element: its veracity and uncertainty (from its latest proof),
 	// its originality (only for the values of an array, such as the other data) and the proofs and relations
 	// that influence it.
@@ -654,7 +662,8 @@
 		name: unknown,
 		inArray: boolean,
 		item?: string,
-		relationImpact?: number
+		relationImpact?: number,
+		relationImpactFunction?: string
 	): ValueInfluence | null {
 		if (!activeElement) return null;
 		const id = activeElement.id;
@@ -742,13 +751,13 @@
 		const impactNow = score('impact');
 		// Only the values of an array and the values of a relation have an originality and an impact.
 		const hasValueScores = inArray || relationImpact !== undefined;
-		// Originality: the one of the relation for a value of a relation, else the latest desired one.
+		// Originality: voted by the proofs of the value; the one of the relation for a value of a relation without one.
 		let originalityNow = NaN;
 		if (hasValueScores) {
-			originalityNow =
-				relationImpact !== undefined && activeRelation
-					? Number(activeRelation.originality)
-					: score('originality');
+			originalityNow = score('originality');
+			if (!Number.isFinite(originalityNow) && relationImpact !== undefined && activeRelation) {
+				originalityNow = Number(activeRelation.originality);
+			}
 		}
 
 		return {
@@ -762,7 +771,19 @@
 						? `${Math.round(impactNow)}`
 						: null,
 			originality: Number.isFinite(originalityNow) ? `${Math.round(originalityNow as number)}%` : null,
-			functions: resolveValueFunctions(proofs),
+			functions: {
+				...resolveValueFunctions(proofs),
+				// A value of a relation: its impact is Ii = Pi(Vi) / Vi; the originality of the relation backs up its proofs.
+				...(relationImpact !== undefined && activeRelation
+					? {
+							impact: relationImpactFunction ?? resolveValueFunctions(proofs).impact ?? String(relationImpact),
+							...(resolveValueFunctions(proofs).originality === undefined &&
+							Number.isFinite(Number(activeRelation.originality))
+								? { originality: String(Number(activeRelation.originality)) }
+								: {})
+						}
+					: {})
+			},
 			allProofs,
 			proofs,
 			relations,
@@ -939,9 +960,9 @@
 							<span class="relation-arrow" aria-hidden="true">↔</span>
 							<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
 							<span class="relation-impact">
-								{m.simulation_field_impact()}: {formatValue(connexion.impact)}
+								{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
 							</span>
-							{#each [valueInfluence(relationValueName('symmetric', 'modify', connexion), false, undefined, connexion.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+							{#each [valueInfluence(relationValueName('symmetric', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 						</div>
 					{/each}
 					<button type="button" class="add-value" onclick={() => startAddValue('symmetric_value_to_modify')}>
@@ -983,9 +1004,9 @@
 									<span class="relation-arrow" aria-hidden="true">→</span>
 									<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
 									<span class="relation-impact">
-										{m.simulation_field_impact()}: {formatValue(connexion.impact)}
+										{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
 									</span>
-									{#each [valueInfluence(relationValueName('element1_element2', 'modify', connexion), false, undefined, connexion.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+									{#each [valueInfluence(relationValueName('element1_element2', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element1_element2_value_to_modify')}>
@@ -1029,9 +1050,9 @@
 									<span class="relation-arrow" aria-hidden="true">→</span>
 									<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
 									<span class="relation-impact">
-										{m.simulation_field_impact()}: {formatValue(connexion.impact)}
+										{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
 									</span>
-									{#each [valueInfluence(relationValueName('element2_element1', 'modify', connexion), false, undefined, connexion.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+									{#each [valueInfluence(relationValueName('element2_element1', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element2_element1_value_to_modify')}>

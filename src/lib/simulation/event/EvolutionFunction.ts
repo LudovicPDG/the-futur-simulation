@@ -49,7 +49,7 @@ function cleanPoints(points: [number, number][]): [number, number][] {
  * peak or a trough, so that the curve never overshoots between two points. At an end without an extrapolation the
  * curve is flat (it stays at its value afterwards); at an end with one, the usual one-sided PCHIP slope.
  */
-function pchipSlopes(xs: number[], ys: number[], flatStart: boolean, flatEnd: boolean): number[] {
+export function pchipSlopes(xs: number[], ys: number[], flatStart: boolean, flatEnd: boolean): number[] {
 	const n = xs.length;
 	if (n < 2) return [0];
 	const h = xs.slice(1).map((x, i) => x - xs[i]);
@@ -79,7 +79,7 @@ function pchipSlopes(xs: number[], ys: number[], flatStart: boolean, flatEnd: bo
 }
 
 /** The cubic Hermite spline through the points with these slopes, at a moment t between the first and the last point. */
-function hermiteAt(xs: number[], ys: number[], slopes: number[], t: number): number {
+export function hermiteAt(xs: number[], ys: number[], slopes: number[], t: number): number {
 	if (xs.length === 1) return ys[0];
 	let lo = 0;
 	let hi = xs.length - 1;

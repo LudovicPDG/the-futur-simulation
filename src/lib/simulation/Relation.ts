@@ -3,10 +3,38 @@ import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
 import { existenceSchema } from './Existence';
 
+/**
+ * How the value of the source property gives an estimate of the target property (see RelationInfluence). Flat on
+ * purpose, so that the genie can write it with strict structured outputs.
+ */
+export const RelationEstimateSchema = z.object({
+	kind: z
+		.enum(['proportional', 'additive', 'inverse', 'points'])
+		.describe(
+			'proportional: estimate = parameter * source value ("each unit of the source gives 2 units of the target", parameter 2). additive: estimate = source value + parameter ("adds 5"). inverse: estimate = parameter / source value (the more the source, the less the target). points: the estimate goes through the given points (any other shape, e.g. a saturation).'
+		),
+	parameter: z
+		.number()
+		.describe('The factor (proportional), the offset (additive) or the constant (inverse). 0 and ignored for points.'),
+	points: z
+		.array(
+			z.object({
+				source_value: z.number().describe('A value of the source property'),
+				estimated_value: z.number().describe('The value of the target property that the relation estimates from it')
+			})
+		)
+		.describe('Only for kind "points": at least two points; an empty list for any other kind.')
+});
+
+export type RelationEstimateData = z.infer<typeof RelationEstimateSchema>;
+
 export const RelationConnexionSchema = z.object({
 	Element1Property: z.string().describe('The property of element 1 in this relation'),
 	Element2Property: z.string().describe('The property of element 2 in this relation'),
-	impact: z.number().describe('The strength of the relation between these properties')
+	impact: z.number().describe('The strength of the relation between these properties'),
+	estimate: RelationEstimateSchema.optional().describe(
+		'The estimate of the target value that the relation gives from the source value. Where the two values are consistent, it gives the current target value.'
+	)
 });
 
 /** A value created by the relation: it links an existing property to the name of the new value, with its value and impact. */

@@ -51,7 +51,8 @@ export async function createDatabase() {
 			CREATE TYPE relation_connexion_t AS (
 				source_property TEXT,
 				target_property TEXT,
-				impact NUMERIC
+				impact NUMERIC,
+				estimate JSONB
 			);
 
 			-- Ressource matérielle d'une action, avec un titre traduit (comme une capacité)

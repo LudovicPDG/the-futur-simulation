@@ -131,13 +131,13 @@ type ValueShape = 'evolution' | 'other' | 'any';
  * A top-level proof as the genie writes it: its desired value gives the content it changes (null to keep it) and, in
  * "curves", the interpolation points of the period it changes for the curves it changes.
  */
-function generatedProofSchema(shape: ValueShape, scored: boolean) {
+function generatedProofSchema(shape: ValueShape, scored: boolean, valueless = false) {
 	const columns =
 		shape === 'any'
 			? { ...valueColumns(true, scored), uncertainty: SCORE_COLUMNS.uncertainty }
 			: valueColumns(shape === 'evolution', scored);
 	const desired: Record<string, z.ZodType> = {};
-	if (shape !== 'evolution') {
+	if (shape !== 'evolution' && !valueless) {
 		desired.content = z
 			.union([TranslationSchema, z.number(), z.boolean()])
 			.nullable()
@@ -415,7 +415,19 @@ const RELATION_VALUE_LISTS = new Set([
  * A value of an element: its name, its content and whether it has an originality and an impact of its own (only
  * the entries of the lists of a fact do; the ones of a relation are the relation's).
  */
-type ElementValue = { value_name: ProofData['value_name']; value: ProofValue; scored: boolean };
+type ElementValue = {
+	value_name: ProofData['value_name'];
+	value: ProofValue;
+	scored: boolean;
+	/** A value of a relation: its proofs give no value, only its parameters (veracity, uncertainty, impact, originality). */
+	valueless?: boolean;
+};
+
+/** The name of a value of a relation (see relationValueName): its proofs have no value, only parameters. */
+const RELATION_VALUE_NAME = /^(symmetric|element1_element2|element2_element1)_(value_to_modify|new_value): /;
+function isRelationValueName(name: unknown): boolean {
+	return valueNames(name).some((candidate) => RELATION_VALUE_NAME.test(candidate));
+}
 
 /**
  * Every value of a freshly created element (its name, description, list items and "other" values), each of which
@@ -425,15 +437,16 @@ function elementValues(
 	element: Record<string, unknown>
 ): ElementValue[] {
 	const values: ElementValue[] = [];
-	const add = (value_name: ProofData['value_name'], raw: unknown, scored = true) => {
+	const add = (value_name: ProofData['value_name'], raw: unknown, scored = true, valueless = false) => {
 		const value = toProofValue(raw);
-		if (value_name && value !== undefined) values.push({ value_name, value, scored });
+		if (value_name && value !== undefined) values.push({ value_name, value, scored, valueless });
 	};
 
-	// Each value to modify and each value to add of a relation has its own proof.
+	// Each value to modify and each value to add of a relation has its own proof. The proof gives no value: only the four
+	// parameters of the value (veracity, uncertainty, impact, originality).
 	if (element.type === 'relation') {
 		for (const value of relationValues(element as Partial<RelationData>)) {
-			add(value.name, value.value, false);
+			add(value.name, value.value, true, true);
 		}
 	}
 
@@ -469,15 +482,16 @@ function elementValues(
  * value, a titled item, a ranked entry), not a primary property nor a value of a relation.
  */
 function hasValueScores(target: ProofTarget, name: unknown, element: Record<string, unknown>): boolean {
-	if (!('factId' in target)) return false;
+	// A value of a relation has its own impact and originality, voted by its proofs.
+	if (!('factId' in target)) return isRelationValueName(name);
 	const key = valueNames(name).find((candidate) => candidate in element);
 	return key ? Array.isArray(element[key]) && key !== 'evolution' : findListEntry(name, element) !== undefined;
 }
 
 /** The parts of a value that its proofs give: its originality and impact only when it has its own. */
-function valueEditFields(scored: boolean, evolution = false): string[] {
+function valueEditFields(scored: boolean, evolution = false, valueless = false): string[] {
 	const fields: string[] = VALUE_EDIT_FIELDS.filter(
-		(field) => scored || (field !== 'impact' && field !== 'originality')
+		(field) => (scored || (field !== 'impact' && field !== 'originality')) && !(valueless && field === 'value')
 	);
 	// An evolution is edited part by part and has no general uncertainty.
 	return evolution
@@ -629,14 +643,14 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 						value_name: value.value_name,
 						// An evolution has no general uncertainty of its own: it keeps the one of the proof, which is not used.
 						desired_value: {
-							value: value.value,
+							...(value.valueless ? {} : { value: value.value }),
 							uncertainty: own.uncertainty,
 							...Object.fromEntries(
 								Object.entries(columns).map(([key, column]) => [key, curveExpression(curves, key, column)])
 							)
 						} as ValueEdit,
 						// The founding proof adds the value: it gives every part of it.
-						edited_fields: valueEditFields(value.scored, evolution),
+						edited_fields: valueEditFields(value.scored, evolution, value.valueless),
 						id: randomUUID(),
 						fact_id: 'factId' in target ? target.factId : null,
 						relation_id: 'relationId' in target ? target.relationId : null,
@@ -748,7 +762,7 @@ ${JSON.stringify(element)}`
 			element: { ...element, other: values },
 			text: `
 
-This proof is about the following relation between two simulation elements. Its values are its name, its description and each value to modify (its value is the impact) or value to add (its value is the content), named in "values":
+This proof is about the following relation between two simulation elements. Its values are its name, its description and each value to modify (a parameter-only value: a proof about it gives its veracity, uncertainty, impact and originality, never a value) or value to add, named in "values":
 ${JSON.stringify({ ...element, ...endpoints, values })}`
 		};
 	}
@@ -762,7 +776,8 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 		valueName: ProofData['value_name'],
 		element: Record<string, unknown>,
 		proofs: ProofData[],
-		fallback: Pick<ProofData, 'veracity' | 'uncertainty' | 'impact' | 'originality'>
+		fallback: Pick<ProofData, 'veracity' | 'uncertainty' | 'impact' | 'originality'>,
+		valueless = false
 	): ValueEdit {
 		const scored = hasValueScores(target, valueName, element);
 		const targetId = 'factId' in target ? target.factId : target.relationId;
@@ -776,17 +791,20 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 		const voted = resolveValueFunctions(own);
 		const raw = rawValue(valueName, element);
 		const current = {
-			value: toProofValue(raw) ?? (raw as ProofValue),
+			// A value of a relation has no value to edit, only parameters.
+			...(valueless ? {} : { value: toProofValue(raw) ?? (raw as ProofValue) }),
 			veracity: voted.veracity ?? fallback.veracity,
 			uncertainty: voted.uncertainty ?? fallback.uncertainty
 		};
-		return scored
-			? {
-					...current,
-					impact: voted.impact ?? fallback.impact,
-					originality: voted.originality ?? fallback.originality
-				}
-			: current;
+		return (
+			scored
+				? {
+						...current,
+						impact: voted.impact ?? fallback.impact,
+						originality: voted.originality ?? fallback.originality
+					}
+				: current
+		) as ValueEdit;
 	}
 
 	private async generateForTarget(
@@ -815,12 +833,14 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 		// Only an entry of a list of a fact has an originality and an impact of its own. When the value is not known
 		// yet (free prompt), the genie may give them, and they are left out below if the value has none.
 		const scored = valueName === undefined || hasValueScores(target, valueName, element);
+		// A value of a relation has no value to propose: a proof about it only gives its parameters.
+		const valueless = valueName !== undefined && !('factId' in target) && isRelationValueName(valueName);
 		let shape: ValueShape = 'any';
 		if (valueName !== undefined) {
 			context += `\n\nThis proof is about the value ${JSON.stringify(valueName)} of the element: use exactly this value_name.`;
 			shape = valueKind(toProofValue(rawValue(valueName, element))) === 'evolution' ? 'evolution' : 'other';
 			if (!parentProofId) {
-				const preview = this.currentValue(target, valueName, element, proofs, DEFAULT_SCORES);
+				const preview = this.currentValue(target, valueName, element, proofs, DEFAULT_SCORES, valueless);
 				context += `\n\nThe current curves of this value over time, each given by its interpolation points [date, value] and its expressions before the first and after the last point (or by its expression when it mixes several proofs):\n${describeCurves(currentCurves(preview))}`;
 			}
 		}
@@ -829,7 +849,11 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 ${
 			parentProofId
 				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources) and null for every other field: they keep their current value exactly. The scores of the debated proof (veracity, uncertainty, impact, originality) are curves of the time: change them in "scores" with the interpolation points of the period the request is about, and a number only for the scores it changes. Never rewrite what does not need to change. It cannot edit the desired value of the debated proof.'
-				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY what the request asks to change: its content (null to keep it) and, in "curves", the interpolation points of the period it is about, with a number only for the curves it changes (${
+				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY what the request asks to change: ${
+						valueless
+							? 'NO content (the values of a relation have no value to propose: a proof about one only gives its parameters, that is its veracity, uncertainty, impact and originality) and, in "curves",'
+							: 'its content (null to keep it) and, in "curves",'
+					} the interpolation points of the period it is about, with a number only for the curves it changes (${
 						shape === 'evolution'
 							? 'the value of the evolution, its uncertainty above, its uncertainty below'
 							: shape === 'other'
@@ -839,7 +863,7 @@ ${
 		}`;
 
 		// The value must exist and the desired content must keep its type: retry once with the error.
-		const schema = parentProofId ? GeneratedSubProofSchema : generatedProofSchema(shape, scored);
+		const schema = parentProofId ? GeneratedSubProofSchema : generatedProofSchema(shape, scored, valueless);
 		const generate = async (extra = '') => {
 			const proof = (await this.generateWithSchema(model_name, level_of_reasoning, basePrompt + extra, schema)) as
 				| GeneratedProof
@@ -880,7 +904,7 @@ ${
 			desired_value = desired as ProofEdit;
 		} else {
 			const edit = proposed as GeneratedProof['desired_value'];
-			const kept = this.currentValue(target, generated.value_name, element, proofs, own);
+			const kept = this.currentValue(target, generated.value_name, element, proofs, own, valueless);
 			const evolution = valueKind(kept.value) === 'evolution';
 			const curves = applyCurves(
 				edit.curves,

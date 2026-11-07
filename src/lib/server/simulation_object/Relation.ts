@@ -1,6 +1,7 @@
 import { BaseSimulationObject } from './BaseSimulationObject';
 import {
 	RelationConnexionSchema,
+	RelationEstimateSchema,
 	RelationElementTypeSchema,
 	RelationSchema,
 	type RelationData
@@ -9,17 +10,6 @@ import { convertToPg } from './PgConversion';
 import { db } from '../utils/database';
 import { z } from 'zod';
 import type { RelationListField } from '$lib/simulation/Relation';
-
-const commonElementProperties = [
-	'name',
-	'description',
-	'other',
-	'impossibility',
-	'end_impossibility',
-	'start_probability_distribution',
-	'end_probability_distribution',
-	'originality'
-];
 
 /** The kind of value a property holds: only a function (evolution), a number or a boolean can be related. */
 export type PropertyKind = 'function' | 'number' | 'boolean' | 'text' | 'array';
@@ -32,36 +22,7 @@ export class RelationRefusal extends Error {
 	}
 }
 
-const FUNCTION_PROPERTIES = [
-	'impossibility',
-	'end_impossibility',
-	'start_probability_distribution',
-	'end_probability_distribution',
-	'financial_resource',
-	'human_resource',
-	'satisfaction',
-	'fund_used',
-	'fund_necessary',
-	'human_mobilized',
-	'human_necessary',
-	'evolution',
-	'number_of_units',
-	'financial_value'
-];
-
-const baseKinds: Record<string, PropertyKind> = {
-	name: 'text',
-	description: 'text',
-	unit: 'text',
-	originality: 'number',
-	other: 'array',
-	power: 'array',
-	rankings: 'array',
-	material_resource_used: 'array',
-	material_resource_necessary: 'array',
-	...Object.fromEntries(FUNCTION_PROPERTIES.map((name) => [name, 'function' as PropertyKind]))
-};
-
+/** The kind of a created value: only a number or a boolean can be related, a text or a list cannot. */
 function valueKind(value: unknown): PropertyKind {
 	if (typeof value === 'number') return 'number';
 	if (typeof value === 'boolean') return 'boolean';
@@ -72,38 +33,6 @@ function valueKind(value: unknown): PropertyKind {
 
 const isRelatable = (kind: PropertyKind | undefined) =>
 	kind === undefined || kind === 'function' || kind === 'number' || kind === 'boolean';
-
-/** The kind of each entry of a list, by every name of the entry (the quantity of a material is a function). */
-function entryKinds(list: unknown, kindOf: (entry: Record<string, unknown>) => PropertyKind) {
-	const kinds: Record<string, PropertyKind> = {};
-	if (!Array.isArray(list)) return kinds;
-	for (const entry of list) {
-		if (typeof entry !== 'object' || entry === null) continue;
-		for (const name of getAdditionalPropertyNames([entry])) {
-			kinds[name] = kindOf(entry as Record<string, unknown>);
-		}
-	}
-	return kinds;
-}
-
-const propertiesByType: Record<string, string[]> = {
-	fact: [],
-	person: ['financial_resource', 'power'],
-	organization: ['financial_resource', 'power', 'human_resource'],
-	interest_group: ['financial_resource', 'power', 'human_resource', 'willing', 'satisfaction'],
-	action: [
-		'material_resource_used',
-		'material_resource_necessary',
-		'fund_used',
-		'fund_necessary',
-		'human_mobilized',
-		'human_necessary'
-	],
-	event: [],
-	evolution: ['evolution', 'unit'],
-	ranking: ['rankings'],
-	material_resource: ['number_of_units', 'financial_value', 'power']
-};
 
 /** The titles of the entries of a list (other data, capabilities, willingness...): each one can be targeted by a relation. */
 function getAdditionalPropertyNames(other: unknown): string[] {
@@ -147,9 +76,28 @@ function mapDatabaseConnexions(
 			Element2Property: reverseDirection
 				? (fields.element1_property ?? fields.source_property)
 				: (fields.element2_property ?? fields.target_property),
-			impact: fields.impact
+			impact: fields.impact,
+			estimate: fields.estimate ?? undefined
 		});
 	});
+}
+
+/** A connexion as the composite relation_connexion_t stores it (source, target, impact, estimate as JSON text). */
+function toPgConnexion(connexion: RelationData['element1_element2_value_to_modify'][number], reversed: boolean) {
+	const estimate = connexion.estimate ? JSON.stringify(connexion.estimate) : null;
+	return reversed
+		? {
+				Element2Property: connexion.Element2Property,
+				Element1Property: connexion.Element1Property,
+				impact: connexion.impact,
+				estimate
+			}
+		: {
+				SourceProperty: connexion.Element1Property,
+				TargetProperty: connexion.Element2Property,
+				impact: connexion.impact,
+				estimate
+			};
 }
 
 function visibleElement<T extends { kinds: unknown }>({ kinds: _kinds, ...visible }: T) {
@@ -185,42 +133,71 @@ const asymmetricPairs = (relation: Partial<RelationData>) =>
 const symmetricPairs = (relation: Partial<RelationData>) =>
 	[...(relation.symmetric_value_to_modify ?? []), ...(relation.symmetric_new_value ?? [])].map(pairKey);
 
-/** Every element a relation can link, with the names of the properties a relation can target. */
+/** The tables that hold the values of each type of fact, merged with the facts table into one element. */
+const FACT_TYPE_TABLES = [
+	'characters',
+	'persons',
+	'organizations',
+	'interest_groups',
+	'events',
+	'evolutions',
+	'rankings',
+	'actions',
+	'material_resources'
+] as const;
+
+/** Keys of an element that are not values a relation can link. */
+const NOT_LINKABLE = new Set(['id', 'type', 'name', 'description', 'unit']);
+
+/** The kind of a value as the element really holds it, or undefined when it is not a value a relation can move. */
+function linkableKind(key: string, value: unknown): PropertyKind | undefined {
+	if (typeof value === 'number') return 'number';
+	if (typeof value === 'boolean') return 'boolean';
+	if (key === 'evolution' && Array.isArray(value)) return 'function';
+	if (typeof value === 'object' && value !== null && !Array.isArray(value) && 'evolution' in value && 'unit' in value) {
+		return 'function';
+	}
+	return undefined;
+}
+
+/**
+ * Every element a relation can link, with the properties it really has: only the numbers, the booleans and the
+ * functions (evolutions) the element holds, and the ones of its "other" values. A relation can never link a value
+ * that does not exist.
+ */
 async function loadElements(ids?: string[]) {
 	const result = await db.query(
 		`
-		SELECT f.id, lower(f.type) AS type, (f.name).fr AS name_fr, (f.name).en AS name_en, to_jsonb(f.other) AS other,
-			to_jsonb(COALESCE(c.power, m.power)) AS power, to_jsonb(ig.willing) AS willing,
-			to_jsonb(a.material_resource_used || a.material_resource_necessary) AS action_materials
+		SELECT f.id, lower(f.type) AS type, (f.name).fr AS name_fr, (f.name).en AS name_en,
+			to_jsonb(f) ${FACT_TYPE_TABLES.map(
+				(table) => `|| COALESCE((SELECT to_jsonb(${table}) FROM ${table} WHERE ${table}.id = f.id), '{}'::jsonb)`
+			).join(' ')} AS element,
+			to_jsonb(f.other) AS other
 		FROM facts f
-		LEFT JOIN actions a ON a.id = f.id
-		LEFT JOIN characters c ON c.id = f.id
-		LEFT JOIN material_resources m ON m.id = f.id
-		LEFT JOIN interest_groups ig ON ig.id = f.id
 		WHERE lower(f.type) = ANY($1::text[]) AND ($2::uuid[] IS NULL OR f.id = ANY($2::uuid[]))
 	`,
 		[RelationElementTypeSchema.options, ids ?? null]
 	);
-	return result.rows.map((row) => ({
-		id: row.id as string,
-		type: row.type as string,
-		name: { fr: row.name_fr, en: row.name_en },
-		kinds: {
-			...baseKinds,
-			...entryKinds(row.other, (entry) => valueKind(entry.value)),
-			...entryKinds(row.power, () => 'text'),
-			...entryKinds(row.willing, () => 'text'),
-			...entryKinds(row.action_materials, () => 'function')
-		} as Record<string, PropertyKind>,
-		properties: [
-			...commonElementProperties,
-			...(propertiesByType[row.type] || []),
-			...getAdditionalPropertyNames(row.other),
-			...getAdditionalPropertyNames(row.power),
-			...getAdditionalPropertyNames(row.willing),
-			...getAdditionalPropertyNames(row.action_materials)
-		]
-	}));
+	return result.rows.map((row) => {
+		const kinds: Record<string, PropertyKind> = {};
+		for (const [key, value] of Object.entries(row.element as Record<string, unknown>)) {
+			const kind = NOT_LINKABLE.has(key) ? undefined : linkableKind(key, value);
+			if (kind) kinds[key] = kind;
+		}
+		// The "other" values are named by their title.
+		for (const entry of Array.isArray(row.other) ? row.other : []) {
+			const kind = linkableKind('other', entry?.value);
+			if (!kind) continue;
+			for (const name of getAdditionalPropertyNames([entry])) kinds[name] = kind;
+		}
+		return {
+			id: row.id as string,
+			type: row.type as string,
+			name: { fr: row.name_fr, en: row.name_en },
+			kinds,
+			properties: Object.keys(kinds)
+		};
+	});
 }
 
 export class RelationServer extends BaseSimulationObject<RelationData> {
@@ -265,7 +242,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		const connexionSchema = z.object({
 			Element1Property: element1Property,
 			Element2Property: element2Property,
-			impact: z.number()
+			impact: z.number(),
+			estimate: RelationEstimateSchema
 		});
 		const valueSchema = z.union([z.string(), z.number(), z.boolean()]);
 		const generatedSchema = RelationSchema.extend({
@@ -284,7 +262,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		const generated = await this.generateWithSchema(
 			model_name,
 			level_of_reasoning,
-			`${prompt}\n\nCreate the relation between these already-selected elements. Do not change their IDs or types.\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nelement1_element2_value_to_modify lists the existing values of element 2 that element 1 modifies: Element1Property is selected from element 1 properties and Element2Property from element 2 properties; impact is the strength of that property-to-property relation. element1_element2_new_value lists values element 1 adds to element 2: Element1Property is an existing element 1 property, Element2Property is the name of the new value (it may be a new name), value is the created value and impact its strength. For the element2_element1_* fields, reverse those choices. The symmetric_* fields have the same format as the element1_element2_* ones, but describe an effect that works identically in BOTH directions (element 1 on element 2 and element 2 on element 1): put there only what is really mutual, and put in the element1_element2_* / element2_element1_* fields only what is one-way (asymmetric). Never repeat an entry in both.`,
+			`${prompt}\n\nCreate the relation between these already-selected elements. Do not change their IDs or types.\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nelement1_element2_value_to_modify lists the existing values of element 2 that element 1 modifies: Element1Property is selected from element 1 properties and Element2Property from element 2 properties; impact is the strength of that property-to-property relation. element1_element2_new_value lists values element 1 adds to element 2: Element1Property is an existing element 1 property, Element2Property is the name of the new value (it may be a new name), value is the created value and impact its strength. For the element2_element1_* fields, reverse those choices. The symmetric_* fields have the same format as the element1_element2_* ones, but describe an effect that works identically in BOTH directions (element 1 on element 2 and element 2 on element 1): put there only what is really mutual, and put in the element1_element2_* / element2_element1_* fields only what is one-way (asymmetric). Never repeat an entry in both. ESTIMATE: for each entry, "estimate" says how the value of the source property gives an estimate of the value of the target property (the source is Element1Property for element1_element2_* and Element2Property for element2_element1_*; the symmetric_* entries are one link read in both directions). Choose the kind that fits the real mechanism: proportional (parameter = factor), additive (parameter = offset), inverse (parameter = constant), or points (at least two {source_value, estimated_value} points, for any other shape). The estimate is what the target value should be according to this relation alone, so where the two values are already consistent it must give the current target value. Use the units of the properties. For an entry that only adds a new value, use kind additive with parameter 0 and no points. A relation only links NUMBERS, FUNCTIONS (evolutions, probabilities, resources...) and BOOLEANS: never link a text or a list, and never create a new value whose "value" is a text (a sentence, a description, an empty string): an entry like that makes the whole relation impossible. When nothing numeric can be created, use the *_value_to_modify fields on numeric properties of the other element instead (for example the start or end probability of an event, or a financial resource) and leave the *_new_value lists empty.`,
 			generatedSchema
 		);
 
@@ -342,20 +320,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				relation.Element1Type,
 				relation.Element2ID,
 				relation.Element2Type,
-				convertToPg(
-					(relation.element1_element2_value_to_modify || []).map((connexion) => ({
-						SourceProperty: connexion.Element1Property,
-						TargetProperty: connexion.Element2Property,
-						impact: connexion.impact
-					}))
-				),
-				convertToPg(
-					(relation.element2_element1_value_to_modify || []).map((connexion) => ({
-						Element2Property: connexion.Element2Property,
-						Element1Property: connexion.Element1Property,
-						impact: connexion.impact
-					}))
-				),
+				convertToPg((relation.element1_element2_value_to_modify || []).map((c) => toPgConnexion(c, false))),
+				convertToPg((relation.element2_element1_value_to_modify || []).map((c) => toPgConnexion(c, true))),
 				JSON.stringify(relation.element1_element2_new_value ?? []),
 				JSON.stringify(relation.element2_element1_new_value ?? []),
 				convertToPg(relation.existence),
@@ -422,7 +388,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		const connexionSchema = z.object({
 			Element1Property: propertyEnum(element1.properties),
 			Element2Property: propertyEnum(element2.properties),
-			impact: z.number()
+			impact: z.number(),
+			estimate: RelationEstimateSchema
 		});
 		const valueSchema = z.union([z.string(), z.number(), z.boolean()]);
 		const schema = isNew ? connexionSchema.extend({ value: valueSchema }) : connexionSchema;
@@ -434,7 +401,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				isNew
 					? `It is a value that ${JSON.stringify(source.name)} adds to ${JSON.stringify(target.name)}: the property of the source is an existing property, the property of the target is the name of the new value (it may be a new name), value is the created value and impact its strength.`
 					: `It is an existing value of ${JSON.stringify(target.name)} that ${JSON.stringify(source.name)} modifies: one property of each element and the impact of that relation.`
-			} Element1Property always belongs to element 1 and Element2Property to element 2.${
+			} Element1Property always belongs to element 1 and Element2Property to element 2. ESTIMATE: for each entry, "estimate" says how the value of the source property gives an estimate of the value of the target property (the source is Element1Property for element1_element2_* and Element2Property for element2_element1_*; the symmetric_* entries are one link read in both directions). Choose the kind that fits the real mechanism: proportional (parameter = factor), additive (parameter = offset), inverse (parameter = constant), or points (at least two {source_value, estimated_value} points, for any other shape). The estimate is what the target value should be according to this relation alone, so where the two values are already consistent it must give the current target value. Use the units of the properties. For an entry that only adds a new value, use kind additive with parameter 0 and no points. A relation only links NUMBERS, FUNCTIONS (evolutions, probabilities, resources...) and BOOLEANS: never link a text or a list, and never create a new value whose "value" is a text (a sentence, a description, an empty string): an entry like that makes the whole relation impossible. When nothing numeric can be created, use the *_value_to_modify fields on numeric properties of the other element instead (for example the start or end probability of an event, or a financial resource) and leave the *_new_value lists empty.${
 				symmetric ? ' The entry is SYMMETRIC: it works identically from element 1 to element 2 and from element 2 to element 1.' : ''
 			}`,
 			schema
@@ -455,21 +422,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		}[field];
 		const value = isNew || symmetric
 			? JSON.stringify(entries)
-			: convertToPg(
-					entries.map((connexion) =>
-						reversed
-							? {
-									Element2Property: connexion.Element2Property,
-									Element1Property: connexion.Element1Property,
-									impact: connexion.impact
-								}
-							: {
-									SourceProperty: connexion.Element1Property,
-									TargetProperty: connexion.Element2Property,
-									impact: connexion.impact
-								}
-					)
-				);
+			: convertToPg(entries.map((connexion) => toPgConnexion(connexion, reversed)));
 		await db.query(`UPDATE relations SET ${column} = $1 WHERE id = $2`, [value, relationId]);
 
 		try {
