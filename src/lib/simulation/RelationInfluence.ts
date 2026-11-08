@@ -3,16 +3,16 @@ import { hermiteAt, pchipSlopes } from './event/EvolutionFunction';
 /**
  * How the relations of a value are combined with it.
  *
- *            V0·(A0·E0)² + Σ ( Vi·Ai·Ei·Ri·Ii·Oi )
+ *            V0·(A0·E0)^2.5 + Σ ( Vi·Ai·Ei·Ri·Fi·Ii·Oi )
  *   V  =  ───────────────────────────────────────────
- *               (A0·E0)² + Σ ( Ai·Ei·Ri·Oi )
+ *               (A0·E0)^2.5 + Σ ( Ai·Ei·Ri·Fi·Oi )
  *
  * Ii does not weigh the relation: it converts the other value Vi into an estimate of V0. What is stored and
  * interpolated is this estimate Pi(Vi) = Vi·Ii(Vi) (so nothing is divided, and Vi = 0 is fine). V is then the
  * weighted average of V0 and of the estimates Pi(Vi) of the relations. With Ii = V0/Vi at the known points, Pi = V0:
  * a consistent relation does not move the value, and an inconsistent one pulls it toward its estimate.
  *
- * The scores (veracity, originality) are percentages (0..100), used as shares (0..1). Both weights have four score
+ * The scores (veracity, originality) are percentages (0..100), used as shares (0..1). Both weights have five score
  * factors, so the result does not depend on that scale.
  */
 
@@ -44,6 +44,8 @@ export interface RelationInput {
 	elementVeracity: number;
 	/** Veracity of the relation, from 0 to 100. */
 	relationVeracity: number;
+	/** Veracity of the relation element itself: the certainty, from 0 to 100, that the relation exists (Fi). */
+	relationExistence: number;
 	/** Originality of the relation, from 0 to 100. */
 	originality: number;
 }
@@ -174,8 +176,8 @@ export function combineRelations(
 ): RelationResult {
 	let numerator = 0;
 	let denominator = 0;
-	// (A0·E0)²: four factors like a relation, so that both weigh the same at the same level of veracity.
-	const initialWeight = (share(initial.veracity) * share(initial.elementVeracity)) ** 2;
+	// (A0·E0)^2.5: five factors like a relation (Ai·Ei·Ri·Fi·Oi), so that both weigh the same at the same level of veracity.
+	const initialWeight = (share(initial.veracity) * share(initial.elementVeracity)) ** 2.5;
 	if (Number.isFinite(initial.value)) {
 		numerator += initial.value * initialWeight;
 		denominator += initialWeight;
@@ -190,6 +192,7 @@ export function combineRelations(
 			share(relation.valueVeracity) *
 			share(relation.elementVeracity) *
 			share(relation.relationVeracity) *
+			share(relation.relationExistence) *
 			share(relation.originality) *
 			extrapolationTrust(relation.estimate, relation.value);
 		numerator += estimate * weight;

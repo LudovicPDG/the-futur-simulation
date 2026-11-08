@@ -8,6 +8,7 @@ import {
 	type EvolutionComponent
 } from './event/EvolutionFunction';
 import { resolveValue, valueNames } from './ProofResolution';
+import { dateToYear } from './TimeAxis';
 import { relationValueName, type RelationConnexionData, type RelationData } from './Relation';
 import {
 	combineRelations,
@@ -29,15 +30,12 @@ import {
  *   nothing.
  * - A value that is an evolution keeps the shape of its curve: the curve is shifted so that it gives the decided value
  *   at the moment t.
- * - The impact of a link is anchored on the known points: at each interpolation date of the two curves, the estimate
- *   gives back the value of the target (Ii = V0 / Vi), as the stored curves (before the proofs) have them. The
- *   estimate of the genie may only move these points by DEVIATION at most ("close to", not necessarily equal). Where
- *   the two values have no usable points (a constant, a number), the estimate of the genie is used as it is.
+ * - The impact of a link follows the known points exactly: at each interpolation date of the two stored curves (before
+ *   the proofs) up to today, Ii = V0 / Vi. After today the estimate of the genie is free (it is the function the
+ *   relation believes in, kept inside the plausible range of the quantity), so the future impact is the one of that
+ *   function. Where the two values have no usable points (a constant, a number), the estimate of the genie is used.
  * - A link without anchors and without a usable estimate function has no effect.
  */
-
-/** How far (as a share of the target value) the genie may move the estimate away from V0 at a known point. */
-export const DEVIATION = 0.25;
 
 type Element = Record<string, unknown>;
 
@@ -235,37 +233,50 @@ function edgesOf(relation: RelationData): Edge[] {
 	return edges;
 }
 
+/** A known date of the two curves: the source value, the target value and the estimate the relation gives there. */
+interface Anchor {
+	date: number;
+	source: number;
+	estimate: number;
+}
+
 /**
- * The estimate of an edge anchored on the known points: at each interpolation date of the two stored curves, the point
- * [source value, target value] (Ii = V0 / Vi). The estimate of the genie, when it has one, may move the target of a point
- * by DEVIATION at most. Undefined when the curves give fewer than two different source values.
+ * The anchors of an edge, from the two stored curves. Up to today the estimate is the target value itself (Ii = V0 / Vi,
+ * exactly); after today it is the estimate of the genie at the source value (free), or the target value when the genie
+ * has no usable estimate there. Both are kept inside the plausible range of the target, so an impossible value (a
+ * probability under 0) never gives an impact.
  */
-function anchoredEstimate(
-	edge: Edge,
-	sourceBase: ValueNode | undefined,
-	targetBase: ValueNode | undefined
-): { estimate: EstimateFunction; points: [number, number][] } | undefined {
-	if (!sourceBase || !targetBase) return undefined;
+function anchorsOf(edge: Edge, sourceBase: ValueNode, targetBase: ValueNode, bounds: Bounds): Anchor[] {
+	const today = dateToYear(Date.now());
 	const dates = [...new Set([...sourceBase.dates, ...targetBase.dates])].sort((a, b) => a - b);
-	const points: [number, number][] = [];
+	const within = (value: number) => Math.min(bounds.max ?? Infinity, Math.max(bounds.min ?? -Infinity, value));
+	const anchors: Anchor[] = [];
 	for (const date of dates) {
 		const source = sourceBase.read(date);
 		const target = targetBase.read(date);
 		if (source === undefined || target === undefined) continue;
-		let estimated = target;
-		const genie = estimateAt(edge.estimate, source);
-		if (Number.isFinite(genie)) {
-			const room = Math.abs(target) * DEVIATION;
-			estimated = Math.min(target + room, Math.max(target - room, genie));
-		}
-		points.push([source, estimated]);
+		const genie = date > today ? estimateAt(edge.estimate, source) : Number.NaN;
+		anchors.push({ date, source, estimate: within(Number.isFinite(genie) ? genie : target) });
 	}
-	return new Set(points.map(([x]) => x)).size >= 2 ? { estimate: { kind: 'points', points }, points } : undefined;
+	return anchors;
+}
+
+/** The estimate of an edge through its anchors. Undefined when they give fewer than two different source values. */
+function anchoredEstimate(
+	edge: Edge,
+	sourceBase: ValueNode | undefined,
+	targetBase: ValueNode | undefined,
+	bounds: Bounds
+): { estimate: EstimateFunction; anchors: Anchor[] } | undefined {
+	if (!sourceBase || !targetBase) return undefined;
+	const anchors = anchorsOf(edge, sourceBase, targetBase, bounds);
+	if (new Set(anchors.map((anchor) => anchor.source)).size < 2) return undefined;
+	return { estimate: { kind: 'points', points: anchors.map((a) => [a.source, a.estimate] as [number, number]) }, anchors };
 }
 
 /**
- * The impact of a value to modify of a relation, Ii = Pi(Vi) / Vi, now (at the moment t) and as a function of the time
- * (the impact at each known date, joined by a spline). Undefined without anchors or estimate.
+ * The impact of a value to modify of a relation, Ii = Pi(Vi) / Vi, at the moment t and as a function of the time (the
+ * impact at each known date, joined by a spline). Up to today it is exactly V0 / Vi; after, the one of the estimate.
  */
 export function relationImpact<T extends object>(
 	relation: RelationData,
@@ -282,16 +293,24 @@ export function relationImpact<T extends object>(
 	};
 	const sourceBase = nodeOf(base, edge.sourceId, edge.sourceProperty);
 	const targetBase = nodeOf(base, edge.targetId, edge.targetProperty);
-	const estimate = anchoredEstimate(edge, sourceBase, targetBase)?.estimate ?? edge.estimate;
+	const bounds = targetBase ? boundsOf(edge.targetProperty, targetBase) : {};
+	const anchored = anchoredEstimate(edge, sourceBase, targetBase, bounds);
+	const estimate = anchored?.estimate ?? edge.estimate;
 	const source = nodeOf(resolved, edge.sourceId, edge.sourceProperty)?.read(t);
-	const now = source === undefined ? undefined : impactAt(estimate, source);
-	const dates =
-		sourceBase && targetBase ? [...new Set([...sourceBase.dates, ...targetBase.dates])].sort((a, b) => a - b) : [];
-	const points = dates.flatMap((date): [number, number][] => {
-		const value = sourceBase?.read(date);
-		const impact = value === undefined ? undefined : impactAt(estimate, value);
-		return impact === undefined ? [] : [[date, impact]];
-	});
+	let now = source === undefined ? undefined : impactAt(estimate, source);
+	// Up to today the impact is exactly V0 / Vi, read on the curves at the date.
+	if (sourceBase && targetBase && t <= dateToYear(Date.now())) {
+		const vi = sourceBase.read(t);
+		const v0 = targetBase.read(t);
+		if (vi !== undefined && v0 !== undefined && vi !== 0) {
+			now = Math.min(bounds.max ?? Infinity, Math.max(bounds.min ?? -Infinity, v0)) / vi;
+		}
+	}
+	// The impact at each known date does not need distinct source values (a constant source has an impact too).
+	const anchors = anchored?.anchors ?? (sourceBase && targetBase ? anchorsOf(edge, sourceBase, targetBase, bounds) : []);
+	const points = anchors.flatMap((anchor): [number, number][] =>
+		anchor.source === 0 ? [] : [[anchor.date, anchor.estimate / anchor.source]]
+	);
 	return { now, expression: points.length > 0 ? splineExpression({ points, before: null, after: null }) : undefined };
 }
 
@@ -322,21 +341,24 @@ export function applyRelations<T extends object>(elements: T[], t: number, base:
 	// The incoming links of each value, with the weights read from the decided (not the moved) values.
 	const incoming = new Map<string, { targetId: string; targetProperty: string; inputs: RelationInput[] }>();
 	for (const relation of relations) {
-		const relationExistence = existenceOf(relation as unknown as Element, t) / 100;
+		// Fi: the certainty that the relation itself exists.
+		const relationExistence = existenceOf(relation as unknown as Element, t);
 		for (const edge of edgesOf(relation)) {
 			const source = byId.get(edge.sourceId);
 			const target = byId.get(edge.targetId);
 			if (!source || !target) continue;
 			const sourceNode = locate(source, edge.sourceProperty);
 			const sourceValue = sourceNode?.read(t);
-			if (!sourceNode || sourceValue === undefined || !locate(target, edge.targetProperty)) continue;
+			const targetNode = locate(target, edge.targetProperty);
+			if (!sourceNode || sourceValue === undefined || !targetNode) continue;
 			const sourceBase = baseById.get(edge.sourceId);
 			const targetBase = baseById.get(edge.targetId);
 			const estimate =
 				anchoredEstimate(
 					edge,
 					sourceBase && locate(sourceBase, edge.sourceProperty),
-					targetBase && locate(targetBase, edge.targetProperty)
+					targetBase && locate(targetBase, edge.targetProperty),
+					targetNode ? boundsOf(edge.targetProperty, targetNode) : {}
 				)?.estimate ?? edge.estimate;
 
 			const key = `${edge.targetId}|${edge.targetProperty}`;
@@ -347,7 +369,8 @@ export function applyRelations<T extends object>(elements: T[], t: number, base:
 				estimate,
 				valueVeracity: veracityOf(edge.sourceId, sourceNode.names, proofs, t),
 				elementVeracity: existenceOf(source, t),
-				relationVeracity: veracityOf(relation.id, [relationValue], proofs, t) * relationExistence,
+				relationVeracity: veracityOf(relation.id, [relationValue], proofs, t),
+				relationExistence,
 				originality: Number(relation.originality)
 			});
 			incoming.set(key, entry);
