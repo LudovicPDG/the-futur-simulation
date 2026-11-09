@@ -4,6 +4,7 @@
 	import * as m from '$lib/paraglide/messages';
 	import ProofList from './ProofList.svelte';
 	import ScoreFunction from './ScoreFunction.svelte';
+	import { RELATION_IMPACT_THRESHOLD, SCORE_THRESHOLD } from '$lib/simulation/CountThreshold';
 
 	/** A change made by a relation on the value: the property it comes from, its impact and, when it adds the value, the value. */
 	export interface RelationInfluenceEntry {
@@ -37,6 +38,8 @@
 		accent?: { dark: string; light: string };
 		/** The scores of the value under their threshold (veracity, impact, originality): they take it out of the votes. */
 		belowThreshold?: string[];
+		/** True when the impact is the ratio of a relation (threshold 0.1) and not a score from 0 to 100. */
+		relationImpact?: boolean;
 		/** Ask the genie for a new proof / a new relation of this value. */
 		addProof?: () => void;
 		addRelation?: () => void;
@@ -58,7 +61,7 @@
 				</span>
 			{/if}
 		</dd>
-		{#if fn}<ScoreFunction expression={fn} />{/if}
+		{#if fn}<ScoreFunction expression={fn} threshold={key === 'uncertainty' ? undefined : key === 'impact' && info.relationImpact ? RELATION_IMPACT_THRESHOLD : SCORE_THRESHOLD} />{/if}
 	</div>
 {/snippet}
 

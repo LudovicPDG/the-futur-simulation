@@ -5,9 +5,12 @@
 
 	let {
 		expression,
-		range
+		range,
+		threshold
 	}: {
 		expression: string;
+		/** Under this value the score is not counted: drawn in red. */
+		threshold?: number;
 		/** The period of the score that a proof really changes: only this portion stands out. */
 		range?: TimeRange;
 	} = $props();
@@ -30,6 +33,7 @@
 				showExistence={false}
 				showUncertainty={false}
 				bounds={[0, 100]}
+					{threshold}
 				edited={range ? { function: true, above: false, below: false } : undefined}
 				ranges={range ? { function: range } : undefined}
 			/>

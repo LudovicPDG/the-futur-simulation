@@ -798,6 +798,7 @@
 						}
 					: {})
 			},
+			relationImpact: relationImpact !== undefined && !!activeRelation,
 			belowThreshold:
 				relationImpact !== undefined && activeRelation
 					? (relationBelow ?? [])

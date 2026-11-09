@@ -26,8 +26,11 @@
 		bounds,
 		width = 320,
 		height = 210,
-		accent
+		accent,
+		threshold
 	}: {
+		/** Under this value, the function is not counted: its points and its portions are drawn in red */
+		threshold?: number;
 		evolution?: unknown;
 		unit?: string;
 		/** Probability that the fact exists over time: the evolution only exists while it is over 50% */
@@ -287,7 +290,15 @@
 		return {
 			xScale,
 			yScale,
-			linePath: line(model.curve) || '',
+			// Under the threshold the curve is entirely red: split in two pieces (each one reaches the first point of the other).
+			linePath:
+				(threshold === undefined
+					? line(model.curve)
+					: line.defined((d, i, all) => d.value >= threshold || all[i - 1]?.value >= threshold || all[i + 1]?.value >= threshold)(model.curve)) || '',
+			belowPath:
+				threshold === undefined
+					? ''
+					: line.defined((d, i, all) => d.value < threshold || all[i - 1]?.value < threshold || all[i + 1]?.value < threshold)(model.curve) || '',
 			cloudAbove: above,
 			cloudBelow: below,
 			knots,
@@ -387,7 +398,7 @@
 	{#if item.points.length > 0}
 		<ul class="spline-points" aria-label={m.simulation_evolution_points()}>
 			{#each item.points as point}
-				<li class="spline-point" title={preciseFormatter.format(point.value)}>
+				<li class="spline-point" class:below={threshold !== undefined && item.part === 'function' && point.value < threshold} title={preciseFormatter.format(point.value)}>
 					<span class="spline-date">{formatPointDate(point.t)}</span>
 					<span class="spline-value">{formatter.format(point.value)}</span>
 				</li>
@@ -459,7 +470,7 @@
 				onpointermove={handlePointerMove}
 				onpointerleave={() => (hoverT = null)}
 			>
-				<defs>
+				<defs>{#if threshold !== undefined}<clipPath id="{uid}-threshold"><rect x={-margin.left} y={geometry.yScale(threshold)} width={innerWidth + margin.left + margin.right} height={Math.max(0, innerHeight + margin.bottom - geometry.yScale(threshold))} /></clipPath>{/if}
 					{#each Object.entries(geometry.highlights) as [part, span] (part)}
 						<clipPath id="{uid}-{part}">
 							<rect x={span.x} y={-margin.top} width={span.width} height={innerHeight + margin.top + margin.bottom} />
@@ -490,7 +501,7 @@
 							{@render partPath(band, 'cloud-band', 'below')}
 						{/each}
 					{/if}
-					{@render partPath(geometry.linePath, 'curve', 'function')}
+					{@render partPath(geometry.linePath, 'curve', 'function')}{#if threshold !== undefined}<path d={geometry.belowPath} class="curve below-curve" />{/if}
 
 					<!-- The interpolation points: of the curve, and of each side of the uncertainty -->
 					{#each (showUncertainty ? (['above', 'below'] as Part[]) : []) as part}
@@ -516,6 +527,7 @@
 							class="knot"
 							class:mixed={!geometry.knots.function.exact}
 							class:shadow={partState('function') === 'shadow'}
+								class:below={threshold !== undefined && point.value < threshold}
 						>
 							<title>{formatDate(point.t)} : {preciseFormatter.format(point.value)} {unit}</title>
 						</circle>
@@ -940,6 +952,20 @@
 
 	.knot-side.mixed {
 		stroke-dasharray: 1 1.5;
+	}
+
+	.curve.below-curve,
+	.knot.below {
+		stroke: #ef4444;
+	}
+
+	.knot.below {
+		fill: #ef4444;
+	}
+
+	.spline-point.below {
+		outline: 1.5px solid #ef4444;
+		color: #ef4444;
 	}
 
 	.knot.shadow,

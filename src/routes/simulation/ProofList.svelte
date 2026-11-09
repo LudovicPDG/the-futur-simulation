@@ -9,7 +9,7 @@
 	} from '$lib/simulation/event/EvolutionFunction';
 	import { addProofTarget, addRelationTarget, addValueTarget, debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
-	import { belowThreshold, type CountedScore } from '$lib/simulation/CountThreshold';
+	import { belowThreshold, SCORE_THRESHOLD, type CountedScore } from '$lib/simulation/CountThreshold';
 	import DatedValue from './DatedValue.svelte';
 	import ScoreFunction from './ScoreFunction.svelte';
 	import ProofList from './ProofList.svelte';
@@ -220,7 +220,7 @@
 							<span style:width="{Math.min(100, Math.max(0, score.value))}%"></span>
 						</span>
 					</dd>
-					<ScoreFunction expression={score.fn} range={score.range} />
+					<ScoreFunction expression={score.fn} range={score.range} threshold={score.key === 'uncertainty' ? undefined : SCORE_THRESHOLD} />
 				</div>
 			{/each}
 		</dl>
