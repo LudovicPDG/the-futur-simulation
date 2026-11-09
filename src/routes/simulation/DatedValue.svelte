@@ -7,6 +7,7 @@
 	} from '$lib/simulation/event/EvolutionFunction';
 	import * as m from '$lib/paraglide/messages';
 	import EvolutionChart from './EvolutionChart.svelte';
+	import { SCORE_THRESHOLD } from '$lib/simulation/CountThreshold';
 	import { getLocale } from '$lib/paraglide/runtime';
 
 	let {
@@ -90,6 +91,7 @@
 				existence={bounds ? evolution : existenceEvolution}
 				clipToExistence={!bounds}
 				{bounds}
+				threshold={bounds ? SCORE_THRESHOLD : undefined}
 				{accent}
 				{edited}
 				{ranges}
