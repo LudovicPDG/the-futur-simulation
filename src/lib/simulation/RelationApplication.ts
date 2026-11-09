@@ -9,6 +9,7 @@ import {
 } from './event/EvolutionFunction';
 import { resolveValue, valueNames } from './ProofResolution';
 import { dateToYear } from './TimeAxis';
+import { belowThreshold, isCounted, type CountedScore } from './CountThreshold';
 import { relationValueName, type RelationConnexionData, type RelationData } from './Relation';
 import {
 	combineRelations,
@@ -170,7 +171,7 @@ function veracityOf(elementId: unknown, names: string[], proofs: ProofData[], t:
 }
 
 /** The probability (0..100) that the element exists at t: the veracity of the element itself. */
-function existenceOf(element: Element, t: number): number {
+export function existenceOf(element: Element, t: number): number {
 	const evolution = parseEvolutionValue(element.existence);
 	if (!evolution) return 100;
 	const value = buildEvolutionFunction(evolution.evolution)(t);
@@ -284,7 +285,7 @@ export function relationImpact<T extends object>(
 	resolved: T[],
 	base: T[],
 	t: number
-): { now?: number; expression?: string } {
+): { now?: number; expression?: string; below?: CountedScore[]; counted?: boolean } {
 	const edge = edgesOf(relation).find((each) => each.connexion === connexion);
 	if (!edge) return {};
 	const nodeOf = (list: T[], id: string, property: string) => {
@@ -311,7 +312,31 @@ export function relationImpact<T extends object>(
 	const points = anchors.flatMap((anchor): [number, number][] =>
 		anchor.source === 0 ? [] : [[anchor.date, anchor.estimate / anchor.source]]
 	);
-	return { now, expression: points.length > 0 ? splineExpression({ points, before: null, after: null }) : undefined };
+	// The scores of the link under their threshold (see CountThreshold): the veracity of its value, the certainty that
+	// the relation exists, its originality and its impact. The veracity of the source value and the existence of its
+	// element also decide whether the link counts.
+	const proofs = resolved.filter((each) => (each as { type?: unknown }).type === 'proof') as unknown as ProofData[];
+	const relationValue = relationValueName(edge.direction, 'modify', edge.connexion).toLowerCase();
+	const below = [
+		...belowThreshold({
+			veracity: veracityOf(relation.id, [relationValue], proofs, t),
+			existence: existenceOf(relation as unknown as Element, t),
+			originality: Number(relation.originality)
+		}),
+		...belowThreshold({ impact: now }, true)
+	];
+	const sourceElement = resolved.find((each) => (each as { id?: unknown }).id === edge.sourceId) as Element | undefined;
+	const sourceNode = sourceElement ? locate(sourceElement, edge.sourceProperty) : undefined;
+	const sourceCounted =
+		!sourceElement ||
+		(isCounted({ existence: existenceOf(sourceElement, t) }) &&
+			isCounted({ veracity: sourceNode ? veracityOf(edge.sourceId, sourceNode.names, proofs, t) : undefined }));
+	return {
+		now,
+		below,
+		counted: below.length === 0 && sourceCounted,
+		expression: points.length > 0 ? splineExpression({ points, before: null, after: null }) : undefined
+	};
 }
 
 /** The elements with every linked value moved by the values it is linked to, at the moment t. */

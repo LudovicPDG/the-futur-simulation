@@ -23,6 +23,7 @@
 	import { valueKind, type ProofData } from '$lib/simulation/Proof';
 	import { resolveAtDate, resolveValue, resolveValueFunctions } from '$lib/simulation/ProofResolution';
 	import { applyRelations, relationImpact } from '$lib/simulation/RelationApplication';
+	import { belowThreshold } from '$lib/simulation/CountThreshold';
 	import { dateToYear } from '$lib/simulation/TimeAxis';
 	import { onMount } from 'svelte';
 	import {
@@ -623,6 +624,18 @@
 	const activeExistence = $derived(
 		activeElement ? parseEvolutionValue((activeElement as Record<string, unknown>).existence) : null
 	);
+	// The certainty of the existence of the element (of the relation) at the date: under its threshold, it is not counted.
+	const activeCertainty = $derived(
+		activeExistence ? buildEvolutionFunction(activeExistence.evolution)(year) : Number.NaN
+	);
+	const activeBelow = $derived(
+		activeElement
+			? belowThreshold({
+					existence: activeCertainty,
+					originality: activeRelation ? Number(activeRelation.originality) : undefined
+				})
+			: []
+	);
 	const activeOther = $derived(
 		activeElement && Array.isArray((activeElement as Record<string, unknown>).other)
 			? ((activeElement as Record<string, unknown>).other as Array<Record<string, unknown>>)
@@ -653,7 +666,7 @@
 	function impactOf(connexion: RelationConnexionData) {
 		return activeRelation
 			? relationImpact(activeRelation, connexion, simulation_data, storedData, year)
-			: ({} as { now?: number; expression?: string });
+			: ({} as ReturnType<typeof relationImpact>);
 	}
 	// Value parameters of a value of the active element: its veracity and uncertainty (from its latest proof),
 	// its originality (only for the values of an array, such as the other data) and the proofs and relations
@@ -663,7 +676,8 @@
 		inArray: boolean,
 		item?: string,
 		relationImpact?: number,
-		relationImpactFunction?: string
+		relationImpactFunction?: string,
+		relationBelow?: string[]
 	): ValueInfluence | null {
 		if (!activeElement) return null;
 		const id = activeElement.id;
@@ -784,6 +798,14 @@
 						}
 					: {})
 			},
+			belowThreshold:
+				relationImpact !== undefined && activeRelation
+					? (relationBelow ?? [])
+					: belowThreshold({
+							veracity: veracityNow,
+							impact: inArray ? impactNow : undefined,
+							originality: inArray ? originalityNow : undefined
+						}),
 			allProofs,
 			proofs,
 			relations,
@@ -848,6 +870,7 @@
 				<div>
 					<p class="element-type">{formatType(activeElement.type || 'fact')}</p>
 					<h2>{formatValue(activeElement.name)}</h2>
+					{#if activeBelow.length > 0}<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>{/if}
 				</div>
 				<button
 					class="close-details"
@@ -955,14 +978,15 @@
 					<h4>{m.simulation_field_value_to_modify()}</h4>
 					{#if (activeRelation.symmetric_value_to_modify ?? []).length === 0}<p class="relation-empty">—</p>{/if}
 					{#each activeRelation.symmetric_value_to_modify ?? [] as connexion}
-						<div class="relation-connexion">
+						<div class="relation-connexion" class:uncounted={impactOf(connexion).counted === false}>
 							<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
 							<span class="relation-arrow" aria-hidden="true">↔</span>
 							<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
+							{#if impactOf(connexion).counted === false}<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>{/if}
 							<span class="relation-impact">
 								{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
 							</span>
-							{#each [valueInfluence(relationValueName('symmetric', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+							{#each [valueInfluence(relationValueName('symmetric', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 						</div>
 					{/each}
 					<button type="button" class="add-value" onclick={() => startAddValue('symmetric_value_to_modify')}>
@@ -999,14 +1023,15 @@
 							<h4>{m.simulation_field_value_to_modify()}</h4>
 							{#if activeRelation.element1_element2_value_to_modify.length === 0}<p class="relation-empty">—</p>{/if}
 							{#each activeRelation.element1_element2_value_to_modify as connexion}
-								<div class="relation-connexion">
+								<div class="relation-connexion" class:uncounted={impactOf(connexion).counted === false}>
 									<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
 									<span class="relation-arrow" aria-hidden="true">→</span>
 									<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
-									<span class="relation-impact">
+									{#if impactOf(connexion).counted === false}<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>{/if}
+							<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
 									</span>
-									{#each [valueInfluence(relationValueName('element1_element2', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+									{#each [valueInfluence(relationValueName('element1_element2', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element1_element2_value_to_modify')}>
@@ -1045,14 +1070,15 @@
 							<h4>{m.simulation_field_value_to_modify()}</h4>
 							{#if activeRelation.element2_element1_value_to_modify.length === 0}<p class="relation-empty">—</p>{/if}
 							{#each activeRelation.element2_element1_value_to_modify as connexion}
-								<div class="relation-connexion">
+								<div class="relation-connexion" class:uncounted={impactOf(connexion).counted === false}>
 									<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
 									<span class="relation-arrow" aria-hidden="true">→</span>
 									<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
-									<span class="relation-impact">
+									{#if impactOf(connexion).counted === false}<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>{/if}
+							<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
 									</span>
-									{#each [valueInfluence(relationValueName('element2_element1', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+									{#each [valueInfluence(relationValueName('element2_element1', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element2_element1_value_to_modify')}>
@@ -1106,7 +1132,7 @@
 				<section class="parameter-details">
 					<h3>{m.simulation_section_global_parameters()}</h3>
 					{#if activeExistence}
-						<div class="distribution-block">
+						<div class="distribution-block" class:below={activeBelow.includes('existence')}>
 							<h4>{existenceTitle()}</h4>
 							<DatedValue
 								evolution={activeExistence.evolution}
@@ -1628,6 +1654,24 @@
 	}
 
 	/* Probability distribution: highlighted sub-component of the parameters */
+	.not-counted {
+		display: inline-block;
+		margin-top: 4px;
+		padding: 1px 8px;
+		border: 1px solid #ef4444;
+		border-radius: 999px;
+		color: #ef4444;
+		font-size: 0.75rem;
+		font-weight: 600;
+	}
+	.distribution-block.below {
+		outline: 2px solid #ef4444;
+		outline-offset: 2px;
+		border-radius: 6px;
+	}
+	.relation-connexion.uncounted {
+		opacity: 0.8;
+	}
 	.distribution-block {
 		margin: 8px 0 6px;
 		padding: 10px 10px 4px;

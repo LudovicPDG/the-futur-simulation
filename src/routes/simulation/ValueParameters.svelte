@@ -35,6 +35,8 @@
 		/** Existence of the element and color of the value: the evolutions of the proofs are drawn like the value. */
 		existence?: unknown;
 		accent?: { dark: string; light: string };
+		/** The scores of the value under their threshold (veracity, impact, originality): they take it out of the votes. */
+		belowThreshold?: string[];
 		/** Ask the genie for a new proof / a new relation of this value. */
 		addProof?: () => void;
 		addRelation?: () => void;
@@ -46,7 +48,7 @@
 <!-- A score as a card with a gauge from 0 to 100, like the scores of a desired value in the proofs. -->
 {#snippet score(key: string, label: string, text: string | null | undefined, fn: string | undefined)}
 	{@const value = parseFloat(text?.match(/-?\d+(\.\d+)?/)?.[0] ?? '')}
-	<div class="score {key}">
+	<div class="score {key}" class:below={info.belowThreshold?.includes(key)}>
 		<dt>{label}</dt>
 		<dd>
 			<strong>{text ?? '—'}</strong>
@@ -63,6 +65,9 @@
 <details class="value-parameters">
 	<summary>
 		<span>{m.simulation_value_parameters()}</span>
+		{#if info.belowThreshold && info.belowThreshold.length > 0}
+			<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>
+		{/if}
 		{#if info.veracity}
 			<span class="summary-score">{m.simulation_veracity_label()} {info.veracity}</span>
 		{/if}
@@ -204,6 +209,20 @@
 		margin: 0 0 8px;
 	}
 
+	.score.below {
+		outline: 2px solid #ef4444;
+		outline-offset: 2px;
+		border-radius: 6px;
+	}
+	.not-counted {
+		margin-left: 8px;
+		padding: 1px 8px;
+		border: 1px solid #ef4444;
+		border-radius: 999px;
+		color: #ef4444;
+		font-size: 0.75em;
+		font-weight: 600;
+	}
 	.score {
 		--accent: #7dd3fc;
 		padding: 6px 8px;

@@ -9,6 +9,7 @@
 	} from '$lib/simulation/event/EvolutionFunction';
 	import { addProofTarget, addRelationTarget, addValueTarget, debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
+	import { belowThreshold, type CountedScore } from '$lib/simulation/CountThreshold';
 	import DatedValue from './DatedValue.svelte';
 	import ScoreFunction from './ScoreFunction.svelte';
 	import ProofList from './ProofList.svelte';
@@ -92,6 +93,8 @@
 		value: number;
 		text: string;
 		changed: boolean;
+		/** The score is under its threshold: it takes the proof out of the votes. */
+		below?: boolean;
 		/** The score as a function of t. */
 		fn: string;
 		/** The period of the score the proof really changes: only this portion of its curve stands out. */
@@ -100,11 +103,21 @@
 
 	/** The own scores of the proof, shown like the scores of its desired value. */
 	function proofScores(proof: StoredProof): ScoreView[] {
+		const below = belowProof(proof);
 		return SCORE_FIELDS.flatMap(([key, label, text]) => {
 			const value = scoreAt(proof[key as keyof StoredProof], year);
 			if (!Number.isFinite(value)) return [];
 			const fn = toScoreFunction(proof[key as keyof StoredProof]);
-			return [{ key, label: label(), value, text: text(value), changed: false, fn }];
+			return [{ key, label: label(), value, text: text(value), changed: false, below: below.includes(key as CountedScore), fn }];
+		});
+	}
+
+	/** The scores of the proof under their threshold at the date: veracity, impact and originality (see CountThreshold). */
+	function belowProof(proof: StoredProof): CountedScore[] {
+		return belowThreshold({
+			veracity: scoreAt(proof.veracity, year),
+			impact: scoreAt(proof.impact, year),
+			originality: scoreAt(proof.originality, year)
 		});
 	}
 
@@ -199,7 +212,7 @@
 	{#if scores.length > 0}
 		<dl class="desired-scores">
 			{#each scores as score (score.key)}
-				<div class="score {score.key}" class:changed={score.changed}>
+				<div class="score {score.key}" class:changed={score.changed} class:below={score.below}>
 					<dt>{score.label}</dt>
 					<dd>
 						<strong>{score.text}</strong>
@@ -221,6 +234,9 @@
 		<li class="proof-item">
 			<h4>
 				{format(proof.name)}
+				{#if belowProof(proof).length > 0}
+					<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>
+				{/if}
 				{#if proof.id === foundingId}
 					<span class="founding-badge" title={m.proof_founding_hint()}>✦ {m.proof_founding()}</span>
 				{:else if proof.original_proof_id}
@@ -545,6 +561,20 @@
 		background: rgb(15 23 42 / 30%);
 	}
 
+	.score.below {
+		outline: 2px solid #ef4444;
+		outline-offset: 2px;
+		border-radius: 6px;
+	}
+	.not-counted {
+		margin-left: 8px;
+		padding: 1px 8px;
+		border: 1px solid #ef4444;
+		border-radius: 999px;
+		color: #ef4444;
+		font-size: 0.7em;
+		font-weight: 600;
+	}
 	.score.veracity {
 		--accent: #22c55e;
 	}

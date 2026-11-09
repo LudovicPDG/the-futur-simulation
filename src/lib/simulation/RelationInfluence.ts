@@ -1,4 +1,5 @@
 import { hermiteAt, pchipSlopes } from './event/EvolutionFunction';
+import { isCounted } from './CountThreshold';
 
 /**
  * How the relations of a value are combined with it.
@@ -53,6 +54,8 @@ export interface RelationInput {
 export interface RelationContribution {
 	/** The estimate of V0 given by the relation, bounded; undefined when it cannot be computed. */
 	estimate?: number;
+	/** False when a score of the relation is under its threshold (see CountThreshold): it does not vote. */
+	counted?: boolean;
 	/** The weight of the relation in the average (0..1 scale); 0 when it does not vote. */
 	weight: number;
 	/** Ii(Vi) = Pi(Vi) / Vi, derived for display; undefined in Vi = 0. */
@@ -177,7 +180,10 @@ export function combineRelations(
 	let numerator = 0;
 	let denominator = 0;
 	// (A0·E0)^2.5: five factors like a relation (Ai·Ei·Ri·Fi·Oi), so that both weigh the same at the same level of veracity.
-	const initialWeight = (share(initial.veracity) * share(initial.elementVeracity)) ** 2.5;
+	// Under the threshold of its veracity or of the existence of its element, the initial value is not counted.
+	const initialWeight = isCounted({ veracity: initial.veracity, existence: initial.elementVeracity })
+		? (share(initial.veracity) * share(initial.elementVeracity)) ** 2.5
+		: 0;
 	if (Number.isFinite(initial.value)) {
 		numerator += initial.value * initialWeight;
 		denominator += initialWeight;
@@ -187,6 +193,18 @@ export function combineRelations(
 		const raw = estimateAt(relation.estimate, relation.value);
 		if (!Number.isFinite(raw)) return { weight: 0 };
 		const estimate = bounded(raw, bounds);
+		const impact = impactAt(relation.estimate, relation.value);
+		// A veracity, an existence, an originality or an impact under its threshold takes the relation out.
+		const counted =
+			isCounted({ veracity: relation.valueVeracity }) &&
+			isCounted({ existence: relation.elementVeracity }) &&
+			isCounted({
+				veracity: relation.relationVeracity,
+				existence: relation.relationExistence,
+				originality: relation.originality
+			}) &&
+			(impact === undefined || isCounted({ impact }, true));
+		if (!counted) return { estimate, weight: 0, counted: false, impact };
 		// Far from its known points, the function extrapolates: the relation is less veracious there.
 		const weight =
 			share(relation.valueVeracity) *
@@ -200,7 +218,8 @@ export function combineRelations(
 		return {
 			estimate,
 			weight,
-			impact: impactAt(relation.estimate, relation.value),
+			counted: true,
+			impact,
 			conflict: Number.isFinite(initial.value) ? estimate - initial.value : undefined
 		};
 	});

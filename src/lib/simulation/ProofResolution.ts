@@ -1,4 +1,5 @@
 import { valueKind, type ProofData } from './Proof';
+import { isCounted, SCORE_THRESHOLD } from './CountThreshold';
 import { relationValueName, type RelationConnexionData } from './Relation';
 import { combineEvolution, scoreAt, toScoreFunction, type EvolutionComponent } from './event/EvolutionFunction';
 
@@ -45,15 +46,22 @@ const SCORE_FUNCTION_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impac
 type Scores = { veracity: number; uncertainty: number; impact: number; originality: number };
 type Voter<T = unknown> = { value: T; scores: Scores };
 
+/** Whether a proof counts at all: a veracity, an impact or an originality under the threshold takes it out (see CountThreshold). */
+const counts = (scores: Scores) =>
+	isCounted({ veracity: scores.veracity, impact: scores.impact, originality: scores.originality });
 /** The score that decides a text or an array: the best one wins. */
 const pickScore = (scores: Scores) => scores.veracity * scores.impact;
-/** The weight of a vote: the originality keeps copies of the same proof from adding up. */
-const voteWeight = (scores: Scores) => scores.veracity * scores.impact * scores.originality;
+/** The weight of a vote: the originality keeps copies of the same proof from adding up; 0 when it does not count. */
+const voteWeight = (scores: Scores) => (counts(scores) ? scores.veracity * scores.impact * scores.originality : 0);
 
 /** The value of the voter with the best veracity * impact; on a tie, the first one (the status quo). */
 function pickBest(voters: Voter[]): unknown {
 	let best = voters[0];
-	for (const voter of voters) if (pickScore(voter.scores) > pickScore(best.scores)) best = voter;
+	// A voter that does not count only wins when nobody counts (the status quo stays).
+	for (const voter of voters) {
+		if (!counts(voter.scores)) continue;
+		if (!counts(best.scores) || pickScore(voter.scores) > pickScore(best.scores)) best = voter;
+	}
 	return best?.value;
 }
 
@@ -413,10 +421,13 @@ export function resolveValueFunctions(proofs: ProofData[]): {
 			result[field] = scores[0];
 			continue;
 		}
-		const weights = voters.map(
-			(proof) =>
-				`${clamp(toScoreFunction(proof.veracity))} * ${clamp(toScoreFunction(proof.impact))} * ${clamp(toScoreFunction(proof.originality))}`
-		);
+		// The weight is 0 where the veracity, the impact or the originality is under the threshold (see CountThreshold).
+		const weights = voters.map((proof) => {
+			const [veracity, impact, originality] = [proof.veracity, proof.impact, proof.originality].map((score) =>
+				clamp(toScoreFunction(score))
+			);
+			return `${veracity} * ${impact} * ${originality} * ((${veracity}) >= ${SCORE_THRESHOLD} and (${impact}) >= ${SCORE_THRESHOLD} and (${originality}) >= ${SCORE_THRESHOLD} ? 1 : 0)`;
+		});
 		result[field] = `(${scores
 			.map((score, index) => `(${weights[index]}) * ${clamp(score)}`)
 			.join(' + ')}) / (${weights.map((weight) => `(${weight})`).join(' + ')})`;
