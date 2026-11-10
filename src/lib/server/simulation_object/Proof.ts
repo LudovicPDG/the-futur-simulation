@@ -33,6 +33,7 @@ import {
 	isValidUncertaintyFunction,
 	parseEvolutionFunction,
 	parseSpline,
+	scoreAt,
 	toScoreFunction,
 	type EvolutionComponent
 } from '$lib/simulation/event/EvolutionFunction';
@@ -121,7 +122,11 @@ function foundingSchema(scored: boolean, evolution: boolean) {
 /** The fields of a debated proof that a sub-proof changes as a whole (its scores are curves, changed by period). */
 const TEXT_EDIT_FIELDS = ['name', 'description', 'verification_method', 'falsifiability_method', 'source'] as const;
 
-type GeneratedText = z.infer<typeof ProofTextSchema> & { value_name: ProofData['value_name']; scores: CurvesInput };
+type GeneratedText = z.infer<typeof ProofTextSchema> & {
+	value_name: ProofData['value_name'];
+	contests_originality: boolean;
+	scores: CurvesInput;
+};
 
 /** A top-level proof as generated: its desired value gives only what it changes of the value. */
 type GeneratedProof = GeneratedText & {
@@ -132,6 +137,21 @@ type GeneratedProof = GeneratedText & {
 type GeneratedSubProof = GeneratedText & {
 	desired_value: Partial<Record<(typeof TEXT_EDIT_FIELDS)[number], unknown>> & { scores: CurvesInput };
 };
+
+/** The entry of a list of a relation that the named value is (see relationValueName), with the list it is in. */
+function locateRelationEntry(
+	lists: Partial<RelationData>,
+	name: unknown
+): { field: (typeof RELATION_LIST_FIELDS)[number]; entry: RelationData['symmetric_value_to_modify'][number] } | undefined {
+	for (const field of RELATION_LIST_FIELDS) {
+		const direction = field.replace('_value_to_modify', '') as 'symmetric' | 'element1_element2' | 'element2_element1';
+		const entry = (lists[field] ?? []).find((connexion) =>
+			valueNames(name).includes(relationValueName(direction, connexion))
+		);
+		if (entry) return { field, entry };
+	}
+	return undefined;
+}
 
 /** What a proof or a sub-proof is, for the genie that compares it with the others: its texts and what it changes. */
 function proofSummary(proof: Partial<ProofData>) {
@@ -160,6 +180,13 @@ function proposedChanges(proposed: unknown): Record<string, unknown> {
 /** The kind of a value, as far as its curves go: an evolution, another content, or not known yet (free prompt). */
 type ValueShape = 'evolution' | 'other' | 'any';
 
+/** Whether the request disputes an originality: the genie then analyses it again (see contestedValueOriginality). */
+const ContestSchema = z
+	.boolean()
+	.describe(
+		'true ONLY when the request contests an originality (it says that something is, or is not, a copy of another one, or asks to change an originality score); false otherwise. If true, do not give the new originality yourself: it is analysed afterwards by comparing with the other ones.'
+	);
+
 /**
  * A top-level proof as the genie writes it: its desired value gives the content it changes (null to keep it) and, in
  * "curves", the interpolation points of the period it changes for the curves it changes.
@@ -186,6 +213,7 @@ function generatedProofSchema(shape: ValueShape, scored: boolean, valueless = fa
 	);
 	return ProofTextSchema.extend({
 		value_name: ProofSchema.shape.value_name,
+		contests_originality: ContestSchema,
 		scores: OwnScoresSchema,
 		desired_value: z
 			.object(desired)
@@ -197,6 +225,7 @@ function generatedProofSchema(shape: ValueShape, scored: boolean, valueless = fa
 
 const GeneratedSubProofSchema = ProofTextSchema.extend({
 	value_name: ProofSchema.shape.value_name,
+	contests_originality: ContestSchema,
 	scores: OwnScoresSchema,
 	desired_value: z
 		.object({
@@ -734,21 +763,16 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 	): Promise<number> {
 		const sameName = (name: unknown) => valueNames(name).some((candidate) => valueNames(value.value_name).includes(candidate));
 		if ('relationId' in target) {
-			for (const field of RELATION_LIST_FIELDS) {
-				const direction = field.replace('_value_to_modify', '') as 'symmetric' | 'element1_element2' | 'element2_element1';
-				const entries = (Array.isArray(created[field]) ? created[field] : []) as RelationData['symmetric_value_to_modify'];
-				const entry = entries.find((connexion) => sameName(relationValueName(direction, connexion)));
-				if (entry) {
-					return RelationServer.instance.scoreValueOriginality(
+			const located = locateRelationEntry(created as Partial<RelationData>, value.value_name);
+			return located
+				? RelationServer.instance.scoreValueOriginality(
 						model_name,
 						level_of_reasoning,
 						target.relationId,
-						field,
-						entry
-					);
-				}
-			}
-			return 50;
+						located.field,
+						located.entry
+					)
+				: 50;
 		}
 		const others = elementValues(stored).filter((other) => other.scored && !sameName(other.value_name));
 		return this.scoreOriginality(
@@ -758,6 +782,75 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 			{ name: value.value_name, value: value.value },
 			others.map((other) => ({ name: other.value_name, value: other.value }))
 		);
+	}
+
+	/**
+	 * The originality a proof contests, analysed again by the genie (see scoreOriginality) with the argument of the proof:
+	 * - the value "originality" of an element or of a relation: its content becomes the new score (always a contest);
+	 * - a value that has an originality of its own (flagged by the genie): its originality becomes the new score.
+	 * Undefined when the proof contests no originality.
+	 */
+	private async contestedValueOriginality(
+		model_name: string,
+		level_of_reasoning: string,
+		target: ProofTarget,
+		valueName: ProofData['value_name'],
+		element: Record<string, unknown>,
+		kept: ValueEdit,
+		year: number,
+		argument: unknown,
+		flagged: boolean
+	): Promise<{ field: 'value' | 'originality'; originality: number } | undefined> {
+		const given = (score: unknown) => (Number.isFinite(Number(score)) ? Number(score) : 50);
+		const sameName = (name: unknown) => valueNames(name).some((candidate) => valueNames(valueName).includes(candidate));
+		const isRelation = 'relationId' in target;
+
+		if (valueNames(valueName).includes('originality') && typeof element.originality === 'number') {
+			const { id: _id, existence: _existence, originality, impact: _impact, ...candidate } = element;
+			const others = await this.comparableElements(isRelation, isRelation ? target.relationId : target.factId);
+			return {
+				field: 'value',
+				originality: await this.scoreOriginality(
+					model_name,
+					level_of_reasoning,
+					isRelation ? 'relation' : 'simulation element',
+					candidate,
+					others,
+					{ current: given(originality), argument }
+				)
+			};
+		}
+		if (!flagged || !hasValueScores(target, valueName, element)) return undefined;
+
+		const contest = { current: given(scoreAt((kept as { originality?: string }).originality ?? '', year)), argument };
+		if (isRelation) {
+			const relation = (await RelationServer.get_all()).find((item) => item.id === target.relationId);
+			const located = relation ? locateRelationEntry(relation, valueName) : undefined;
+			if (!located) return undefined;
+			return {
+				field: 'originality',
+				originality: await RelationServer.instance.scoreValueOriginality(
+					model_name,
+					level_of_reasoning,
+					target.relationId,
+					located.field,
+					located.entry,
+					contest
+				)
+			};
+		}
+		const others = elementValues(element).filter((other) => other.scored && !sameName(other.value_name));
+		return {
+			field: 'originality',
+			originality: await this.scoreOriginality(
+				model_name,
+				level_of_reasoning,
+				'value of an element',
+				{ name: valueName, value: (kept as { value?: unknown }).value },
+				others.map((other) => ({ name: other.value_name, value: other.value })),
+				contest
+			)
+		};
 	}
 
 	/** A proof is scored by comparing it with the other proofs (see generateForTarget), never as an element. */
@@ -918,8 +1011,9 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 		let context = text;
 
 		let parentEdit: ProofEdit | undefined;
+		let parent: ProofData | undefined;
 		if (parentProofId) {
-			const parent = proofs.find((proof) => proof.id === parentProofId);
+			parent = proofs.find((proof) => proof.id === parentProofId);
 			if (!parent) throw new Error('The debated proof does not exist');
 			parentEdit = proofFields(parent);
 			context += `\n\nThis proof is a sub-proof: it debates (supports, questions or refutes) the following existing proof:\n${JSON.stringify(
@@ -945,7 +1039,7 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 
 ${
 			parentProofId
-				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources) and null for every other field: they keep their current value exactly. The scores of the debated proof (veracity, uncertainty, impact) are curves of the time: change them in "scores" with the interpolation points of the period the request is about, and a number only for the scores it changes. Never give an originality: it is decided afterwards by comparing this sub-proof with the other sub-proofs. Never rewrite what does not need to change. It cannot edit the desired value of the debated proof.'
+				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources) and null for every other field: they keep their current value exactly. The scores of the debated proof (veracity, uncertainty, impact) are curves of the time: change them in "scores" with the interpolation points of the period the request is about, and a number only for the scores it changes. Never give an originality: it is decided afterwards by comparing this sub-proof with the other sub-proofs. When the request contests the originality of the debated proof (it says it copies another one, or that it is really original), set contests_originality to true: its originality is then analysed again with your argument. Never rewrite what does not need to change. It cannot edit the desired value of the debated proof.'
 				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY what the request asks to change: ${
 						valueless
 							? 'NO content (the values of a relation have no value to propose: a proof about one only gives its parameters, that is its veracity, uncertainty, impact and originality) and, in "curves",'
@@ -956,7 +1050,7 @@ ${
 							: shape === 'other'
 								? 'the scores of the value'
 								: 'the value of an evolution and its uncertainty above and below, or the scores of the value'
-					}) and null for the others. Everything else keeps its current value exactly: a proof about the uncertainty above in the 1990s gives points in the 1990s with only "uncertainty_above".`
+					}) and null for the others. An originality is never a curve or a number you give: when the request contests the originality of this value (or of the element or relation, whose originality is the value "originality"), set contests_originality to true and put your argument in the texts of the proof; the new originality is analysed afterwards. Everything else keeps its current value exactly: a proof about the uncertainty above in the 1990s gives points in the 1990s with only "uncertainty_above".`
 		}`;
 
 		// The value must exist and the desired content must keep its type: retry once with the error.
@@ -979,7 +1073,7 @@ ${
 			if (secondError) throw new Error(secondError);
 		}
 
-		const { scores, desired_value: proposed, ...texts } = generated;
+		const { scores, desired_value: proposed, contests_originality, ...texts } = generated;
 		const own = ownScores(scores);
 		// The originality is a single number: the genie compares this proof with the other proofs of the value, or this
 		// sub-proof with the other sub-proofs of the debated proof (or sub-proof).
@@ -1000,6 +1094,8 @@ ${
 				siblings.map(proofSummary)
 			)
 		);
+		// What the proof says, when it contests an originality.
+		const argument = { ...proofSummary(texts), changes: proposedChanges(proposed) };
 		let desired_value: ProofData['desired_value'];
 		const edited_fields: string[] = [];
 		let edited_ranges: EditedRanges = {};
@@ -1017,6 +1113,30 @@ ${
 			for (const field of SCORE_FIELDS) desired[field] = curves.functions[field];
 			edited_fields.push(...curves.fields);
 			edited_ranges = curves.ranges;
+			// The originality of the debated proof is contested: it is analysed again, and this sub-proof votes for the result.
+			if (contests_originality) {
+				const comparable = proofs.filter(
+					(other) =>
+						other.id !== parentProofId &&
+						!other.original_proof_id &&
+						(parent!.parent_proof_id
+							? other.parent_proof_id === parent!.parent_proof_id
+							: !other.parent_proof_id &&
+								(other.fact_id ?? other.relation_id) === targetId &&
+								valueNames(other.value_name).some((name) => valueNames(parent!.value_name).includes(name)))
+				);
+				desired.originality = String(
+					await this.scoreOriginality(
+						model_name,
+						level_of_reasoning,
+						parent!.parent_proof_id ? 'sub-proof' : 'proof',
+						proofSummary(parent!),
+						comparable.map(proofSummary),
+						{ current: scoreAt(parent!.originality, year), argument }
+					)
+				);
+				if (!edited_fields.includes('originality')) edited_fields.push('originality');
+			}
 			desired_value = desired as ProofEdit;
 		} else {
 			const edit = proposed as GeneratedProof['desired_value'];
@@ -1052,6 +1172,26 @@ ${
 			}
 			edited_fields.push(...curves.fields);
 			edited_ranges = curves.ranges;
+			const contested = await this.contestedValueOriginality(
+				model_name,
+				level_of_reasoning,
+				target,
+				generated.value_name,
+				element,
+				kept,
+				year,
+				argument,
+				contests_originality
+			);
+			if (contested) {
+				if (contested.field === 'value') {
+					desired.value = contested.originality;
+					if (!edited_fields.includes('value')) edited_fields.push('value');
+				} else {
+					desired.originality = String(contested.originality);
+					if (!edited_fields.includes('originality')) edited_fields.push('originality');
+				}
+			}
 			desired_value = desired as ValueEdit;
 		}
 

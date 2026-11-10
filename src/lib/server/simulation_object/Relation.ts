@@ -424,7 +424,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		level_of_reasoning: string,
 		relationId: string,
 		field: RelationListField,
-		entry: RelationData['element1_element2_value_to_modify'][number]
+		entry: RelationData['element1_element2_value_to_modify'][number],
+		contest?: { current: number; argument: unknown }
 	): Promise<number> {
 		const [relations, elements] = await Promise.all([this.get_all(), loadElements()]);
 		const relation = relations.find((item) => item.id === relationId);
@@ -478,7 +479,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 					level_of_reasoning,
 					'relation value',
 					{ ...candidate, edits: { element: names.get(edited.id), value: edited.property } },
-					others
+					others,
+					contest
 				)
 			);
 		}

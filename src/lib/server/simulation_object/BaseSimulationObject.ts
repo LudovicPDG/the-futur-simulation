@@ -71,18 +71,28 @@ export abstract class BaseSimulationObject<
 		level_of_reasoning: string,
 		subject: string,
 		candidate: unknown,
-		others: unknown[]
+		others: unknown[],
+		contest?: { current: number; argument: unknown }
 	): Promise<number> {
-		if (others.length === 0) return 100;
+		// Nothing to compare with: it is completely original (a contest has nothing to change either).
+		if (others.length === 0) return contest ? contest.current : 100;
 		try {
 			const { originality } = await this.generateWithSchema(
 				model_name,
 				level_of_reasoning,
-				`Compare the NEW ${subject} with each of the ${others.length} OTHER ones already in the simulation and give the originality of the new one.
-
+				`Compare the ${contest ? '' : 'NEW '}${subject} with each of the ${others.length} OTHER ones already in the simulation and give its originality.
+${
+	contest
+		? `
+This originality is CONTESTED. Its current score is ${contest.current}. Someone gives this argument to change it:
+${JSON.stringify(contest.argument)}
+Analyse the comparison again with this argument in mind, as an impartial judge. Move the score only as far as the argument is right (for example it shows that the ${subject} really differs from the one it is said to copy, or that it really copies another one that was missed); keep ${contest.current} when the argument is weak or only a claim without a reason. Give the new score, not the change.
+`
+		: ''
+}
 Originality is a single percentage from 0 to 100 (NOT a ratio between 0 and 1): 0 = a copy (or a paraphrase) of one that already exists, 50 = moderately original, 100 = nothing similar exists. Judge the meaning, not the words: the same idea written differently is not original. It keeps people from spamming the same thing to make it more probable. Use the whole scale.
 
-NEW ${subject}:
+${contest ? '' : 'NEW '}${subject}:
 ${JSON.stringify(candidate)}
 
 OTHER ${subject}s:
@@ -99,6 +109,20 @@ ${JSON.stringify(others.slice(-BaseSimulationObject.MAX_COMPARED))}`,
 		}
 	}
 
+	/** The other elements an element is compared with: the other relations for a relation, the other facts otherwise. */
+	protected async comparableElements(isRelation: boolean, excludeId?: string): Promise<unknown[]> {
+		const result = await db.query(
+			isRelation
+				? `SELECT id, to_jsonb(name) AS name, to_jsonb(description) AS description, element1_id, element2_id,
+						to_jsonb(element1_element2_connexions) AS element1_element2_value_to_modify,
+						to_jsonb(element2_element1_connexions) AS element2_element1_value_to_modify,
+						symmetric_connexions AS symmetric_value_to_modify
+					FROM relations`
+				: `SELECT id, type, to_jsonb(name) AS name, to_jsonb(description) AS description, to_jsonb(other) AS other FROM facts`
+		);
+		return result.rows.filter((row) => row.id !== excludeId).map(({ id: _id, ...row }) => row);
+	}
+
 	/**
 	 * The originality of a new element, compared with all the other elements of its kind (the relations for a relation,
 	 * the other facts for any other element). Undefined for an object that has its own way to be scored.
@@ -109,15 +133,7 @@ ${JSON.stringify(others.slice(-BaseSimulationObject.MAX_COMPARED))}`,
 		data: T
 	): Promise<number | undefined> {
 		const isRelation = this.proofOwner === 'relation';
-		const result = await db.query(
-			isRelation
-				? `SELECT to_jsonb(name) AS name, to_jsonb(description) AS description, element1_id, element2_id,
-						to_jsonb(element1_element2_connexions) AS element1_element2_value_to_modify,
-						to_jsonb(element2_element1_connexions) AS element2_element1_value_to_modify,
-						symmetric_connexions AS symmetric_value_to_modify
-					FROM relations`
-				: `SELECT type, to_jsonb(name) AS name, to_jsonb(description) AS description, to_jsonb(other) AS other FROM facts`
-		);
+		const others = await this.comparableElements(isRelation);
 		// The new element is not saved yet: all the elements in the database are the others.
 		const { existence: _existence, originality: _originality, impact: _impact, ...candidate } = data;
 		return this.scoreOriginality(
@@ -125,7 +141,7 @@ ${JSON.stringify(others.slice(-BaseSimulationObject.MAX_COMPARED))}`,
 			level_of_reasoning,
 			isRelation ? 'relation' : 'simulation element',
 			candidate,
-			result.rows
+			others
 		);
 	}
 
