@@ -9,7 +9,7 @@ import {
 import { convertToPg } from './PgConversion';
 import { db } from '../utils/database';
 import { z } from 'zod';
-import type { RelationListField } from '$lib/simulation/Relation';
+import { RELATION_LIST_FIELDS, type RelationListField } from '$lib/simulation/Relation';
 
 /** The kind of value a property holds: only a function (evolution), a number or a boolean can be related. */
 export type PropertyKind = 'function' | 'number' | 'boolean' | 'text' | 'array';
@@ -298,7 +298,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				originality,
 				impact,
 				symmetric_connexions
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
 			[
 				convertToPg(relation.name),
 				convertToPg(relation.description),
@@ -411,6 +411,78 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		}
 
 		return { ...relation, [field]: entries };
+	}
+
+	/**
+	 * The originality of one value to modify of a relation: the genie looks for the value that the entry edits, compares the
+	 * entry with all the other entries (of the other relations) that edit this same value, and gives a score. An
+	 * asymmetric entry edits one value; a symmetric one edits the values of both elements, so it is scored for each of
+	 * them and keeps the lowest score (it is as much a copy as its most copied side).
+	 */
+	async scoreValueOriginality(
+		model_name: string,
+		level_of_reasoning: string,
+		relationId: string,
+		field: RelationListField,
+		entry: RelationData['element1_element2_value_to_modify'][number]
+	): Promise<number> {
+		const [relations, elements] = await Promise.all([this.get_all(), loadElements()]);
+		const relation = relations.find((item) => item.id === relationId);
+		if (!relation) return 50;
+		const names = new Map(elements.map((element) => [element.id, element.name]));
+
+		/** The values (element, property) that an entry of a list of a relation edits. */
+		const editedBy = (
+			item: RelationData,
+			list: RelationListField,
+			connexion: RelationData['element1_element2_value_to_modify'][number]
+		) => {
+			const first = { id: item.Element1ID, property: connexion.Element1Property };
+			const second = { id: item.Element2ID, property: connexion.Element2Property };
+			if (list === 'symmetric_value_to_modify') return [first, second];
+			return list === 'element1_element2_value_to_modify' ? [second] : [first];
+		};
+
+		const candidate = {
+			relation: { name: relation.name, description: relation.description },
+			between: [names.get(relation.Element1ID), names.get(relation.Element2ID)],
+			kind: field === 'symmetric_value_to_modify' ? 'symmetric' : 'asymmetric',
+			direction: field,
+			entry
+		};
+
+		const scores: number[] = [];
+		for (const edited of editedBy(relation, field, entry)) {
+			const others = relations.flatMap((item) =>
+				RELATION_LIST_FIELDS.flatMap((list) =>
+					item[list]
+						.filter(
+							(connexion) =>
+								!(item.id === relationId && list === field && pairKey(connexion) === pairKey(entry)) &&
+								editedBy(item, list, connexion).some(
+									(other) => other.id === edited.id && other.property === edited.property
+								)
+						)
+						.map((connexion) => ({
+							relation: { name: item.name, description: item.description },
+							between: [names.get(item.Element1ID), names.get(item.Element2ID)],
+							kind: list === 'symmetric_value_to_modify' ? 'symmetric' : 'asymmetric',
+							direction: list,
+							entry: connexion
+						}))
+				)
+			);
+			scores.push(
+				await this.scoreOriginality(
+					model_name,
+					level_of_reasoning,
+					'relation value',
+					{ ...candidate, edits: { element: names.get(edited.id), value: edited.property } },
+					others
+				)
+			);
+		}
+		return scores.length > 0 ? Math.min(...scores) : 50;
 	}
 
 	static instance = new RelationServer();

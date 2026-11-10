@@ -67,14 +67,25 @@ export type ScoreField = keyof typeof SCORE_COLUMNS;
 export const SCORE_FIELDS = Object.keys(SCORE_COLUMNS) as ScoreField[];
 
 /**
+ * The scores the genie draws as curves of the time. The originality is not one of them: it is a single number (not a
+ * function), given by the genie after it compared the proof or the value with all the others.
+ */
+export const CURVE_SCORE_COLUMNS = {
+	veracity: SCORE_COLUMNS.veracity,
+	uncertainty: SCORE_COLUMNS.uncertainty,
+	impact: SCORE_COLUMNS.impact
+} satisfies CurveColumns;
+
+/**
  * The curves of a value given as points: the value and its uncertainty above and below for an evolution (it has no
- * general uncertainty), then its scores, the impact and the originality only for a value that has its own.
+ * general uncertainty), then its scores, the impact only for a value that has its own. The originality is never a
+ * curve (see CURVE_SCORE_COLUMNS).
  */
 export function valueColumns(evolution: boolean, scored: boolean): CurveColumns {
 	const columns: CurveColumns = evolution ? evolutionColumns() : {};
-	for (const field of SCORE_FIELDS) {
+	for (const field of Object.keys(CURVE_SCORE_COLUMNS) as (keyof typeof CURVE_SCORE_COLUMNS)[]) {
 		if (evolution && field === 'uncertainty') continue;
-		if (!scored && (field === 'impact' || field === 'originality')) continue;
+		if (!scored && field === 'impact') continue;
 		columns[field] = SCORE_COLUMNS[field];
 	}
 	return columns;

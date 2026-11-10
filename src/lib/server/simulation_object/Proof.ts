@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
 import {
 	CURVE_FIELDS,
+	CURVE_SCORE_COLUMNS,
 	ProofSchema,
 	SCORE_COLUMNS,
 	SCORE_FIELDS,
@@ -43,7 +44,12 @@ import {
 	type CurvesInput
 } from '$lib/simulation/event/EvolutionType';
 import { dateToYear } from '$lib/simulation/TimeAxis';
-import { relationValues, type RelationData } from '$lib/simulation/Relation';
+import {
+	RELATION_LIST_FIELDS,
+	relationValueName,
+	relationValues,
+	type RelationData
+} from '$lib/simulation/Relation';
 import { RelationServer } from './Relation';
 import { convertToPg } from './PgConversion';
 import { db } from '../utils/database';
@@ -78,17 +84,20 @@ const ProofTextSchema = ProofSchema.pick({
 });
 
 /** The own scores of a proof over time, given as interpolation points. */
-const OwnScoresSchema = curvesSchema(SCORE_COLUMNS).describe(
-	'The scores of THIS proof over time (its veracity, the uncertainty of its author, independent of the veracity, its impact and its originality), as interpolation points at the dates that matter: a proof is stronger or weaker as time passes, as the facts become known, forgotten or confirmed.'
+const OwnScoresSchema = curvesSchema(CURVE_SCORE_COLUMNS).describe(
+	'The scores of THIS proof over time (its veracity, the uncertainty of its author, independent of the veracity, and its impact), as interpolation points at the dates that matter: a proof is stronger or weaker as time passes, as the facts become known, forgotten or confirmed. Do not give its originality: it is decided afterwards by comparing the proof with the other ones.'
 );
 
-/** The own scores of a generated proof, as functions of the time. */
+/**
+ * The own scores of a generated proof, as functions of the time. The originality is not a function: it is a single
+ * number that the genie gives afterwards (see proofOriginality), 50 until then.
+ */
 function ownScores(scores: CurvesInput): Pick<ProofData, 'veracity' | 'uncertainty' | 'impact' | 'originality'> {
 	return {
 		veracity: curveExpression(scores, 'veracity'),
 		uncertainty: curveExpression(scores, 'uncertainty'),
 		impact: curveExpression(scores, 'impact'),
-		originality: curveExpression(scores, 'originality')
+		originality: '50'
 	};
 }
 
@@ -123,6 +132,30 @@ type GeneratedProof = GeneratedText & {
 type GeneratedSubProof = GeneratedText & {
 	desired_value: Partial<Record<(typeof TEXT_EDIT_FIELDS)[number], unknown>> & { scores: CurvesInput };
 };
+
+/** What a proof or a sub-proof is, for the genie that compares it with the others: its texts and what it changes. */
+function proofSummary(proof: Partial<ProofData>) {
+	const desired = (proof.desired_value ?? {}) as Record<string, unknown>;
+	return {
+		name: proof.name,
+		description: proof.description,
+		verification_method: proof.verification_method,
+		falsifiability_method: proof.falsifiability_method,
+		source: proof.source,
+		value_name: proof.value_name,
+		changes: Object.fromEntries(
+			(proof.edited_fields ?? []).flatMap((field) =>
+				!(SCORE_FIELDS as string[]).includes(field) && field in desired ? [[field, desired[field]]] : []
+			)
+		)
+	};
+}
+
+/** What a generated proof or sub-proof changes (its content, its texts), without the curves it draws. */
+function proposedChanges(proposed: unknown): Record<string, unknown> {
+	const { curves: _curves, scores: _scores, unit: _unit, ...changes } = proposed as Record<string, unknown>;
+	return Object.fromEntries(Object.entries(changes).filter(([, value]) => value !== null && value !== undefined));
+}
 
 /** The kind of a value, as far as its curves go: an evolution, another content, or not known yet (free prompt). */
 type ValueShape = 'evolution' | 'other' | 'any';
@@ -181,8 +214,8 @@ const GeneratedSubProofSchema = ProofTextSchema.extend({
 				.array(z.string())
 				.nullable()
 				.describe('The whole list of sources this sub-proof wants for the debated proof, or null to keep them.'),
-			scores: curvesSchema(SCORE_COLUMNS, true).describe(
-				'What this sub-proof changes in the scores of the DEBATED proof over time: the interpolation points of the period it changes, with a number only for the scores it changes. The rest of every score stays as it is.'
+			scores: curvesSchema(CURVE_SCORE_COLUMNS, true).describe(
+				'What this sub-proof changes in the scores of the DEBATED proof over time (veracity, uncertainty, impact; never its originality): the interpolation points of the period it changes, with a number only for the scores it changes. The rest of every score stays as it is.'
 			)
 		})
 		.describe(
@@ -618,6 +651,8 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		const proofs: ProofData[] = [];
 
 		const values = elementValues(element);
+		const existing = values.length > 0 ? await this.get_all() : [];
+		const targetId = 'factId' in target ? target.factId : target.relationId;
 		for (let i = 0; i < values.length; i += FOUNDING_PROOF_CONCURRENCY) {
 			const batch = values.slice(i, i + FOUNDING_PROOF_CONCURRENCY);
 			const results = await Promise.allSettled(
@@ -634,6 +669,24 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 					)) as z.infer<ReturnType<typeof foundingSchema>> & { scores: CurvesInput; desired_value: CurvesInput };
 					const { scores, desired_value: curves, ...texts } = generated;
 					const own = ownScores(scores);
+					// The originality of the proof: compared with the other proofs of this value.
+					const sameValue = (proof: ProofData) =>
+						valueNames(proof.value_name).some((name) => valueNames(value.value_name).includes(name));
+					own.originality = String(
+						await this.scoreOriginality(
+							model_name,
+							level_of_reasoning,
+							'proof',
+							{ ...proofSummary(texts), value_name: value.value_name, changes: { value: value.value } },
+							existing
+								.filter((proof) => !proof.parent_proof_id && (proof.fact_id ?? proof.relation_id) === targetId && sameValue(proof))
+								.map(proofSummary)
+						)
+					);
+					// The originality of the value itself (only for a value that has one).
+					const valueOriginality = value.scored
+						? await this.valueOriginality(model_name, level_of_reasoning, target, value, element, context.element)
+						: undefined;
 					const proof: ProofData = {
 						...texts,
 						...own,
@@ -642,6 +695,7 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 						desired_value: {
 							...(value.valueless ? {} : { value: value.value }),
 							uncertainty: own.uncertainty,
+							...(valueOriginality !== undefined ? { originality: String(valueOriginality) } : {}),
 							...Object.fromEntries(
 								Object.entries(columns).map(([key, column]) => [key, curveExpression(curves, key, column)])
 							)
@@ -663,6 +717,52 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 			}
 		}
 		return proofs;
+	}
+
+	/**
+	 * The originality of a value that has one: for a value of a relation, compared with the other relations that edit the
+	 * same value (see RelationServer.scoreValueOriginality); for an entry of a list of an element, compared with the other
+	 * entries of the element.
+	 */
+	private async valueOriginality(
+		model_name: string,
+		level_of_reasoning: string,
+		target: ProofTarget,
+		value: ElementValue,
+		created: Record<string, unknown>,
+		stored: Record<string, unknown>
+	): Promise<number> {
+		const sameName = (name: unknown) => valueNames(name).some((candidate) => valueNames(value.value_name).includes(candidate));
+		if ('relationId' in target) {
+			for (const field of RELATION_LIST_FIELDS) {
+				const direction = field.replace('_value_to_modify', '') as 'symmetric' | 'element1_element2' | 'element2_element1';
+				const entries = (Array.isArray(created[field]) ? created[field] : []) as RelationData['symmetric_value_to_modify'];
+				const entry = entries.find((connexion) => sameName(relationValueName(direction, connexion)));
+				if (entry) {
+					return RelationServer.instance.scoreValueOriginality(
+						model_name,
+						level_of_reasoning,
+						target.relationId,
+						field,
+						entry
+					);
+				}
+			}
+			return 50;
+		}
+		const others = elementValues(stored).filter((other) => other.scored && !sameName(other.value_name));
+		return this.scoreOriginality(
+			model_name,
+			level_of_reasoning,
+			'value of an element',
+			{ name: value.value_name, value: value.value },
+			others.map((other) => ({ name: other.value_name, value: other.value }))
+		);
+	}
+
+	/** A proof is scored by comparing it with the other proofs (see generateForTarget), never as an element. */
+	protected override async elementOriginality(): Promise<number | undefined> {
+		return undefined;
 	}
 
 	/**
@@ -845,7 +945,7 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 
 ${
 			parentProofId
-				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources) and null for every other field: they keep their current value exactly. The scores of the debated proof (veracity, uncertainty, impact, originality) are curves of the time: change them in "scores" with the interpolation points of the period the request is about, and a number only for the scores it changes. Never rewrite what does not need to change. It cannot edit the desired value of the debated proof.'
+				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources) and null for every other field: they keep their current value exactly. The scores of the debated proof (veracity, uncertainty, impact) are curves of the time: change them in "scores" with the interpolation points of the period the request is about, and a number only for the scores it changes. Never give an originality: it is decided afterwards by comparing this sub-proof with the other sub-proofs. Never rewrite what does not need to change. It cannot edit the desired value of the debated proof.'
 				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY what the request asks to change: ${
 						valueless
 							? 'NO content (the values of a relation have no value to propose: a proof about one only gives its parameters, that is its veracity, uncertainty, impact and originality) and, in "curves",'
@@ -881,6 +981,25 @@ ${
 
 		const { scores, desired_value: proposed, ...texts } = generated;
 		const own = ownScores(scores);
+		// The originality is a single number: the genie compares this proof with the other proofs of the value, or this
+		// sub-proof with the other sub-proofs of the debated proof (or sub-proof).
+		const targetId = 'factId' in target ? target.factId : target.relationId;
+		const sameValue = (proof: ProofData) =>
+			valueNames(proof.value_name).some((name) => valueNames(generated.value_name).includes(name));
+		const siblings = proofs.filter((proof) =>
+			parentProofId
+				? proof.parent_proof_id === parentProofId
+				: !proof.parent_proof_id && (proof.fact_id ?? proof.relation_id) === targetId && sameValue(proof)
+		);
+		own.originality = String(
+			await this.scoreOriginality(
+				model_name,
+				level_of_reasoning,
+				parentProofId ? 'sub-proof' : 'proof',
+				{ ...proofSummary(texts), value_name: generated.value_name, changes: proposedChanges(proposed) },
+				siblings.map(proofSummary)
+			)
+		);
 		let desired_value: ProofData['desired_value'];
 		const edited_fields: string[] = [];
 		let edited_ranges: EditedRanges = {};
@@ -894,7 +1013,7 @@ ${
 				desired[field] = edit[field];
 				edited_fields.push(field);
 			}
-			const curves = applyCurves(edit.scores, SCORE_COLUMNS, currentCurves(parentEdit));
+			const curves = applyCurves(edit.scores, CURVE_SCORE_COLUMNS, currentCurves(parentEdit));
 			for (const field of SCORE_FIELDS) desired[field] = curves.functions[field];
 			edited_fields.push(...curves.fields);
 			edited_ranges = curves.ranges;

@@ -220,7 +220,10 @@
 							<span style:width="{Math.min(100, Math.max(0, score.value))}%"></span>
 						</span>
 					</dd>
-					<ScoreFunction expression={score.fn} range={score.range} threshold={score.key === 'uncertainty' ? undefined : SCORE_THRESHOLD} />
+					<!-- The originality is a single number, not a function of the time. -->
+					{#if score.key !== 'originality'}
+						<ScoreFunction expression={score.fn} range={score.range} threshold={score.key === 'uncertainty' ? undefined : SCORE_THRESHOLD} />
+					{/if}
 				</div>
 			{/each}
 		</dl>
