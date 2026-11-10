@@ -61,7 +61,7 @@
 				</span>
 			{/if}
 		</dd>
-		{#if fn}<ScoreFunction expression={fn} threshold={key === 'uncertainty' ? undefined : key === 'impact' && info.relationImpact ? RELATION_IMPACT_THRESHOLD : SCORE_THRESHOLD} />{/if}
+		{#if fn}<ScoreFunction expression={fn} fit={key === 'impact' && !!info.relationImpact} threshold={key === 'uncertainty' ? undefined : key === 'impact' && info.relationImpact ? RELATION_IMPACT_THRESHOLD : SCORE_THRESHOLD} />{/if}
 	</div>
 {/snippet}
 

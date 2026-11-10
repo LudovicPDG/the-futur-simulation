@@ -6,8 +6,11 @@
 	let {
 		expression,
 		range,
-		threshold
+		threshold,
+		fit = false
 	}: {
+		/** True for a value that is not from 0 to 100 (the impact of a relation): the axis fits the curve. */
+		fit?: boolean;
 		expression: string;
 		/** Under this value the score is not counted: drawn in red. */
 		threshold?: number;
@@ -28,11 +31,12 @@
 		<div class="score-chart">
 			<EvolutionChart
 				{evolution}
-				unit="%"
+				unit={fit ? '' : '%'}
 				clipToExistence={false}
 				showExistence={false}
 				showUncertainty={false}
-				bounds={[0, 100]}
+				bounds={fit ? undefined : [0, 100]}
+				fitCurve={fit}
 					{threshold}
 				edited={range ? { function: true, above: false, below: false } : undefined}
 				ranges={range ? { function: range } : undefined}

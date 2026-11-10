@@ -24,6 +24,7 @@
 		edited,
 		ranges,
 		bounds,
+		fitCurve = false,
 		width = 320,
 		height = 210,
 		accent,
@@ -47,6 +48,8 @@
 		ranges?: { function?: TimeRange; above?: TimeRange; below?: TimeRange };
 		/** Fixed bounds of the vertical axis (a probability goes from 0 to 1) */
 		bounds?: [number, number];
+		/** True to fit the vertical axis to the curve shown (its min and max, plus 10% on each side) */
+		fitCurve?: boolean;
 		width?: number;
 		height?: number;
 		/** Color of the curve and of the formula (a character's resource or satisfaction) */
@@ -223,9 +226,18 @@
 		const low = d3.min(model.curve, (d) => d.value - d.down) ?? 0;
 		const high = d3.max(model.curve, (d) => d.value + d.up) ?? 1;
 
-		const yScale = bounds
-			? d3.scaleLinear().domain(bounds).range([innerHeight, 0])
-			: d3.scaleLinear().domain([low, high]).nice().range([innerHeight, 0]);
+		// Fitted on the curve itself: its min and max over the window, with 10% of the span free above and below.
+		const fitted = (): [number, number] => {
+			const [min, max] = d3.extent(model.curve, (d) => d.value) as [number, number];
+			if (min === undefined || max === undefined) return [0, 1];
+			const pad = (max - min > 1e-9 ? max - min : Math.max(Math.abs(max), 1) * 0.2) * 0.1;
+			return [min - pad, max + pad];
+		};
+		const yScale = fitCurve
+			? d3.scaleLinear().domain(fitted()).range([innerHeight, 0])
+			: bounds
+				? d3.scaleLinear().domain(bounds).range([innerHeight, 0])
+				: d3.scaleLinear().domain([low, high]).nice().range([innerHeight, 0]);
 
 		const line = d3
 			.line<CurvePoint>()
