@@ -316,7 +316,7 @@ export function relationImpact<T extends object>(
 	// the relation exists, its originality and its impact. The veracity of the source value and the existence of its
 	// element also decide whether the link counts.
 	const proofs = resolved.filter((each) => (each as { type?: unknown }).type === 'proof') as unknown as ProofData[];
-	const relationValue = relationValueName(edge.direction, 'modify', edge.connexion).toLowerCase();
+	const relationValue = relationValueName(edge.direction, edge.connexion).toLowerCase();
 	const below = [
 		...belowThreshold({
 			veracity: veracityOf(relation.id, [relationValue], proofs, t),
@@ -388,7 +388,7 @@ export function applyRelations<T extends object>(elements: T[], t: number, base:
 
 			const key = `${edge.targetId}|${edge.targetProperty}`;
 			const entry = incoming.get(key) ?? { targetId: edge.targetId, targetProperty: edge.targetProperty, inputs: [] };
-			const relationValue = relationValueName(edge.direction, 'modify', edge.connexion).toLowerCase();
+			const relationValue = relationValueName(edge.direction, edge.connexion).toLowerCase();
 			entry.inputs.push({
 				value: sourceValue,
 				estimate,

@@ -37,13 +37,6 @@ export const RelationConnexionSchema = z.object({
 	)
 });
 
-/** A value created by the relation: it links an existing property to the name of the new value, with its value and impact. */
-export const RelationNewValueSchema = RelationConnexionSchema.extend({
-	value: z.union([z.string(), z.number(), z.boolean()]).describe('The value created')
-});
-
-export type RelationNewValueData = z.infer<typeof RelationNewValueSchema>;
-
 export type RelationConnexionData = z.infer<typeof RelationConnexionSchema>;
 
 export const RelationElementTypeSchema = z.enum([
@@ -70,29 +63,15 @@ export const RelationSchema = z.object({
 		.array(RelationConnexionSchema)
 		.default([])
 		.describe('Existing values modified, from element 1 to element 2: existing property, modified property, impact'),
-	element1_element2_new_value: z
-		.array(RelationNewValueSchema)
-		.default([])
-		.describe('Values added, from element 1 to element 2: existing property, name of the new value, its value, impact'),
 	element2_element1_value_to_modify: z
 		.array(RelationConnexionSchema)
 		.default([])
 		.describe('Existing values modified, from element 2 to element 1: existing property, modified property, impact'),
-	element2_element1_new_value: z
-		.array(RelationNewValueSchema)
-		.default([])
-		.describe('Values added, from element 2 to element 1: existing property, name of the new value, its value, impact'),
 	symmetric_value_to_modify: z
 		.array(RelationConnexionSchema)
 		.default([])
 		.describe(
 			'SYMMETRIC relation, the same from element 1 to element 2 and from element 2 to element 1. Existing values modified: property of element 1, property of element 2, impact. Only for effects that really work both ways.'
-		),
-	symmetric_new_value: z
-		.array(RelationNewValueSchema)
-		.default([])
-		.describe(
-			'SYMMETRIC relation, the same from element 1 to element 2 and from element 2 to element 1. Values added: existing property of element 1, name of the new value on element 2 (and reversed), its value, impact.'
 		),
 	existence: existenceSchema('relation'),
 	originality: z
@@ -114,11 +93,8 @@ export const RelationSchema = z.object({
 /** The lists of a relation to which the user can ask the genie to add an entry. */
 export const RELATION_LIST_FIELDS = [
 	'symmetric_value_to_modify',
-	'symmetric_new_value',
 	'element1_element2_value_to_modify',
-	'element1_element2_new_value',
-	'element2_element1_value_to_modify',
-	'element2_element1_new_value'
+	'element2_element1_value_to_modify'
 ] as const;
 export type RelationListField = (typeof RELATION_LIST_FIELDS)[number];
 
@@ -126,32 +102,27 @@ export type RelationData = z.infer<typeof RelationSchema> & { id?: string };
 
 /**
  * Every value of a relation that has its own value parameters (proofs, veracity, originality): the impact of each value
- * to modify and the content of each value to add. "name" is the value_name that its proofs use.
+ * to modify. "name" is the value_name that its proofs use.
  */
 export function relationValues(
 	relation: Partial<RelationData>
 ): { name: string; value: number | string | boolean }[] {
 	const sides = [
-		['symmetric', relation.symmetric_value_to_modify, relation.symmetric_new_value],
-		['element1_element2', relation.element1_element2_value_to_modify, relation.element1_element2_new_value],
-		['element2_element1', relation.element2_element1_value_to_modify, relation.element2_element1_new_value]
+		['symmetric', relation.symmetric_value_to_modify],
+		['element1_element2', relation.element1_element2_value_to_modify],
+		['element2_element1', relation.element2_element1_value_to_modify]
 	] as const;
-	return sides.flatMap(([direction, toModify, toAdd]) => [
-		...(toModify ?? []).map((c) => ({
-			name: relationValueName(direction, 'modify', c),
-			value: c.impact
-		})),
-		...(toAdd ?? []).map((c) => ({ name: relationValueName(direction, 'add', c), value: c.value }))
-	]);
+	return sides.flatMap(([direction, toModify]) =>
+		(toModify ?? []).map((c) => ({ name: relationValueName(direction, c), value: c.impact }))
+	);
 }
 
-/** The value_name of one value to modify or to add of a relation. */
+/** The value_name of one value to modify of a relation. */
 export function relationValueName(
 	direction: 'symmetric' | 'element1_element2' | 'element2_element1',
-	kind: 'modify' | 'add',
 	connexion: RelationConnexionData
 ): string {
-	return `${direction}_${kind === 'modify' ? 'value_to_modify' : 'new_value'}: ${connexion.Element1Property} → ${connexion.Element2Property}`;
+	return `${direction}_value_to_modify: ${connexion.Element1Property} → ${connexion.Element2Property}`;
 }
 
 export interface RelationSvgShapeOptions extends SvgShapeOptions {

@@ -303,17 +303,13 @@ export const VALUE_LISTS = [
 ] as const;
 
 const RELATION_SIDES = [
-	['symmetric', 'modify', 'symmetric_value_to_modify'],
-	['symmetric', 'add', 'symmetric_new_value'],
-	['element1_element2', 'modify', 'element1_element2_value_to_modify'],
-	['element1_element2', 'add', 'element1_element2_new_value'],
-	['element2_element1', 'modify', 'element2_element1_value_to_modify'],
-	['element2_element1', 'add', 'element2_element1_new_value']
+	['symmetric', 'symmetric_value_to_modify'],
+	['element1_element2', 'element1_element2_value_to_modify'],
+	['element2_element1', 'element2_element1_value_to_modify']
 ] as const;
 
 /**
- * Gives the named value of the element its new content, wherever it is: a primary property, a value to modify or
- * to add of a relation, an "other" value or a titled item. The entries of a plain list are left alone: they all
+ * Gives the named value of the element its new content, wherever it is: a primary property, a value to modify of a relation, an "other" value or a titled item. The entries of a plain list are left alone: they all
  * share the name of the list, so their proofs cannot be told apart.
  */
 function setValue(element: Record<string, unknown>, name: unknown, value: unknown): void {
@@ -331,15 +327,15 @@ function setValue(element: Record<string, unknown>, name: unknown, value: unknow
 		return;
 	}
 
-	for (const [direction, kind, list] of RELATION_SIDES) {
+	for (const [direction, list] of RELATION_SIDES) {
 		const entries = element[list];
 		if (!Array.isArray(entries)) continue;
 		const index = entries.findIndex((entry) =>
-			names.includes(relationValueName(direction, kind, entry as RelationConnexionData))
+			names.includes(relationValueName(direction, entry as RelationConnexionData))
 		);
 		if (index === -1) continue;
 		element[list] = entries.map((entry, i) =>
-			i === index ? { ...entry, [kind === 'modify' ? 'impact' : 'value']: value } : entry
+			i === index ? { ...entry, impact: value } : entry
 		);
 		return;
 	}

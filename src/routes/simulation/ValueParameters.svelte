@@ -6,13 +6,11 @@
 	import ScoreFunction from './ScoreFunction.svelte';
 	import { RELATION_IMPACT_THRESHOLD, SCORE_THRESHOLD } from '$lib/simulation/CountThreshold';
 
-	/** A change made by a relation on the value: the property it comes from, its impact and, when it adds the value, the value. */
+	/** A change made by a relation on the value: the property it comes from, its impact. */
 	export interface RelationInfluenceEntry {
 		from: string;
 		to: string;
 		impact: number;
-		value?: unknown;
-		added: boolean;
 	}
 
 	export interface ValueInfluence {
@@ -114,13 +112,7 @@
 						<p>{format(relation.description)}</p>
 						{#each entries as entry}
 							<div class="relation-entry">
-								<span class="relation-kind">
-									{entry.added ? m.simulation_field_new_value() : m.simulation_field_value_to_modify()}
-								</span>
 								<span>{entry.from} → {entry.to}</span>
-								{#if entry.added}
-									<span class="relation-value">{format(entry.value)}</span>
-								{/if}
 								<span class="relation-impact">
 									{m.simulation_field_impact()}: <strong>{format(entry.impact)}</strong>
 								</span>

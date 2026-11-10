@@ -125,13 +125,11 @@ const pairKey = (entry: Linked) => `${entry.Element1Property}|${entry.Element2Pr
 const asymmetricPairs = (relation: Partial<RelationData>) =>
 	[
 		...(relation.element1_element2_value_to_modify ?? []),
-		...(relation.element1_element2_new_value ?? []),
-		...(relation.element2_element1_value_to_modify ?? []),
-		...(relation.element2_element1_new_value ?? [])
+		...(relation.element2_element1_value_to_modify ?? [])
 	].map(pairKey);
 
 const symmetricPairs = (relation: Partial<RelationData>) =>
-	[...(relation.symmetric_value_to_modify ?? []), ...(relation.symmetric_new_value ?? [])].map(pairKey);
+	(relation.symmetric_value_to_modify ?? []).map(pairKey);
 
 /** The tables that hold the values of each type of fact, merged with the facts table into one element. */
 const FACT_TYPE_TABLES = [
@@ -245,35 +243,28 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			impact: z.number(),
 			estimate: RelationEstimateSchema
 		});
-		const valueSchema = z.union([z.string(), z.number(), z.boolean()]);
 		const generatedSchema = RelationSchema.extend({
 			Element1ID: z.literal(element1.id),
 			Element1Type: z.literal(element1.type),
 			Element2ID: z.literal(element2.id),
 			Element2Type: z.literal(element2.type),
 			symmetric_value_to_modify: z.array(connexionSchema),
-			symmetric_new_value: z.array(connexionSchema.extend({ value: valueSchema })),
 			element1_element2_value_to_modify: z.array(connexionSchema),
-			element2_element1_value_to_modify: z.array(connexionSchema),
-			element1_element2_new_value: z.array(connexionSchema.extend({ value: valueSchema })),
-			element2_element1_new_value: z.array(connexionSchema.extend({ value: valueSchema }))
+			element2_element1_value_to_modify: z.array(connexionSchema)
 		});
 
 		const generated = await this.generateWithSchema(
 			model_name,
 			level_of_reasoning,
-			`${prompt}\n\nCreate the relation between these already-selected elements. Do not change their IDs or types.\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nelement1_element2_value_to_modify lists the existing values of element 2 that element 1 modifies: Element1Property is selected from element 1 properties and Element2Property from element 2 properties; impact is the strength of that property-to-property relation. element1_element2_new_value lists values element 1 adds to element 2: Element1Property is an existing element 1 property, Element2Property is the name of the new value (it may be a new name), value is the created value and impact its strength. For the element2_element1_* fields, reverse those choices. The symmetric_* fields have the same format as the element1_element2_* ones, but describe an effect that works identically in BOTH directions (element 1 on element 2 and element 2 on element 1): put there only what is really mutual, and put in the element1_element2_* / element2_element1_* fields only what is one-way (asymmetric). Never repeat an entry in both. ESTIMATE: for each entry, "estimate" says how the value of the source property gives an estimate of the value of the target property (the source is Element1Property for element1_element2_* and Element2Property for element2_element1_*; the symmetric_* entries are one link read in both directions). Choose the kind that fits the real mechanism: proportional (parameter = factor), additive (parameter = offset), inverse (parameter = constant), or points (at least two {source_value, estimated_value} points, for any other shape). The estimate is what the target value should be according to this relation alone, so where the two values are already consistent it must give the current target value. Use the units of the properties. For an entry that only adds a new value, use kind additive with parameter 0 and no points. A relation only links NUMBERS, FUNCTIONS (evolutions, probabilities, resources...) and BOOLEANS: never link a text or a list, and never create a new value whose "value" is a text (a sentence, a description, an empty string): an entry like that makes the whole relation impossible. When nothing numeric can be created, use the *_value_to_modify fields on numeric properties of the other element instead (for example the start or end probability of an event, or a financial resource) and leave the *_new_value lists empty.`,
+			`${prompt}\n\nCreate the relation between these already-selected elements. Do not change their IDs or types.\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nelement1_element2_value_to_modify lists the existing values of element 2 that element 1 modifies: Element1Property is selected from element 1 properties and Element2Property from element 2 properties; impact is the strength of that property-to-property relation. For the element2_element1_* fields, reverse those choices. The symmetric_* fields have the same format as the element1_element2_* ones, but describe an effect that works identically in BOTH directions (element 1 on element 2 and element 2 on element 1): put there only what is really mutual, and put in the element1_element2_* / element2_element1_* fields only what is one-way (asymmetric). Never repeat an entry in both. ESTIMATE: for each entry, "estimate" says how the value of the source property gives an estimate of the value of the target property (the source is Element1Property for element1_element2_* and Element2Property for element2_element1_*; the symmetric_* entries are one link read in both directions). Choose the kind that fits the real mechanism: proportional (parameter = factor), additive (parameter = offset), inverse (parameter = constant), or points (at least two {source_value, estimated_value} points, for any other shape). The estimate is what the target value should be according to this relation alone, so where the two values are already consistent it must give the current target value. Use the units of the properties. A relation only links NUMBERS, FUNCTIONS (evolutions, probabilities, resources...) and BOOLEANS: never link a text or a list. An entry that links a text makes the whole relation impossible. Use numeric properties (for example the start or end probability of an event, or a financial resource).`,
 			generatedSchema
 		);
 
 		assertRelatable(
 			[
 				...generated.symmetric_value_to_modify,
-				...generated.symmetric_new_value,
 				...generated.element1_element2_value_to_modify,
-				...generated.element1_element2_new_value,
-				...generated.element2_element1_value_to_modify,
-				...generated.element2_element1_new_value
+				...generated.element2_element1_value_to_modify
 			],
 			element1.kinds,
 			element2.kinds
@@ -282,9 +273,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		const symmetric = new Set(symmetricPairs(generated));
 		for (const key of [
 			'element1_element2_value_to_modify',
-			'element1_element2_new_value',
-			'element2_element1_value_to_modify',
-			'element2_element1_new_value'
+			'element2_element1_value_to_modify'
 		] as const) {
 			generated[key] = generated[key].filter((entry) => !symmetric.has(pairKey(entry))) as never;
 		}
@@ -305,14 +294,11 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				element2_type,
 				element1_element2_connexions,
 				element2_element1_connexions,
-				element1_element2_new_value,
-				element2_element1_new_value,
 				existence,
 				originality,
 				impact,
-				symmetric_connexions,
-				symmetric_new_value
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
+				symmetric_connexions
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
 			[
 				convertToPg(relation.name),
 				convertToPg(relation.description),
@@ -322,13 +308,10 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				relation.Element2Type,
 				convertToPg((relation.element1_element2_value_to_modify || []).map((c) => toPgConnexion(c, false))),
 				convertToPg((relation.element2_element1_value_to_modify || []).map((c) => toPgConnexion(c, true))),
-				JSON.stringify(relation.element1_element2_new_value ?? []),
-				JSON.stringify(relation.element2_element1_new_value ?? []),
 				convertToPg(relation.existence),
 				relation.originality,
 				relation.impact,
-				JSON.stringify(relation.symmetric_value_to_modify ?? []),
-				JSON.stringify(relation.symmetric_new_value ?? [])
+				JSON.stringify(relation.symmetric_value_to_modify ?? [])
 			]
 		);
 		return result.rows[0].id;
@@ -353,18 +336,15 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			Element2ID: row.element2_id,
 			Element2Type: row.element2_type,
 			symmetric_value_to_modify: row.symmetric_connexions ?? [],
-			symmetric_new_value: row.symmetric_new_value ?? [],
 			element1_element2_value_to_modify: mapDatabaseConnexions(row.element1_connexions_json),
 			element2_element1_value_to_modify: mapDatabaseConnexions(row.element2_connexions_json, true),
-			element1_element2_new_value: row.element1_element2_new_value ?? [],
-			element2_element1_new_value: row.element2_element1_new_value ?? [],
 			existence: row.existence_json,
 			originality: Number(row.originality),
 			impact: Number(row.impact)
 		}));
 	}
 
-	/** Generates one new value to modify or to add of the relation, saves it and gives it a founding proof. */
+	/** Generates one new value to modify of the relation, saves it and gives it a founding proof. */
 	async addEntry(
 		model_name: string,
 		level_of_reasoning: string,
@@ -384,27 +364,22 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		const symmetric = field.startsWith('symmetric');
 		const source = reversed ? element2 : element1;
 		const target = reversed ? element1 : element2;
-		const isNew = field.endsWith('new_value');
 		const connexionSchema = z.object({
 			Element1Property: propertyEnum(element1.properties),
 			Element2Property: propertyEnum(element2.properties),
 			impact: z.number(),
 			estimate: RelationEstimateSchema
 		});
-		const valueSchema = z.union([z.string(), z.number(), z.boolean()]);
-		const schema = isNew ? connexionSchema.extend({ value: valueSchema }) : connexionSchema;
 
 		const generated = await this.generateWithSchema(
 			model_name,
 			level_of_reasoning,
 			`${prompt}\n\nThe user wants to add one entry to "${field}" of a relation between:\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nThe current entries of "${field}" are: ${JSON.stringify(relation[field])}\n\nCreate one new entry that does not repeat an existing one. ${
-				isNew
-					? `It is a value that ${JSON.stringify(source.name)} adds to ${JSON.stringify(target.name)}: the property of the source is an existing property, the property of the target is the name of the new value (it may be a new name), value is the created value and impact its strength.`
-					: `It is an existing value of ${JSON.stringify(target.name)} that ${JSON.stringify(source.name)} modifies: one property of each element and the impact of that relation.`
-			} Element1Property always belongs to element 1 and Element2Property to element 2. ESTIMATE: for each entry, "estimate" says how the value of the source property gives an estimate of the value of the target property (the source is Element1Property for element1_element2_* and Element2Property for element2_element1_*; the symmetric_* entries are one link read in both directions). Choose the kind that fits the real mechanism: proportional (parameter = factor), additive (parameter = offset), inverse (parameter = constant), or points (at least two {source_value, estimated_value} points, for any other shape). The estimate is what the target value should be according to this relation alone, so where the two values are already consistent it must give the current target value. Use the units of the properties. For an entry that only adds a new value, use kind additive with parameter 0 and no points. A relation only links NUMBERS, FUNCTIONS (evolutions, probabilities, resources...) and BOOLEANS: never link a text or a list, and never create a new value whose "value" is a text (a sentence, a description, an empty string): an entry like that makes the whole relation impossible. When nothing numeric can be created, use the *_value_to_modify fields on numeric properties of the other element instead (for example the start or end probability of an event, or a financial resource) and leave the *_new_value lists empty.${
+				`It is an existing value of ${JSON.stringify(target.name)} that ${JSON.stringify(source.name)} modifies: one property of each element and the impact of that relation.`
+			} Element1Property always belongs to element 1 and Element2Property to element 2. ESTIMATE: for each entry, "estimate" says how the value of the source property gives an estimate of the value of the target property (the source is Element1Property for element1_element2_* and Element2Property for element2_element1_*; the symmetric_* entries are one link read in both directions). Choose the kind that fits the real mechanism: proportional (parameter = factor), additive (parameter = offset), inverse (parameter = constant), or points (at least two {source_value, estimated_value} points, for any other shape). The estimate is what the target value should be according to this relation alone, so where the two values are already consistent it must give the current target value. Use the units of the properties. A relation only links NUMBERS, FUNCTIONS (evolutions, probabilities, resources...) and BOOLEANS: never link a text or a list. An entry that links a text makes the whole relation impossible. Use numeric properties (for example the start or end probability of an event, or a financial resource).${
 				symmetric ? ' The entry is SYMMETRIC: it works identically from element 1 to element 2 and from element 2 to element 1.' : ''
 			}`,
-			schema
+			connexionSchema
 		);
 
 		assertRelatable([generated], element1.kinds, element2.kinds);
@@ -414,13 +389,10 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		const entries = [...relation[field], generated];
 		const column = {
 			symmetric_value_to_modify: 'symmetric_connexions',
-			symmetric_new_value: 'symmetric_new_value',
 			element1_element2_value_to_modify: 'element1_element2_connexions',
-			element2_element1_value_to_modify: 'element2_element1_connexions',
-			element1_element2_new_value: 'element1_element2_new_value',
-			element2_element1_new_value: 'element2_element1_new_value'
+			element2_element1_value_to_modify: 'element2_element1_connexions'
 		}[field];
-		const value = isNew || symmetric
+		const value = symmetric
 			? JSON.stringify(entries)
 			: convertToPg(entries.map((connexion) => toPgConnexion(connexion, reversed)));
 		await db.query(`UPDATE relations SET ${column} = $1 WHERE id = $2`, [value, relationId]);

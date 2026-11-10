@@ -404,11 +404,8 @@ const NOT_A_VALUE = new Set([
 /** The lists of a relation whose entries are values on their own (see relationValues). */
 const RELATION_VALUE_LISTS = new Set([
 	'symmetric_value_to_modify',
-	'symmetric_new_value',
 	'element1_element2_value_to_modify',
-	'element1_element2_new_value',
-	'element2_element1_value_to_modify',
-	'element2_element1_new_value'
+	'element2_element1_value_to_modify'
 ]);
 
 /**
@@ -424,7 +421,7 @@ type ElementValue = {
 };
 
 /** The name of a value of a relation (see relationValueName): its proofs have no value, only parameters. */
-const RELATION_VALUE_NAME = /^(symmetric|element1_element2|element2_element1)_(value_to_modify|new_value): /;
+const RELATION_VALUE_NAME = /^(symmetric|element1_element2|element2_element1)_value_to_modify: /;
 function isRelationValueName(name: unknown): boolean {
 	return valueNames(name).some((candidate) => RELATION_VALUE_NAME.test(candidate));
 }
@@ -442,7 +439,7 @@ function elementValues(
 		if (value_name && value !== undefined) values.push({ value_name, value, scored, valueless });
 	};
 
-	// Each value to modify and each value to add of a relation has its own proof. The proof gives no value: only the four
+	// Each value to modify of a relation has its own proof. The proof gives no value: only the four
 	// parameters of the value (veracity, uncertainty, impact, originality).
 	if (element.type === 'relation') {
 		for (const value of relationValues(element as Partial<RelationData>)) {
@@ -752,7 +749,7 @@ ${JSON.stringify(element)}`
 		if (relation.rows.length === 0) throw new Error('The debated relation does not exist');
 		const { element: raw, ...endpoints } = relation.rows[0];
 		const element = resolveElement(raw as Record<string, unknown>, proofs, year);
-		// Each value to modify and each value to add is a value of the relation: exposed like the "other" values of a fact.
+		// Each value to modify is a value of the relation: exposed like the "other" values of a fact.
 		const relationData = (await RelationServer.get_all()).find((item) => item.id === target.relationId);
 		const stored = relationData ? resolveElement(relationData, proofs, year) : undefined;
 		const values = stored
@@ -762,7 +759,7 @@ ${JSON.stringify(element)}`
 			element: { ...element, other: values },
 			text: `
 
-This proof is about the following relation between two simulation elements. Its values are its name, its description and each value to modify (a parameter-only value: a proof about it gives its veracity, uncertainty, impact and originality, never a value) or value to add, named in "values":
+This proof is about the following relation between two simulation elements. Its values are its name, its description and each value to modify (a parameter-only value: a proof about it gives its veracity, uncertainty, impact and originality, never a value), named in "values":
 ${JSON.stringify({ ...element, ...endpoints, values })}`
 		};
 	}

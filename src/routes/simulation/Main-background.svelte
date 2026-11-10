@@ -245,9 +245,7 @@
 				? m.simulation_section_other_information()
 				: field.endsWith('value_to_modify')
 					? m.simulation_field_value_to_modify()
-					: field.endsWith('new_value')
-						? m.simulation_field_new_value()
-						: formatLabel(field);
+					: formatLabel(field);
 		debateTarget.set(null);
 		addProofTarget.set(null);
 		addRelationTarget.set(null);
@@ -385,7 +383,6 @@
 			human_necessary: m.simulation_field_human_necessary,
 			number_of_units: m.simulation_field_number_of_units,
 			financial_value: m.simulation_field_financial_value,
-			new_value: m.simulation_field_new_value,
 			value_to_modify: m.simulation_field_value_to_modify,
 			verification_method: m.simulation_field_verification_method,
 			falsifiability_method: m.simulation_field_falsifiability_method,
@@ -565,7 +562,7 @@
 						key !== 'type' &&
 						key !== 'other' &&
 						!(activeElement.type === 'evolution' && key === 'unit') &&
-						!/^(element[12]_element[12]|symmetric)_(new_value|value_to_modify)$/.test(key) &&
+						!/^(element[12]_element[12]|symmetric)_value_to_modify$/.test(key) &&
 						!(
 							activeRelation &&
 							[
@@ -718,12 +715,7 @@
 						const source = other(otherId);
 						for (const c of relation.symmetric_value_to_modify ?? []) {
 							if (matches(c[activeKey])) {
-								entries.push({ from: formatRelationProperty(c[otherKey], source), to: formatLabel(c[activeKey]), impact: c.impact, added: false });
-							}
-						}
-						for (const c of relation.symmetric_new_value ?? []) {
-							if (matches(c[activeKey])) {
-								entries.push({ from: formatRelationProperty(c[otherKey], source), to: c[activeKey], impact: c.impact, value: c.value, added: true });
+								entries.push({ from: formatRelationProperty(c[otherKey], source), to: formatLabel(c[activeKey]), impact: c.impact });
 							}
 						}
 					}
@@ -731,12 +723,7 @@
 						const source = other(relation.Element1ID);
 						for (const c of relation.element1_element2_value_to_modify ?? []) {
 							if (matches(c.Element2Property)) {
-								entries.push({ from: formatRelationProperty(c.Element1Property, source), to: formatLabel(c.Element2Property), impact: c.impact, added: false });
-							}
-						}
-						for (const c of relation.element1_element2_new_value ?? []) {
-							if (matches(c.Element2Property)) {
-								entries.push({ from: formatRelationProperty(c.Element1Property, source), to: c.Element2Property, impact: c.impact, value: c.value, added: true });
+								entries.push({ from: formatRelationProperty(c.Element1Property, source), to: formatLabel(c.Element2Property), impact: c.impact });
 							}
 						}
 					}
@@ -744,16 +731,11 @@
 						const source = other(relation.Element2ID);
 						for (const c of relation.element2_element1_value_to_modify ?? []) {
 							if (matches(c.Element1Property)) {
-								entries.push({ from: formatRelationProperty(c.Element2Property, source), to: formatLabel(c.Element1Property), impact: c.impact, added: false });
-							}
-						}
-						for (const c of relation.element2_element1_new_value ?? []) {
-							if (matches(c.Element1Property)) {
-								entries.push({ from: formatRelationProperty(c.Element2Property, source), to: c.Element1Property, impact: c.impact, value: c.value, added: true });
+								entries.push({ from: formatRelationProperty(c.Element2Property, source), to: formatLabel(c.Element1Property), impact: c.impact });
 							}
 						}
 					}
-					const kept = itemKey === undefined ? entries : entries.filter((entry) => entry.added && isItem(entry.value));
+					const kept = itemKey === undefined ? entries : [];
 					return kept.length > 0 ? [{ relation, entries: kept }] : [];
 				});
 
@@ -976,7 +958,6 @@
 						{m.simulation_relation_and()}
 						{formatValue(relationElement2?.name) || m.simulation_field_element2_name()}
 					</h3>
-					<h4>{m.simulation_field_value_to_modify()}</h4>
 					{#if (activeRelation.symmetric_value_to_modify ?? []).length === 0}<p class="relation-empty">—</p>{/if}
 					{#each activeRelation.symmetric_value_to_modify ?? [] as connexion}
 						<div class="relation-connexion" class:uncounted={impactOf(connexion).counted === false}>
@@ -987,29 +968,10 @@
 							<span class="relation-impact">
 								{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
 							</span>
-							{#each [valueInfluence(relationValueName('symmetric', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+							{#each [valueInfluence(relationValueName('symmetric', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 						</div>
 					{/each}
 					<button type="button" class="add-value" onclick={() => startAddValue('symmetric_value_to_modify')}>
-						+ {m.relation_add()}
-					</button>
-					<h4>{m.simulation_field_new_value()}</h4>
-					{#if (activeRelation.symmetric_new_value ?? []).length === 0}<p class="relation-empty">—</p>{/if}
-					{#each activeRelation.symmetric_new_value ?? [] as added}
-						<div class="relation-connexion">
-							<span>{formatRelationProperty(added.Element1Property, relationElement1)}</span>
-							<span class="relation-arrow" aria-hidden="true">↔</span>
-							<span class="relation-new-value">
-								<span class="relation-new-name">{added.Element2Property}</span>
-								<span class="relation-new-content">{formatValue(added.value)}</span>
-							</span>
-							<span class="relation-impact">
-								{m.simulation_field_impact()}: {formatValue(added.impact)}
-							</span>
-							{#each [valueInfluence(relationValueName('symmetric', 'add', added), false, undefined, added.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
-						</div>
-					{/each}
-					<button type="button" class="add-value" onclick={() => startAddValue('symmetric_new_value')}>
 						+ {m.relation_add()}
 					</button>
 
@@ -1021,7 +983,6 @@
 							{formatValue(relationElement2?.name) || m.simulation_field_element2_name()}
 						</h3>
 						{#if true}
-							<h4>{m.simulation_field_value_to_modify()}</h4>
 							{#if activeRelation.element1_element2_value_to_modify.length === 0}<p class="relation-empty">—</p>{/if}
 							{#each activeRelation.element1_element2_value_to_modify as connexion}
 								<div class="relation-connexion" class:uncounted={impactOf(connexion).counted === false}>
@@ -1032,7 +993,7 @@
 							<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
 									</span>
-									{#each [valueInfluence(relationValueName('element1_element2', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+									{#each [valueInfluence(relationValueName('element1_element2', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element1_element2_value_to_modify')}>
@@ -1040,25 +1001,6 @@
 							</button>
 						{/if}
 						{#if true}
-							<h4>{m.simulation_field_new_value()}</h4>
-							{#if activeRelation.element1_element2_new_value.length === 0}<p class="relation-empty">—</p>{/if}
-							{#each activeRelation.element1_element2_new_value as added}
-								<div class="relation-connexion">
-									<span>{formatRelationProperty(added.Element1Property, relationElement1)}</span>
-									<span class="relation-arrow" aria-hidden="true">→</span>
-									<span class="relation-new-value">
-										<span class="relation-new-name">{added.Element2Property}</span>
-										<span class="relation-new-content">{formatValue(added.value)}</span>
-									</span>
-									<span class="relation-impact">
-										{m.simulation_field_impact()}: {formatValue(added.impact)}
-									</span>
-									{#each [valueInfluence(relationValueName('element1_element2', 'add', added), false, undefined, added.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
-								</div>
-							{/each}
-							<button type="button" class="add-value" onclick={() => startAddValue('element1_element2_new_value')}>
-								+ {m.relation_add()}
-							</button>
 						{/if}
 					{/if}
 					{#if true}
@@ -1068,7 +1010,6 @@
 							{formatValue(relationElement1?.name) || m.simulation_field_element1_name()}
 						</h3>
 						{#if true}
-							<h4>{m.simulation_field_value_to_modify()}</h4>
 							{#if activeRelation.element2_element1_value_to_modify.length === 0}<p class="relation-empty">—</p>{/if}
 							{#each activeRelation.element2_element1_value_to_modify as connexion}
 								<div class="relation-connexion" class:uncounted={impactOf(connexion).counted === false}>
@@ -1079,7 +1020,7 @@
 							<span class="relation-impact">
 										{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
 									</span>
-									{#each [valueInfluence(relationValueName('element2_element1', 'modify', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
+									{#each [valueInfluence(relationValueName('element2_element1', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element2_element1_value_to_modify')}>
@@ -1087,25 +1028,6 @@
 							</button>
 						{/if}
 						{#if true}
-							<h4>{m.simulation_field_new_value()}</h4>
-							{#if activeRelation.element2_element1_new_value.length === 0}<p class="relation-empty">—</p>{/if}
-							{#each activeRelation.element2_element1_new_value as added}
-								<div class="relation-connexion">
-									<span>{formatRelationProperty(added.Element2Property, relationElement2)}</span>
-									<span class="relation-arrow" aria-hidden="true">→</span>
-									<span class="relation-new-value">
-										<span class="relation-new-name">{added.Element1Property}</span>
-										<span class="relation-new-content">{formatValue(added.value)}</span>
-									</span>
-									<span class="relation-impact">
-										{m.simulation_field_impact()}: {formatValue(added.impact)}
-									</span>
-									{#each [valueInfluence(relationValueName('element2_element1', 'add', added), false, undefined, added.impact)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
-								</div>
-							{/each}
-							<button type="button" class="add-value" onclick={() => startAddValue('element2_element1_new_value')}>
-								+ {m.relation_add()}
-							</button>
 						{/if}
 					{/if}
 				</section>
