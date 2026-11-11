@@ -24,8 +24,9 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 					other,
 					existence,
 					originality,
-					impact
-				) VALUES ($1, $2, $3, $4, $5, $6, $7)
+					impact,
+					people_impacted
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 				RETURNING id`,
 				[
 					convertToPg(resource.name),
@@ -34,7 +35,8 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 					convertToPgNullable(resource.other),
 					convertToPg(resource.existence),
 					resource.originality,
-					convertToPg(resource.impact)
+					convertToPg(resource.impact),
+					convertToPg(resource.people_impacted)
 				]
 			);
 			const id = factRes.rows[0].id;
@@ -68,7 +70,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 	async get_all(): Promise<MaterialResourceData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact, to_jsonb(f.people_impacted) AS people_impacted,
 				to_jsonb(m.number_of_units) AS number_of_units, to_jsonb(m.financial_value) AS financial_value, to_jsonb(m.power) AS power
 			FROM material_resources m
 			JOIN facts f ON m.id = f.id
@@ -83,6 +85,7 @@ export class MaterialResourceServer extends BaseSimulationObject<MaterialResourc
 			existence: row.existence,
 			originality: Number(row.originality),
 			impact: row.impact,
+			people_impacted: row.people_impacted,
 			number_of_units: row.number_of_units,
 			financial_value: row.financial_value,
 			power: row.power || []

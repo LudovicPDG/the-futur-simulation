@@ -806,7 +806,7 @@ Create the founding proof of ONE value of this element: the value ${JSON.stringi
 		const isRelation = 'relationId' in target;
 
 		if (valueNames(valueName).includes('originality') && typeof element.originality === 'number') {
-			const { id: _id, existence: _existence, originality, impact: _impact, ...candidate } = element;
+			const { id: _id, existence: _existence, originality, impact: _impact, people_impacted: _people, ...candidate } = element;
 			const others = await this.comparableElements(isRelation, isRelation ? target.relationId : target.factId);
 			return {
 				field: 'value',

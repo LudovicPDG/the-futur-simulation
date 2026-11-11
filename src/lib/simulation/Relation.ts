@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
 import type { SvgShapeOptions } from './fact';
-import { existenceSchema, impactSchema } from './Existence';
+import { existenceSchema, impactSchema, peopleImpactedSchema } from './Existence';
 
 /**
  * How the value of the source property gives an estimate of the target property (see RelationInfluence). Flat on
@@ -81,7 +81,8 @@ export const RelationSchema = z.object({
 		.describe(
 			'Originality of the relation compared with other relations, as a percentage from 0 to 100 (NOT a ratio between 0 and 1): 0 = a copy of something that already exists, 50 = moderately original, 100 = completely new. Use the whole scale, e.g. 35 or 80, never 0.35 or 0.8. It avoids that people spam the same thing and increase the probability of certain things.'
 		),
-	impact: impactSchema('relation')
+	impact: impactSchema('relation'),
+	people_impacted: peopleImpactedSchema('relation')
 });
 
 /** The lists of a relation to which the user can ask the genie to add an entry. */

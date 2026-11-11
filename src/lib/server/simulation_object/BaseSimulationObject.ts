@@ -15,6 +15,8 @@ export abstract class BaseSimulationObject<
 		originality?: unknown;
 		/** One number for an element, a function of the time for a proof. */
 		impact?: unknown;
+		/** A function of the time, from 0 to +infinity, for an element. */
+		people_impacted?: unknown;
 	}
 > {
 	protected abstract schema: z.ZodType<T>;
@@ -135,7 +137,7 @@ ${JSON.stringify(others.slice(-BaseSimulationObject.MAX_COMPARED))}`,
 		const isRelation = this.proofOwner === 'relation';
 		const others = await this.comparableElements(isRelation);
 		// The new element is not saved yet: all the elements in the database are the others.
-		const { existence: _existence, originality: _originality, impact: _impact, ...candidate } = data;
+		const { existence: _existence, originality: _originality, impact: _impact, people_impacted: _people, ...candidate } = data;
 		return this.scoreOriginality(
 			model_name,
 			level_of_reasoning,

@@ -24,8 +24,9 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 					other,
 					existence,
 					originality,
-					impact
-				) VALUES ($1, $2, $3, $4, $5, $6, $7)
+					impact,
+					people_impacted
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 				RETURNING id`,
 				[
 					convertToPg(group.name),
@@ -34,7 +35,8 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 					convertToPgNullable(group.other),
 					convertToPg(group.existence),
 					group.originality,
-					convertToPg(group.impact)
+					convertToPg(group.impact),
+					convertToPg(group.people_impacted)
 				]
 			);
 			const id = factRes.rows[0].id;
@@ -81,7 +83,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 	async get_all(): Promise<InterestGroupData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact, to_jsonb(f.people_impacted) AS people_impacted,
 				to_jsonb(c.financial_resource) AS financial_resource, to_jsonb(c.power) AS power,
 				to_jsonb(o.human_resource) AS human_resource,
 				to_jsonb(ig.willing) AS willing, to_jsonb(ig.satisfaction) AS satisfaction
@@ -100,6 +102,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 			existence: row.existence,
 			originality: Number(row.originality),
 			impact: row.impact,
+			people_impacted: row.people_impacted,
 			financial_resource: row.financial_resource,
 			power: row.power || [],
 			human_resource: row.human_resource,

@@ -17,8 +17,9 @@ export class FactServer extends BaseSimulationObject<FactData> {
 				other,
 				existence,
 				originality,
-				impact
-			) VALUES ($1, $2, $3, $4, $5, $6, $7)
+				impact,
+				people_impacted
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			RETURNING id`,
 			[
 				convertToPg(fact.name),
@@ -27,7 +28,8 @@ export class FactServer extends BaseSimulationObject<FactData> {
 				convertToPgNullable(fact.other),
 				convertToPg(fact.existence),
 				fact.originality,
-				convertToPg(fact.impact)
+				convertToPg(fact.impact),
+				convertToPg(fact.people_impacted)
 			]
 		);
 		return result.rows[0].id;
@@ -35,7 +37,7 @@ export class FactServer extends BaseSimulationObject<FactData> {
 
 	async get_all(): Promise<FactData[]> {
 		const result = await db.query(`
-			SELECT facts.*, to_jsonb(facts.other) AS other_json, to_jsonb(facts.existence) AS existence_json, to_jsonb(facts.impact) AS impact_json
+			SELECT facts.*, to_jsonb(facts.other) AS other_json, to_jsonb(facts.existence) AS existence_json, to_jsonb(facts.impact) AS impact_json, to_jsonb(facts.people_impacted) AS people_impacted_json
 			FROM facts
 			WHERE type = 'fact'
 		`);
@@ -48,7 +50,8 @@ export class FactServer extends BaseSimulationObject<FactData> {
 			other: row.other_json,
 			existence: row.existence_json,
 			originality: Number(row.originality),
-			impact: row.impact_json
+			impact: row.impact_json,
+			people_impacted: row.people_impacted_json
 		}));
 	}
 

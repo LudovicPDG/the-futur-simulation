@@ -27,8 +27,24 @@ export function existenceSchema(subject: string, details = '') {
 /** Evolution, in percent over time, of the impact of the given kind of element (a function of the time, not a single number). */
 export function impactSchema(subject: string) {
 	return PercentageEvolutionSchema.describe(
-		`Evolution of the impact of the ${subject} on the simulation, in percent (0 to 100), over time: 0 = no effect on the world, 100 = it changes the whole world. The impact is a function of the time: it can be low before the ${subject} is known, grow as it spreads, and fade away later. Use the whole scale, e.g. 35 or 80. Give the moments as precisely as possible, converted to decimal years.`
+		`Evolution of the AVERAGE impact of the ${subject} on each person it reaches, in percent (0 to 100), over time: 0 = no effect on their life, 100 = it changes their whole life. The impact is a function of the time: it can be low before the ${subject} is known, grow as it spreads, and fade away later. Use the whole scale, e.g. 35 or 80. Give the moments as precisely as possible, converted to decimal years.`
 	);
+}
+
+/** Evolution of the number of people impacted by the given kind of element: from 0 to +infinity (no upper bound). */
+export function peopleImpactedSchema(subject: string) {
+	return z
+		.object({
+			evolution: evolutionPointsSchema({
+				description:
+					'The NUMBER OF PEOPLE impacted at this date, from 0 to +infinity (no maximum): 0 = nobody, 8000000000 = all humanity.',
+				min: 0
+			}).describe('The number of people impacted over time, given as interpolation points at precise dates.'),
+			unit: z.literal('people').describe('Always "people"')
+		})
+		.describe(
+			`Evolution of the NUMBER OF PEOPLE impacted by the ${subject} over time, from 0 to +infinity (never negative, no upper bound). It is a count of people (e.g. 250 or 12000000), not a percentage, and it is independent of the average impact on each of them. Give the moments as precisely as possible, converted to decimal years.`
+		);
 }
 
 /** Evolution, in percent over time, of the existence of the given event (the event takes place while it exists). */

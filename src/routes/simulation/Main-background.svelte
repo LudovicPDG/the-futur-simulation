@@ -396,7 +396,8 @@
 			connexions: m.simulation_field_connexions,
 			source_property: m.simulation_field_source_property,
 			target_property: m.simulation_field_target_property,
-			impact: m.simulation_field_impact
+			impact: m.simulation_field_average_impact,
+			people_impacted: m.simulation_field_people_impacted
 		};
 
 		return (
@@ -574,7 +575,7 @@
 								'element2_element1_connexions'
 							].includes(key)
 						) &&
-						!['existence', 'originality', 'impact'].includes(key)
+						!['existence', 'originality', 'impact', 'people_impacted'].includes(key)
 				)
 			: []
 	);
@@ -634,6 +635,10 @@
 	// The impact of the element (of the relation) is a function of the time, like its existence.
 	const activeImpact = $derived(
 		activeElement ? parseEvolutionValue((activeElement as Record<string, unknown>).impact) : null
+	);
+	// The number of people impacted: a function of the time from 0 to +infinity.
+	const activePeopleImpacted = $derived(
+		activeElement ? parseEvolutionValue((activeElement as Record<string, unknown>).people_impacted) : null
 	);
 	const activeOther = $derived(
 		activeElement && Array.isArray((activeElement as Record<string, unknown>).other)
@@ -1053,7 +1058,7 @@
 					</button>
 				</section>
 			{/if}
-			{#if activeParameters.length > 0 || activeExistence || activeImpact}
+			{#if activeParameters.length > 0 || activeExistence || activeImpact || activePeopleImpacted}
 				<section class="parameter-details">
 					<h3>{m.simulation_section_global_parameters()}</h3>
 					{#if activeExistence}
@@ -1069,18 +1074,25 @@
 						{@const existenceInfluence = valueInfluence('existence', false)}
 						{#if existenceInfluence}<ValueParameters info={existenceInfluence} format={formatValue} />{/if}
 					{/if}
-					{#if activeImpact}
-						<div class="distribution-block">
-							<h4>{m.simulation_field_impact()}</h4>
-							<DatedValue
-								evolution={activeImpact.evolution}
-								unit={activeImpact.unit}
-								{year}
-								bounds={[0, 100]}
-							/>
+					{#if activeImpact || activePeopleImpacted}
+						<div class="impact-category">
+							<h4 class="impact-title">{m.simulation_section_impact()}</h4>
+							{#each [{ key: 'impact', title: m.simulation_field_average_impact(), data: activeImpact, bounds: [0, 100] as [number, number] }, { key: 'people_impacted', title: m.simulation_field_people_impacted(), data: activePeopleImpacted, bounds: undefined }] as part (part.key)}
+								{#if part.data}
+									{@const influence = valueInfluence(part.key, false)}
+									<div class="impact-part" class:people={part.key === 'people_impacted'}>
+										<h5>{part.title}</h5>
+										<DatedValue
+											evolution={part.data.evolution}
+											unit={part.data.unit}
+											{year}
+											bounds={part.bounds}
+										/>
+										{#if influence}<ValueParameters info={influence} format={formatValue} />{/if}
+									</div>
+								{/if}
+							{/each}
 						</div>
-						{@const impactInfluence = valueInfluence('impact', false)}
-						{#if impactInfluence}<ValueParameters info={impactInfluence} format={formatValue} />{/if}
 					{/if}
 					<dl>
 						{#each activeParameters as [key, value]}
@@ -1610,6 +1622,73 @@
 	.relation-connexion.uncounted {
 		opacity: 0.8;
 	}
+	.impact-category {
+		margin: 12px 0 6px;
+		padding: 10px;
+		background: rgb(56 189 248 / 5%);
+		border: 1px solid rgb(56 189 248 / 26%);
+		border-radius: 10px;
+	}
+
+	.impact-title {
+		margin: 0 0 10px;
+		color: #7dd3fc;
+		font-size: 13px;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.impact-part {
+		margin-top: 8px;
+		padding: 10px 10px 6px;
+		background: rgb(15 23 42 / 45%);
+		border: 1px solid rgb(148 163 184 / 16%);
+		border-left: 3px solid #fbbf24;
+		border-radius: 6px;
+	}
+
+	.impact-part.people {
+		border-left-color: #a78bfa;
+	}
+
+	.impact-part h5 {
+		margin: 0 0 8px;
+		color: #fcd34d;
+		font-size: 13px;
+		font-weight: 700;
+	}
+
+	.impact-part.people h5 {
+		color: #c4b5fd;
+	}
+
+	:global(body.light) .impact-category {
+		background: rgb(2 132 199 / 5%);
+		border-color: rgb(3 105 161 / 28%);
+	}
+
+	:global(body.light) .impact-title {
+		color: #0369a1;
+	}
+
+	:global(body.light) .impact-part {
+		background: rgb(255 255 255 / 70%);
+		border-left-color: #ca8a04;
+	}
+
+	:global(body.light) .impact-part.people {
+		border-left-color: #7c3aed;
+	}
+
+	:global(body.light) .impact-part h5 {
+		color: #a16207;
+	}
+
+	:global(body.light) .impact-part.people h5 {
+		color: #6d28d9;
+	}
+
 	.distribution-block {
 		margin: 8px 0 6px;
 		padding: 10px 10px 4px;

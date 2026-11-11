@@ -21,8 +21,9 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 					other,
 					existence,
 					originality,
-					impact
-				) VALUES ($1, $2, $3, $4, $5, $6, $7)
+					impact,
+					people_impacted
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 				RETURNING id`,
 				[
 					convertToPg(evolution.name),
@@ -31,7 +32,8 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 					convertToPgNullable(evolution.other),
 					convertToPg(evolution.existence),
 					evolution.originality,
-					convertToPg(evolution.impact)
+					convertToPg(evolution.impact),
+					convertToPg(evolution.people_impacted)
 				]
 			);
 			const id = factRes.rows[0].id;
@@ -62,7 +64,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 	async get_all(): Promise<EvolutionData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact, to_jsonb(f.people_impacted) AS people_impacted,
 				ev.evolution, ev.unit
 			FROM evolutions ev
 			JOIN events e ON ev.id = e.id
@@ -78,6 +80,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 			existence: row.existence,
 			originality: Number(row.originality),
 			impact: row.impact,
+			people_impacted: row.people_impacted,
 			evolution: row.evolution,
 			unit: row.unit
 		}));

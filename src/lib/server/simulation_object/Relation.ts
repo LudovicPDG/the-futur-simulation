@@ -297,8 +297,9 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				existence,
 				originality,
 				impact,
+				people_impacted,
 				symmetric_connexions
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
 			[
 				convertToPg(relation.name),
 				convertToPg(relation.description),
@@ -311,6 +312,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				convertToPg(relation.existence),
 				relation.originality,
 				convertToPg(relation.impact),
+				convertToPg(relation.people_impacted),
 				JSON.stringify(relation.symmetric_value_to_modify ?? [])
 			]
 		);
@@ -323,7 +325,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				to_jsonb(element1_element2_connexions) AS element1_connexions_json,
 				to_jsonb(element2_element1_connexions) AS element2_connexions_json,
 					to_jsonb(existence) AS existence_json,
-					to_jsonb(impact) AS impact_json
+					to_jsonb(impact) AS impact_json,
+					to_jsonb(people_impacted) AS people_impacted_json
 			FROM relations
 		`);
 
@@ -341,7 +344,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			element2_element1_value_to_modify: mapDatabaseConnexions(row.element2_connexions_json, true),
 			existence: row.existence_json,
 			originality: Number(row.originality),
-			impact: row.impact_json
+			impact: row.impact_json,
+			people_impacted: row.people_impacted_json
 		}));
 	}
 
