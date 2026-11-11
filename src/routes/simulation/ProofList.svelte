@@ -262,8 +262,8 @@
 									<span class="changed-tag" title={m.proof_edit_changed_hint()}>{m.proof_edit_changed()}</span>
 								{/if}
 							</span>
-							{#if field.evolution && proof.value_name === 'existence'}
-								<!-- A proof of the existence: shown like the existence itself, as a percentage. -->
+							{#if field.evolution && (proof.value_name === 'existence' || proof.value_name === 'impact')}
+								<!-- A proof of the existence or of the impact: shown like the existence itself, as a percentage. -->
 								<DatedValue
 									evolution={field.evolution.evolution}
 									unit={field.evolution.unit}

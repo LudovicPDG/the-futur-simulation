@@ -31,7 +31,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 					convertToPgNullable(evolution.other),
 					convertToPg(evolution.existence),
 					evolution.originality,
-					evolution.impact
+					convertToPg(evolution.impact)
 				]
 			);
 			const id = factRes.rows[0].id;
@@ -62,7 +62,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 	async get_all(): Promise<EvolutionData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, f.impact,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact,
 				ev.evolution, ev.unit
 			FROM evolutions ev
 			JOIN events e ON ev.id = e.id
@@ -77,7 +77,7 @@ export class EvolutionServer extends BaseSimulationObject<EvolutionData> {
 			other: row.other,
 			existence: row.existence,
 			originality: Number(row.originality),
-			impact: Number(row.impact),
+			impact: row.impact,
 			evolution: row.evolution,
 			unit: row.unit
 		}));

@@ -596,9 +596,7 @@
 	});
 	const activeParameters = $derived(
 		activeElement
-			? Object.entries(activeElement as Record<string, unknown>).filter(([key]) =>
-					['originality', 'impact'].includes(key)
-				)
+			? Object.entries(activeElement as Record<string, unknown>).filter(([key]) => key === 'originality')
 			: []
 	);
 	// Probability that the element exists (or that the event occurs), titled after its type
@@ -632,6 +630,10 @@
 					originality: activeRelation ? Number(activeRelation.originality) : undefined
 				})
 			: []
+	);
+	// The impact of the element (of the relation) is a function of the time, like its existence.
+	const activeImpact = $derived(
+		activeElement ? parseEvolutionValue((activeElement as Record<string, unknown>).impact) : null
 	);
 	const activeOther = $derived(
 		activeElement && Array.isArray((activeElement as Record<string, unknown>).other)
@@ -1051,7 +1053,7 @@
 					</button>
 				</section>
 			{/if}
-			{#if activeParameters.length > 0 || activeExistence}
+			{#if activeParameters.length > 0 || activeExistence || activeImpact}
 				<section class="parameter-details">
 					<h3>{m.simulation_section_global_parameters()}</h3>
 					{#if activeExistence}
@@ -1066,6 +1068,19 @@
 						</div>
 						{@const existenceInfluence = valueInfluence('existence', false)}
 						{#if existenceInfluence}<ValueParameters info={existenceInfluence} format={formatValue} />{/if}
+					{/if}
+					{#if activeImpact}
+						<div class="distribution-block">
+							<h4>{m.simulation_field_impact()}</h4>
+							<DatedValue
+								evolution={activeImpact.evolution}
+								unit={activeImpact.unit}
+								{year}
+								bounds={[0, 100]}
+							/>
+						</div>
+						{@const impactInfluence = valueInfluence('impact', false)}
+						{#if impactInfluence}<ValueParameters info={impactInfluence} format={formatValue} />{/if}
 					{/if}
 					<dl>
 						{#each activeParameters as [key, value]}

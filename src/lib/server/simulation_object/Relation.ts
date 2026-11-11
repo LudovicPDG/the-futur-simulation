@@ -310,7 +310,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				convertToPg((relation.element2_element1_value_to_modify || []).map((c) => toPgConnexion(c, true))),
 				convertToPg(relation.existence),
 				relation.originality,
-				relation.impact,
+				convertToPg(relation.impact),
 				JSON.stringify(relation.symmetric_value_to_modify ?? [])
 			]
 		);
@@ -322,7 +322,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			SELECT relations.*,
 				to_jsonb(element1_element2_connexions) AS element1_connexions_json,
 				to_jsonb(element2_element1_connexions) AS element2_connexions_json,
-					to_jsonb(existence) AS existence_json
+					to_jsonb(existence) AS existence_json,
+					to_jsonb(impact) AS impact_json
 			FROM relations
 		`);
 
@@ -340,7 +341,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			element2_element1_value_to_modify: mapDatabaseConnexions(row.element2_connexions_json, true),
 			existence: row.existence_json,
 			originality: Number(row.originality),
-			impact: Number(row.impact)
+			impact: row.impact_json
 		}));
 	}
 

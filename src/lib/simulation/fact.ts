@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TranslationSchema } from './Translation';
-import { existenceSchema } from './Existence';
+import { existenceSchema, impactSchema } from './Existence';
 
 export const OtherValueSchema = z.object({
 	name: TranslationSchema.describe('The name of one other data of the fact'),
@@ -46,13 +46,7 @@ export const FactSchema = z.object({
 			'Originality of the fact compared with other facts, as a percentage from 0 to 100 (NOT a ratio between 0 and 1): 0 = a copy of something that already exists, 50 = moderately original, 100 = completely new. Use the whole scale, e.g. 35 or 80, never 0.35 or 0.8. It avoids that people spam the same thing and increase the probability of certain things.'
 		),
 
-	impact: z
-		.number()
-		.min(0)
-		.max(100)
-		.describe(
-			'Impact of the fact on the simulation, as a number from 0 (no effect on the world) to 100 (it changes the whole world). Use the whole scale, e.g. 35 or 80.'
-		)
+	impact: impactSchema('fact')
 });
 
 export type FactData = z.infer<typeof FactSchema>;

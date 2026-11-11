@@ -11,6 +11,7 @@ export const db = new Pool({
 });
 
 const DEFAULT_EXISTENCE = `ROW('[{"function":"100","weight":1,"uncertainty_down":"0","uncertainty_up":"0"}]'::jsonb, '%')::evolution_t`;
+const DEFAULT_IMPACT = `ROW('[{"function":"50","weight":1,"uncertainty_down":"0","uncertainty_up":"0"}]'::jsonb, '%')::evolution_t`;
 const DEFAULT_ZERO_EVOLUTION = `ROW('[{"function":"0","weight":1,"uncertainty_down":"0","uncertainty_up":"0"}]'::jsonb, '')::evolution_t`;
 
 /**
@@ -95,7 +96,7 @@ export async function createDatabase() {
 				other other_fact_t[],
 				existence evolution_t NOT NULL DEFAULT ${DEFAULT_EXISTENCE},
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100),
-				impact NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (impact >= 0 AND impact <= 100)
+				impact evolution_t NOT NULL DEFAULT ${DEFAULT_IMPACT}
 			);
 		`);
 
@@ -116,7 +117,7 @@ export async function createDatabase() {
 				element2_element1_connexions relation_connexion_t[] NOT NULL DEFAULT '{}',
 				existence evolution_t NOT NULL DEFAULT ${DEFAULT_EXISTENCE},
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100),
-				impact NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (impact >= 0 AND impact <= 100)
+				impact evolution_t NOT NULL DEFAULT ${DEFAULT_IMPACT}
 			);
 
 			CREATE TABLE proof_relations (

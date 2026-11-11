@@ -31,7 +31,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 					convertToPgNullable(organization.other),
 					convertToPg(organization.existence),
 					organization.originality,
-					organization.impact
+					convertToPg(organization.impact)
 				]
 			);
 			const id = factRes.rows[0].id;
@@ -68,7 +68,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 	async get_all(): Promise<OrganizationData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, f.impact,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact,
 				to_jsonb(c.financial_resource) AS financial_resource, to_jsonb(c.power) AS power,
 				to_jsonb(o.human_resource) AS human_resource
 			FROM organizations o
@@ -85,7 +85,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 			other: row.other,
 			existence: row.existence,
 			originality: Number(row.originality),
-			impact: Number(row.impact),
+			impact: row.impact,
 			financial_resource: row.financial_resource,
 			power: row.power || [],
 			human_resource: row.human_resource

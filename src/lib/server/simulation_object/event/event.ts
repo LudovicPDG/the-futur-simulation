@@ -31,7 +31,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 					convertToPgNullable(event.other),
 					convertToPg(event.existence),
 					event.originality,
-					event.impact
+					convertToPg(event.impact)
 				]
 			);
 			const id = factRes.rows[0].id;
@@ -52,7 +52,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 	async get_all(): Promise<EventData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, f.impact
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact
 			FROM events e
 			JOIN facts f ON e.id = f.id
 			WHERE lower(f.type) = 'event'
@@ -66,7 +66,7 @@ export class EventServer extends BaseSimulationObject<EventData> {
 			other: row.other,
 			existence: row.existence,
 			originality: Number(row.originality),
-			impact: Number(row.impact)
+			impact: row.impact
 		}));
 	}
 

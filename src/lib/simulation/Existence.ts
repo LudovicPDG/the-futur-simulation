@@ -24,6 +24,13 @@ export function existenceSchema(subject: string, details = '') {
 	);
 }
 
+/** Evolution, in percent over time, of the impact of the given kind of element (a function of the time, not a single number). */
+export function impactSchema(subject: string) {
+	return PercentageEvolutionSchema.describe(
+		`Evolution of the impact of the ${subject} on the simulation, in percent (0 to 100), over time: 0 = no effect on the world, 100 = it changes the whole world. The impact is a function of the time: it can be low before the ${subject} is known, grow as it spreads, and fade away later. Use the whole scale, e.g. 35 or 80. Give the moments as precisely as possible, converted to decimal years.`
+	);
+}
+
 /** Evolution, in percent over time, of the existence of the given event (the event takes place while it exists). */
 export function occurrenceSchema(subject: string, details = '') {
 	return existenceSchema(

@@ -31,7 +31,7 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 					convertToPgNullable(action.other),
 					convertToPg(action.existence),
 					action.originality,
-					action.impact
+					convertToPg(action.impact)
 				]
 			);
 			const id = factRes.rows[0].id;
@@ -71,7 +71,7 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 	async get_all(): Promise<ActionData[]> {
 		const result = await db.query(`
 			SELECT 
-				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, f.impact,
+				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact,
 				to_jsonb(a.material_resource_used) AS material_resource_used, to_jsonb(a.material_resource_necessary) AS material_resource_necessary,
 				to_jsonb(a.fund_used) AS fund_used, to_jsonb(a.fund_necessary) AS fund_necessary,
 				to_jsonb(a.human_mobilized) AS human_mobilized, to_jsonb(a.human_necessary) AS human_necessary
@@ -87,7 +87,7 @@ export class ActionServer extends BaseSimulationObject<ActionData> {
 			other: row.other,
 			existence: row.existence,
 			originality: Number(row.originality),
-			impact: Number(row.impact),
+			impact: row.impact,
 			material_resource_used: row.material_resource_used || [],
 			material_resource_necessary: row.material_resource_necessary || [],
 			fund_used: row.fund_used,
