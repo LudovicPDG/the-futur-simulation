@@ -43,9 +43,17 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 				`INSERT INTO characters (
 					id,
 					financial_resource,
-					power
-				) VALUES ($1, $2, $3)`,
-				[id, convertToPg(organization.financial_resource), convertToPg(organization.power)]
+					power,
+					willing,
+					satisfaction
+				) VALUES ($1, $2, $3, $4, $5)`,
+				[
+					id,
+					convertToPg(organization.financial_resource),
+					convertToPg(organization.power),
+					convertToPg(organization.willing),
+					convertToPg(organization.average_satisfaction)
+				]
 			);
 
 			// 3. Insert into organizations
@@ -71,7 +79,7 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 		const result = await db.query(`
 			SELECT 
 				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact, to_jsonb(f.people_impacted) AS people_impacted,
-				to_jsonb(c.financial_resource) AS financial_resource, to_jsonb(c.power) AS power,
+				to_jsonb(c.financial_resource) AS financial_resource, to_jsonb(c.power) AS power, to_jsonb(c.willing) AS willing, to_jsonb(c.satisfaction) AS satisfaction,
 				to_jsonb(o.human_resource) AS human_resource
 			FROM organizations o
 			JOIN characters c ON o.id = c.id
@@ -91,6 +99,8 @@ export class OrganizationServer extends BaseSimulationObject<OrganizationData> {
 			people_impacted: row.people_impacted,
 			financial_resource: row.financial_resource,
 			power: row.power || [],
+			willing: row.willing || [],
+			average_satisfaction: row.satisfaction,
 			human_resource: row.human_resource
 		}));
 	}

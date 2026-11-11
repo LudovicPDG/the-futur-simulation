@@ -2,14 +2,15 @@ import { z } from 'zod';
 import { EvolutionTypeSchema } from '../event/Evolution';
 import { CharacterSchema, character_svg_shape } from './Character';
 import type { SvgShapeOptions } from '../fact';
-import { existenceSchema } from '../Existence';
+import { existenceSchema, satisfactionSchema } from '../Existence';
 
-export const OrganizationSchema = CharacterSchema.extend({
+export const OrganizationSchema = CharacterSchema.omit({ satisfaction: true }).extend({
 	type: z.literal('organization').default('organization').describe('The type of organization'),
 	existence: existenceSchema(
 		'organization',
 		'The existence starts at the CREATION of the organization (legal foundation, official birth) and ends at its DISSOLUTION (closure, bankruptcy, merger, collapse); if it is not planned, make the end a slow decline, or keep the probability high for an organization that may never be dissolved.'
 	),
+	average_satisfaction: satisfactionSchema(true),
 	human_resource: EvolutionTypeSchema.describe('Number of human that are in this organization')
 });
 

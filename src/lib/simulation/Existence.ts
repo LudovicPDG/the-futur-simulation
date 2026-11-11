@@ -47,6 +47,20 @@ export function peopleImpactedSchema(subject: string) {
 		);
 }
 
+/**
+ * Evolution of the satisfaction of a character, from 0 to 100, over time. For a character made of other characters
+ * (an organization, an interest group) it is the AVERAGE satisfaction of its members.
+ */
+export function satisfactionSchema(average: boolean) {
+	const rule =
+		'It depends on the REALIZATION of the willings of the character: 100 when ALL its willings are realized, 0 when NONE of them is, 50 when half of them are, and so on (a willing that is only partly realized counts for its part). The genie judges SUBJECTIVELY how far each willing is realized at each date, weighing the willings by their importance for the character, and the curve follows it over time: it goes up when a willing gets realized, down when it is blocked or lost.';
+	return PercentageEvolutionSchema.describe(
+		average
+			? `Evolution of the AVERAGE satisfaction of the members of this character, in percent (0 to 100), over time. It is an average over its members (not a sum). ${rule} For a group, the willings are the ones shared by its members.`
+			: `Evolution of the satisfaction of this character, in percent (0 to 100), over time. ${rule}`
+	);
+}
+
 /** Evolution, in percent over time, of the existence of the given event (the event takes place while it exists). */
 export function occurrenceSchema(subject: string, details = '') {
 	return existenceSchema(

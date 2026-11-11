@@ -352,7 +352,8 @@
 	const ACCENTS: Record<string, { dark: string; light: string }> = {
 		financial_resource: { dark: '#fbbf24', light: '#a16207' },
 		human_resource: { dark: '#38bdf8', light: '#0369a1' },
-		satisfaction: { dark: '#f472b6', light: '#be185d' }
+		satisfaction: { dark: '#f472b6', light: '#be185d' },
+		average_satisfaction: { dark: '#f472b6', light: '#be185d' }
 	};
 
 	function formatLabel(value: string): string {
@@ -397,7 +398,10 @@
 			source_property: m.simulation_field_source_property,
 			target_property: m.simulation_field_target_property,
 			impact: m.simulation_field_average_impact,
-			people_impacted: m.simulation_field_people_impacted
+			people_impacted: m.simulation_field_people_impacted,
+			satisfaction: m.simulation_field_satisfaction,
+			average_satisfaction: m.simulation_field_average_satisfaction,
+			willing: m.simulation_field_willing
 		};
 
 		return (
@@ -581,8 +585,8 @@
 	);
 	// The lists an element of each type has: shown even when empty, so that a value can be added to them
 	const LISTS_OF_TYPE: Record<string, string[]> = {
-		person: ['power'],
-		organization: ['power'],
+		person: ['power', 'willing'],
+		organization: ['power', 'willing'],
 		interest_group: ['power', 'willing'],
 		material_resource: ['power'],
 		ranking: ['rankings']

@@ -13,6 +13,7 @@ export const db = new Pool({
 const DEFAULT_EXISTENCE = `ROW('[{"function":"100","weight":1,"uncertainty_down":"0","uncertainty_up":"0"}]'::jsonb, '%')::evolution_t`;
 const DEFAULT_IMPACT = `ROW('[{"function":"50","weight":1,"uncertainty_down":"0","uncertainty_up":"0"}]'::jsonb, '%')::evolution_t`;
 const DEFAULT_PEOPLE = `ROW('[{"function":"0","weight":1,"uncertainty_down":"0","uncertainty_up":"0"}]'::jsonb, 'people')::evolution_t`;
+const DEFAULT_SATISFACTION = `ROW('[{"function":"50","weight":1,"uncertainty_down":"0","uncertainty_up":"0"}]'::jsonb, '%')::evolution_t`;
 const DEFAULT_ZERO_EVOLUTION = `ROW('[{"function":"0","weight":1,"uncertainty_down":"0","uncertainty_up":"0"}]'::jsonb, '')::evolution_t`;
 
 /**
@@ -178,7 +179,10 @@ export async function createDatabase() {
 			CREATE TABLE characters (
 				id UUID PRIMARY KEY DEFAULT gen_random_uuid() REFERENCES facts(id) ON DELETE CASCADE,
 				financial_resource evolution_t NOT NULL,
-				power titled_item_t[] NOT NULL DEFAULT '{}'
+				power titled_item_t[] NOT NULL DEFAULT '{}',
+				-- Ce que le personnage veut, et sa satisfaction (de 0 à 100, moyenne des membres pour une organisation / un groupe)
+				willing titled_item_t[] NOT NULL DEFAULT '{}',
+				satisfaction evolution_t NOT NULL DEFAULT ${DEFAULT_SATISFACTION}
 			);
 
 			-- persons hérite de characters
@@ -192,11 +196,9 @@ export async function createDatabase() {
 				human_resource evolution_t NOT NULL
 			);
 
-			-- interest_groups hérite de organizations (+ willing, satisfaction)
+			-- interest_groups hérite de organizations
 			CREATE TABLE interest_groups (
-				id UUID PRIMARY KEY DEFAULT gen_random_uuid() REFERENCES organizations(id) ON DELETE CASCADE,
-				willing titled_item_t[] NOT NULL DEFAULT '{}',
-				satisfaction evolution_t NOT NULL
+				id UUID PRIMARY KEY DEFAULT gen_random_uuid() REFERENCES organizations(id) ON DELETE CASCADE
 			);
 		`);
 

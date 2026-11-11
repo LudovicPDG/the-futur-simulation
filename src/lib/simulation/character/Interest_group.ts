@@ -1,7 +1,5 @@
 import { OrganizationSchema } from './Organization';
 import { z } from 'zod';
-import { EvolutionTypeSchema } from '../event/Evolution';
-import { TitledItemSchema } from '../Translation';
 import { character_svg_shape } from './Character';
 import type { SvgShapeOptions } from '../fact';
 import { existenceSchema } from '../Existence';
@@ -14,12 +12,6 @@ export const InterestGroupSchema = OrganizationSchema.extend({
 	existence: existenceSchema(
 		'interest group',
 		'The existence starts at its EMERGENCE (the moment when this shared interest became a visible, identifiable movement: a founding event, a first manifestation, a publication) and ends at its DISAPPEARANCE (goal reached, dissolution, loss of all its supporters); if it is not foreseeable, make the end a slow decline.'
-	),
-	willing: z
-		.array(TitledItemSchema)
-		.describe('list of what this person is willing to do, each willingness having its own title'),
-	satisfaction: EvolutionTypeSchema.describe(
-		'Satisfaction of the person, based on the realization or no of this willing.'
 	)
 });
 

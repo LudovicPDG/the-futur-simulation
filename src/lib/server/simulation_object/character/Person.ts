@@ -43,9 +43,17 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 				`INSERT INTO characters (
 					id,
 					financial_resource,
-					power
-				) VALUES ($1, $2, $3)`,
-				[id, convertToPg(person.financial_resource), convertToPg(person.power)]
+					power,
+					willing,
+					satisfaction
+				) VALUES ($1, $2, $3, $4, $5)`,
+				[
+					id,
+					convertToPg(person.financial_resource),
+					convertToPg(person.power),
+					convertToPg(person.willing),
+					convertToPg(person.satisfaction)
+				]
 			);
 
 			// 3. Insert into persons
@@ -65,7 +73,7 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 		const result = await db.query(`
 			SELECT 
 				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact, to_jsonb(f.people_impacted) AS people_impacted,
-				to_jsonb(c.financial_resource) AS financial_resource, to_jsonb(c.power) AS power
+				to_jsonb(c.financial_resource) AS financial_resource, to_jsonb(c.power) AS power, to_jsonb(c.willing) AS willing, to_jsonb(c.satisfaction) AS satisfaction
 			FROM persons p
 			JOIN characters c ON p.id = c.id
 			JOIN facts f ON c.id = f.id
@@ -82,7 +90,9 @@ export class PersonServer extends BaseSimulationObject<PersonData> {
 			impact: row.impact,
 			people_impacted: row.people_impacted,
 			financial_resource: row.financial_resource,
-			power: row.power || []
+			power: row.power || [],
+			willing: row.willing || [],
+			satisfaction: row.satisfaction
 		}));
 	}
 

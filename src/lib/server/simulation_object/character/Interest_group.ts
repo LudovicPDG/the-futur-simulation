@@ -46,9 +46,17 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 				`INSERT INTO characters (
 					id,
 					financial_resource,
-					power
-				) VALUES ($1, $2, $3)`,
-				[id, convertToPg(group.financial_resource), convertToPg(group.power)]
+					power,
+					willing,
+					satisfaction
+				) VALUES ($1, $2, $3, $4, $5)`,
+				[
+					id,
+					convertToPg(group.financial_resource),
+					convertToPg(group.power),
+					convertToPg(group.willing),
+					convertToPg(group.average_satisfaction)
+				]
 			);
 
 			// 3. Insert into organizations
@@ -61,14 +69,7 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 			);
 
 			// 4. Insert into interest_groups
-			await client.query(
-				`INSERT INTO interest_groups (
-					id,
-					willing,
-					satisfaction
-				) VALUES ($1, $2, $3)`,
-				[id, convertToPg(group.willing), convertToPg(group.satisfaction)]
-			);
+			await client.query(`INSERT INTO interest_groups (id) VALUES ($1)`, [id]);
 
 			await client.query('COMMIT');
 			return id;
@@ -84,9 +85,8 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 		const result = await db.query(`
 			SELECT 
 				f.id, f.type, f.name, f.description, to_jsonb(f.other) AS other, to_jsonb(f.existence) AS existence, f.originality, to_jsonb(f.impact) AS impact, to_jsonb(f.people_impacted) AS people_impacted,
-				to_jsonb(c.financial_resource) AS financial_resource, to_jsonb(c.power) AS power,
-				to_jsonb(o.human_resource) AS human_resource,
-				to_jsonb(ig.willing) AS willing, to_jsonb(ig.satisfaction) AS satisfaction
+				to_jsonb(c.financial_resource) AS financial_resource, to_jsonb(c.power) AS power, to_jsonb(c.willing) AS willing, to_jsonb(c.satisfaction) AS satisfaction,
+				to_jsonb(o.human_resource) AS human_resource
 			FROM interest_groups ig
 			JOIN organizations o ON ig.id = o.id
 			JOIN characters c ON o.id = c.id
@@ -105,9 +105,9 @@ export class InterestGroupServer extends BaseSimulationObject<InterestGroupData>
 			people_impacted: row.people_impacted,
 			financial_resource: row.financial_resource,
 			power: row.power || [],
-			human_resource: row.human_resource,
 			willing: row.willing || [],
-			satisfaction: row.satisfaction
+			average_satisfaction: row.satisfaction,
+			human_resource: row.human_resource,
 		}));
 	}
 

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { FactSchema, type SvgShapeOptions } from '../fact';
 import { EvolutionTypeSchema } from '../event/Evolution';
 import { TitledItemSchema } from '../Translation';
+import { satisfactionSchema } from '../Existence';
 
 export const CharacterSchema = FactSchema.extend({
 	type: z.string().default('character').describe('The type of character'),
@@ -16,13 +17,19 @@ export const CharacterSchema = FactSchema.extend({
 	),
 	power: z
 		.array(TitledItemSchema)
-		.describe('list of what this character can do, each capability having its own title')
+		.describe('list of what this character can do, each capability having its own title'),
+	willing: z
+		.array(TitledItemSchema)
+		.describe(
+			'list of what this character is willing to do or to obtain, each willingness having its own title (e.g. to live, to be free, to earn more). Its satisfaction is the share of these willings that are realized, so list the real, distinct goals of the character, each one something that can be realized or not.'
+		),
+	satisfaction: satisfactionSchema(false)
 });
 
 export type CharacterData = z.infer<typeof CharacterSchema>;
 
 export function character_svg_shape(
-	character: CharacterData,
+	character: Pick<CharacterData, 'name' | 'type'>,
 	options: SvgShapeOptions = {},
 	symbolSvg: string = ''
 ): string {

@@ -35,7 +35,7 @@ const LISTS = {
 			'one new capability: a short title (different from the existing ones) and its description'
 	},
 	willing: {
-		tables: ['interest_groups'],
+		tables: ['characters'],
 		type: 'titled_item_t',
 		schema: TitledItemSchema,
 		description:
