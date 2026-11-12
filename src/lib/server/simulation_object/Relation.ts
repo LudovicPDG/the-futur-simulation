@@ -131,6 +131,11 @@ const asymmetricPairs = (relation: Partial<RelationData>) =>
 const symmetricPairs = (relation: Partial<RelationData>) =>
 	(relation.symmetric_value_to_modify ?? []).map(pairKey);
 
+/** What the genie must know about satisfaction when it creates a relation. */
+const SATISFACTION_HINT = `
+
+SATISFACTION: the satisfaction of a character ("satisfaction" for a person, "average_satisfaction" for an organization or an interest group, from 0 to 100) is something important in the simulation: it is the share of the willings of the character that are realized. When it is interesting, link it: for example an event, an action, a resource, a capability or the existence of an element that realizes or blocks a willing of a character raises or lowers its satisfaction, and the satisfaction of a person can follow the average satisfaction of the organization or the group they belong to (and the other way round). Do not force it: only make a satisfaction link when it really exists between these two elements, and use the real mechanism for the estimate (for example a points estimate).`;
+
 /** The tables that hold the values of each type of fact, merged with the facts table into one element. */
 const FACT_TYPE_TABLES = [
 	'characters',
@@ -178,7 +183,10 @@ async function loadElements(ids?: string[]) {
 	);
 	return result.rows.map((row) => {
 		const kinds: Record<string, PropertyKind> = {};
-		for (const [key, value] of Object.entries(row.element as Record<string, unknown>)) {
+		// The satisfaction of an organization or of an interest group is an AVERAGE over its members: it is named so.
+		const averaged = row.type === 'organization' || row.type === 'interest_group';
+		for (const [rawKey, value] of Object.entries(row.element as Record<string, unknown>)) {
+			const key = averaged && rawKey === 'satisfaction' ? 'average_satisfaction' : rawKey;
 			const kind = NOT_LINKABLE.has(key) ? undefined : linkableKind(key, value);
 			if (kind) kinds[key] = kind;
 		}
@@ -217,7 +225,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		const endpoints = await this.generateWithSchema(
 			model_name,
 			level_of_reasoning,
-			`${prompt}\n\nSelect two distinct existing simulation elements for this relation. Use their exact IDs and types. Available property names are included for each element:\n${JSON.stringify(elements)}`,
+			`${prompt}\n\nSelect two distinct existing simulation elements for this relation. Use their exact IDs and types. Available property names are included for each element. Think about the satisfaction of the characters too: choose two elements whose link goes through a satisfaction when that is the interesting relation.${SATISFACTION_HINT}\n${JSON.stringify(elements)}`,
 			z.object({
 				Element1ID: z.uuid(),
 				Element1Type: RelationElementTypeSchema,
@@ -256,7 +264,7 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 		const generated = await this.generateWithSchema(
 			model_name,
 			level_of_reasoning,
-			`${prompt}\n\nCreate the relation between these already-selected elements. Do not change their IDs or types.\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nelement1_element2_value_to_modify lists the existing values of element 2 that element 1 modifies: Element1Property is selected from element 1 properties and Element2Property from element 2 properties; impact is the strength of that property-to-property relation. For the element2_element1_* fields, reverse those choices. The symmetric_* fields have the same format as the element1_element2_* ones, but describe an effect that works identically in BOTH directions (element 1 on element 2 and element 2 on element 1): put there only what is really mutual, and put in the element1_element2_* / element2_element1_* fields only what is one-way (asymmetric). Never repeat an entry in both. ESTIMATE: for each entry, "estimate" says how the value of the source property gives an estimate of the value of the target property (the source is Element1Property for element1_element2_* and Element2Property for element2_element1_*; the symmetric_* entries are one link read in both directions). Choose the kind that fits the real mechanism: proportional (parameter = factor), additive (parameter = offset), inverse (parameter = constant), or points (at least two {source_value, estimated_value} points, for any other shape). The estimate is what the target value should be according to this relation alone, so where the two values are already consistent it must give the current target value. Use the units of the properties. A relation only links NUMBERS, FUNCTIONS (evolutions, probabilities, resources...) and BOOLEANS: never link a text or a list. An entry that links a text makes the whole relation impossible. Use numeric properties (for example the start or end probability of an event, or a financial resource).`,
+			`${prompt}\n\nCreate the relation between these already-selected elements. Do not change their IDs or types.\nElement 1: ${JSON.stringify(element1)}\nElement 2: ${JSON.stringify(element2)}\n\nelement1_element2_value_to_modify lists the existing values of element 2 that element 1 modifies: Element1Property is selected from element 1 properties and Element2Property from element 2 properties; impact is the strength of that property-to-property relation. For the element2_element1_* fields, reverse those choices. The symmetric_* fields have the same format as the element1_element2_* ones, but describe an effect that works identically in BOTH directions (element 1 on element 2 and element 2 on element 1): put there only what is really mutual, and put in the element1_element2_* / element2_element1_* fields only what is one-way (asymmetric). Never repeat an entry in both. ESTIMATE: for each entry, "estimate" says how the value of the source property gives an estimate of the value of the target property (the source is Element1Property for element1_element2_* and Element2Property for element2_element1_*; the symmetric_* entries are one link read in both directions). Choose the kind that fits the real mechanism: proportional (parameter = factor), additive (parameter = offset), inverse (parameter = constant), or points (at least two {source_value, estimated_value} points, for any other shape). The estimate is what the target value should be according to this relation alone, so where the two values are already consistent it must give the current target value. Use the units of the properties. A relation only links NUMBERS, FUNCTIONS (evolutions, probabilities, resources...) and BOOLEANS: never link a text or a list. An entry that links a text makes the whole relation impossible. Use numeric properties (for example the start or end probability of an event, or a financial resource, or the satisfaction of a character).${SATISFACTION_HINT}`,
 			generatedSchema
 		);
 
