@@ -67,6 +67,19 @@ export type ScoreField = keyof typeof SCORE_COLUMNS;
 export const SCORE_FIELDS = Object.keys(SCORE_COLUMNS) as ScoreField[];
 
 /**
+ * The number of people impacted by a value: a curve of the time from 0 to +infinity, next to its (average) impact. Only
+ * a value that has an impact of its own has it: it is a part of the value, never a score of a proof.
+ */
+export const PEOPLE_IMPACTED_COLUMN = {
+	description:
+		'The NUMBER OF PEOPLE impacted by this value at this date, from 0 to +infinity (no maximum): a count of people (e.g. 250 or 12000000), not a percentage. It is independent of the average impact on each of them.',
+	min: 0
+} satisfies CurveColumns[string];
+
+/** The scores of a value: the ones of a proof and the number of people impacted. */
+export const VALUE_SCORE_FIELDS: string[] = [...SCORE_FIELDS, 'people_impacted'];
+
+/**
  * The scores the genie draws as curves of the time. The originality is not one of them: it is a single number (not a
  * function), given by the genie after it compared the proof or the value with all the others.
  */
@@ -78,16 +91,17 @@ export const CURVE_SCORE_COLUMNS = {
 
 /**
  * The curves of a value given as points: the value and its uncertainty above and below for an evolution (it has no
- * general uncertainty), then its scores, the impact only for a value that has its own. The originality is never a
+ * general uncertainty), then its scores, with its impact (every value has one). The originality is never a
  * curve (see CURVE_SCORE_COLUMNS).
  */
 export function valueColumns(evolution: boolean, scored: boolean): CurveColumns {
 	const columns: CurveColumns = evolution ? evolutionColumns() : {};
 	for (const field of Object.keys(CURVE_SCORE_COLUMNS) as (keyof typeof CURVE_SCORE_COLUMNS)[]) {
 		if (evolution && field === 'uncertainty') continue;
-		if (!scored && field === 'impact') continue;
 		columns[field] = SCORE_COLUMNS[field];
 	}
+	// Every value has an impact of its own: its average impact and the number of people it impacts.
+	columns.people_impacted = PEOPLE_IMPACTED_COLUMN;
 	return columns;
 }
 
@@ -99,6 +113,7 @@ export const CURVE_FIELDS: Record<string, string> = {
 	veracity: 'veracity',
 	uncertainty: 'uncertainty',
 	impact: 'impact',
+	people_impacted: 'people_impacted',
 	originality: 'originality'
 };
 
@@ -114,6 +129,8 @@ export const ValueEditSchema = z.object({
 	veracity: StoredScoreSchema,
 	uncertainty: StoredScoreSchema,
 	impact: StoredScoreSchema,
+	/** The number of people impacted, a function of the time from 0 to +infinity (only for a value with its own impact). */
+	people_impacted: StoredScoreSchema.optional(),
 	originality: StoredScoreSchema
 });
 
@@ -137,7 +154,7 @@ export const ProofEditSchema = z.object({
  * The desired value of a value without an originality and an impact: a primary property of the element (name,
  * description, existence...) or a value of a relation (its originality and impact are the relation's).
  */
-export const PlainValueEditSchema = ValueEditSchema.omit({ impact: true, originality: true });
+export const PlainValueEditSchema = ValueEditSchema.omit({ impact: true, originality: true, people_impacted: true });
 
 export type ValueEdit = z.infer<typeof ValueEditSchema> | z.infer<typeof PlainValueEditSchema>;
 export type ProofEdit = z.infer<typeof ProofEditSchema>;

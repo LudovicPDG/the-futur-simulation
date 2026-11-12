@@ -1,7 +1,7 @@
 import { valueKind, type ProofData } from './Proof';
 import { isCounted, SCORE_THRESHOLD } from './CountThreshold';
 import { relationValueName, type RelationConnexionData } from './Relation';
-import { combineEvolution, scoreAt, toScoreFunction, type EvolutionComponent } from './event/EvolutionFunction';
+import { combineEvolution, countAt, scoreAt, toScoreFunction, type EvolutionComponent } from './event/EvolutionFunction';
 
 /**
  * The votes of the proofs. Every proof gives a desired value, but only the fields it really changed (its
@@ -29,7 +29,7 @@ export const PROOF_EDIT_FIELDS = [
 ] as const;
 
 /** The parts of a value of an element that its top-level proofs can change. */
-export const VALUE_EDIT_FIELDS = ['value', 'veracity', 'uncertainty', 'impact', 'originality'] as const;
+export const VALUE_EDIT_FIELDS = ['value', 'veracity', 'uncertainty', 'impact', 'people_impacted', 'originality'] as const;
 
 /**
  * The parts of an evolution that a proof changes on its own: the function and each side of its uncertainty. A proof
@@ -40,7 +40,7 @@ export type EvolutionPart = (typeof EVOLUTION_PARTS)[number];
 
 const SCORE_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impact', 'originality']);
 /** The scores that are functions of the time: all of them. */
-const SCORE_FUNCTION_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impact', 'originality']);
+const SCORE_FUNCTION_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impact', 'people_impacted', 'originality']);
 
 /** The scores of a proof at one moment. */
 type Scores = { veracity: number; uncertainty: number; impact: number; originality: number };
@@ -187,7 +187,9 @@ function scoresOf(proof: ProofData, t: number): Scores {
 /** The weighted average of one score at the moment t. */
 function averageScore(field: string, voters: Voter[], t: number): number | undefined {
 	if (!SCORE_FUNCTION_FIELDS.has(field)) return weightedAverage(voters);
-	return weightedAverage(voters.map((voter) => ({ ...voter, value: scoreAt(voter.value, t) })));
+	return weightedAverage(
+		voters.map((voter) => ({ ...voter, value: field === 'people_impacted' ? countAt(voter.value, t) : scoreAt(voter.value, t) }))
+	);
 }
 
 /** The fields the proof really changed. Without the information, all of them. */
@@ -263,6 +265,7 @@ export function resolveValue(proofs: ProofData[], t: number): {
 	veracity?: number;
 	uncertainty?: number;
 	impact?: number;
+	people_impacted?: number;
 	originality?: number;
 } {
 	// Oldest first: the founding proof is the status quo of a tie.
@@ -401,9 +404,11 @@ export function resolveValueFunctions(proofs: ProofData[]): {
 	veracity?: string;
 	uncertainty?: string;
 	impact?: string;
+	people_impacted?: string;
 	originality?: string;
 } {
 	const clamp = (expression: string) => `max(0, min(100, ${expression}))`;
+	const count = (expression: string) => `max(0, ${expression})`;
 	const ordered = [...proofs].reverse();
 	const result: Record<string, string> = {};
 	for (const field of SCORE_FUNCTION_FIELDS) {
@@ -425,7 +430,7 @@ export function resolveValueFunctions(proofs: ProofData[]): {
 			return `${veracity} * ${impact} * ${originality} * ((${veracity}) >= ${SCORE_THRESHOLD} and (${impact}) >= ${SCORE_THRESHOLD} and (${originality}) >= ${SCORE_THRESHOLD} ? 1 : 0)`;
 		});
 		result[field] = `(${scores
-			.map((score, index) => `(${weights[index]}) * ${clamp(score)}`)
+			.map((score, index) => `(${weights[index]}) * ${field === 'people_impacted' ? count(score) : clamp(score)}`)
 			.join(' + ')}) / (${weights.map((weight) => `(${weight})`).join(' + ')})`;
 	}
 	return result;

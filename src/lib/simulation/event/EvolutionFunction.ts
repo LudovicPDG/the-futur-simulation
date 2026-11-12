@@ -327,6 +327,16 @@ export function scoreAt(score: unknown, t: number): number {
 	}
 }
 
+/** The value of a function of the time that is a count (never negative, no maximum); NaN where it cannot be computed. */
+export function countAt(score: unknown, t: number): number {
+	try {
+		const value = evaluateCompiled(compile(toScoreFunction(score)), t);
+		return Number.isFinite(value) ? Math.max(0, value) : Number.NaN;
+	} catch {
+		return Number.NaN;
+	}
+}
+
 /** True when the expression gives different values over the next decades: a constant is not a function of the time. */
 export function dependsOnTime(expression: string): boolean {
 	try {

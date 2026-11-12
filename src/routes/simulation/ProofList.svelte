@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { ProofData } from '$lib/simulation/Proof';
 	import {
+		countAt,
 		parseEvolutionValue,
 		scoreAt,
 		toScoreFunction,
@@ -9,6 +10,7 @@
 	} from '$lib/simulation/event/EvolutionFunction';
 	import { addProofTarget, addRelationTarget, addValueTarget, debateTarget } from '$lib/stores/debate';
 	import * as m from '$lib/paraglide/messages';
+	import { getLocale } from '$lib/paraglide/runtime';
 	import { belowThreshold, SCORE_THRESHOLD, type CountedScore } from '$lib/simulation/CountThreshold';
 	import DatedValue from './DatedValue.svelte';
 	import ScoreFunction from './ScoreFunction.svelte';
@@ -79,11 +81,17 @@
 		['falsifiability_method', m.simulation_field_falsifiability_method, 'falsification']
 	];
 
+	/** A number of people, as a short number of the locale. */
+	function formatPeople(value: number): string {
+		return new Intl.NumberFormat(getLocale(), { maximumSignificantDigits: 4 }).format(value);
+	}
+
 	/** The scores a desired value gives, each shown as a gauge from 0 to 100. */
 	const SCORE_FIELDS: [string, () => string, (value: number) => string][] = [
 		['veracity', m.proof_veracity, (value) => `${Math.round(value)}%`],
 		['uncertainty', m.simulation_evolution_uncertainty, (value) => `±${Math.round(value)}%`],
 		['impact', m.simulation_field_impact, (value) => `${Math.round(value)}`],
+		['people_impacted', m.simulation_field_people_impacted, (value) => `${formatPeople(value)} ${m.simulation_people_unit()}`],
 		['originality', m.simulation_field_originality, (value) => `${Math.round(value)}%`]
 	];
 
@@ -192,10 +200,12 @@
 		const scores = SCORE_FIELDS.flatMap(([key, label, text]) => {
 			// An evolution has no general uncertainty: only the one above and below its function.
 			if (isEvolution && key === 'uncertainty') return [];
-			const value = scoreAt(desired[key], year);
-			if (desired[key] === null || !Number.isFinite(value)) return [];
+			const value = key === 'people_impacted' ? countAt(desired[key], year) : scoreAt(desired[key], year);
+			if (desired[key] === null || desired[key] === undefined || !Number.isFinite(value)) return [];
 			const fn = toScoreFunction(desired[key]);
-			return [{ key, label: label(), value, text: text(value), changed: changed(key), fn, range: rangeOf(key) }];
+			// The impact of a value is its AVERAGE impact, next to the number of people it impacts.
+			const title = key === 'impact' ? m.simulation_field_average_impact() : label();
+			return [{ key, label: title, value, text: text(value), changed: changed(key), fn, range: rangeOf(key) }];
 		});
 		return { compared, texts, sources, scores };
 	}
@@ -216,13 +226,15 @@
 					<dt>{score.label}</dt>
 					<dd>
 						<strong>{score.text}</strong>
-						<span class="gauge" aria-hidden="true">
-							<span style:width="{Math.min(100, Math.max(0, score.value))}%"></span>
-						</span>
+						{#if score.key !== 'people_impacted'}
+							<span class="gauge" aria-hidden="true">
+								<span style:width="{Math.min(100, Math.max(0, score.value))}%"></span>
+							</span>
+						{/if}
 					</dd>
 					<!-- The originality is a single number, not a function of the time. -->
 					{#if score.key !== 'originality'}
-						<ScoreFunction expression={score.fn} range={score.range} threshold={score.key === 'uncertainty' ? undefined : SCORE_THRESHOLD} />
+						<ScoreFunction expression={score.fn} range={score.range} fit={score.key === 'people_impacted'} unit={score.key === 'people_impacted' ? m.simulation_people_unit() : undefined} threshold={score.key === 'uncertainty' || score.key === 'people_impacted' ? undefined : SCORE_THRESHOLD} />
 					{/if}
 				</div>
 			{/each}
@@ -588,6 +600,10 @@
 
 	.score.impact {
 		--accent: #a78bfa;
+	}
+
+	.score.people_impacted {
+		--accent: #fbbf24;
 	}
 
 	.score.originality {

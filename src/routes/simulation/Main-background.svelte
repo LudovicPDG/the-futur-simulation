@@ -752,12 +752,15 @@
 
 		// Scores: the weighted average voted by the proofs of the value (the founding proof among them).
 		const voted = resolveValue(proofs, year);
-		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'originality'): number => voted[key] ?? NaN;
+		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'people_impacted' | 'originality'): number => voted[key] ?? NaN;
 		const veracityNow = score('veracity');
 		const uncertaintyNow = score('uncertainty');
 		const impactNow = score('impact');
+		const peopleNow = score('people_impacted');
 		// Only the values of an array and the values of a relation have an originality and an impact.
 		const hasValueScores = inArray || relationImpact !== undefined;
+		// Every value has an impact of its own, except the parameters of the element themselves.
+		const hasImpact = !nameKeys(name).some((key) => ['impact', 'people_impacted', 'originality'].includes(key));
 		// Originality: voted by the proofs of the value; the one of the relation for a value of a relation without one.
 		let originalityNow = NaN;
 		if (hasValueScores) {
@@ -774,9 +777,14 @@
 			impact:
 				relationImpact !== undefined
 					? formatValue(relationImpact)
-					: hasValueScores && Number.isFinite(impactNow)
+					: hasImpact && Number.isFinite(impactNow)
 						? `${Math.round(impactNow)}`
 						: null,
+			// The number of people impacted by the value (only for a value that has an impact of its own).
+			peopleImpacted:
+				hasImpact && Number.isFinite(peopleNow)
+					? `${new Intl.NumberFormat(getLocale(), { maximumSignificantDigits: 4 }).format(peopleNow)} ${m.simulation_people_unit()}`
+					: null,
 			originality: Number.isFinite(originalityNow) ? `${Math.round(originalityNow as number)}%` : null,
 			functions: {
 				...resolveValueFunctions(proofs),

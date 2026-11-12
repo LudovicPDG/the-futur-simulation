@@ -7,8 +7,11 @@
 		expression,
 		range,
 		threshold,
-		fit = false
+		fit = false,
+		unit
 	}: {
+		/** The unit of the axis when the score is not a percentage (a number of people). */
+		unit?: string;
 		/** True for a value that is not from 0 to 100 (the impact of a relation): the axis fits the curve. */
 		fit?: boolean;
 		expression: string;
@@ -31,7 +34,7 @@
 		<div class="score-chart">
 			<EvolutionChart
 				{evolution}
-				unit={fit ? '' : '%'}
+				unit={unit ?? (fit ? '' : '%')}
 				clipToExistence={false}
 				showExistence={false}
 				showUncertainty={false}

@@ -23,6 +23,8 @@
 		originality: string | null;
 		/** Impact of the value: the one of its relation, or of its latest proof. */
 		impact?: string | null;
+		/** Number of people impacted by the value now (already formatted), from its proofs. */
+		peopleImpacted?: string | null;
 		/** Every proof, to find the sub-proofs, and the top-level proofs of this value (newest first). */
 		allProofs: (ProofData & { id: string })[];
 		proofs: (ProofData & { id: string })[];
@@ -30,7 +32,7 @@
 		/** The date of the time machine, as a decimal year. */
 		year: number;
 		/** Veracity, uncertainty, impact and originality as functions of t (expressions). */
-		functions?: { veracity?: string; uncertainty?: string; impact?: string; originality?: string };
+		functions?: { veracity?: string; uncertainty?: string; impact?: string; people_impacted?: string; originality?: string };
 		/** Existence of the element and color of the value: the evolutions of the proofs are drawn like the value. */
 		existence?: unknown;
 		accent?: { dark: string; light: string };
@@ -48,18 +50,19 @@
 
 <!-- A score as a card with a gauge from 0 to 100, like the scores of a desired value in the proofs. -->
 {#snippet score(key: string, label: string, text: string | null | undefined, fn: string | undefined)}
+	{@const isCount = key === 'people_impacted'}
 	{@const value = parseFloat(text?.match(/-?\d+(\.\d+)?/)?.[0] ?? '')}
 	<div class="score {key}" class:below={info.belowThreshold?.includes(key)}>
 		<dt>{label}</dt>
 		<dd>
 			<strong>{text ?? '—'}</strong>
-			{#if Number.isFinite(value)}
+			{#if Number.isFinite(value) && !isCount}
 				<span class="gauge" aria-hidden="true">
 					<span style:width="{Math.min(100, Math.max(0, value))}%"></span>
 				</span>
 			{/if}
 		</dd>
-		{#if fn && key !== 'originality'}<ScoreFunction expression={fn} fit={key === 'impact' && !!info.relationImpact} threshold={key === 'uncertainty' ? undefined : key === 'impact' && info.relationImpact ? RELATION_IMPACT_THRESHOLD : SCORE_THRESHOLD} />{/if}
+		{#if fn && key !== 'originality'}<ScoreFunction expression={fn} fit={isCount || (key === 'impact' && !!info.relationImpact)} unit={isCount ? m.simulation_people_unit() : undefined} threshold={key === 'uncertainty' || isCount ? undefined : key === 'impact' && info.relationImpact ? RELATION_IMPACT_THRESHOLD : SCORE_THRESHOLD} />{/if}
 	</div>
 {/snippet}
 
@@ -78,13 +81,24 @@
 		{#if !info.hideUncertainty}
 			{@render score('uncertainty', m.simulation_uncertainty_label(), info.uncertainty, info.functions?.uncertainty)}
 		{/if}
-		{#if info.impact}
-			{@render score('impact', m.simulation_field_impact(), info.impact, info.functions?.impact)}
-		{/if}
 		{#if info.originality}
 			{@render score('originality', m.simulation_originality_label(), info.originality, info.functions?.originality)}
 		{/if}
 	</dl>
+	{#if info.impact || info.peopleImpacted}
+		<!-- The impact of a value: a category with its average impact and the number of people it impacts. -->
+		<section class="impact-group">
+			<h5 class="impact-heading">{m.simulation_section_impact()}</h5>
+			<dl class="value-scores">
+				{#if info.impact}
+					{@render score('impact', m.simulation_field_average_impact(), info.impact, info.functions?.impact)}
+				{/if}
+				{#if info.peopleImpacted}
+					{@render score('people_impacted', m.simulation_field_people_impacted(), info.peopleImpacted, info.functions?.people_impacted)}
+				{/if}
+			</dl>
+		</section>
+	{/if}
 
 	<h5>{m.simulation_influence()}</h5>
 	<h6>{m.simulation_influence_proofs()}</h6>
@@ -243,8 +257,29 @@
 		--accent: #a78bfa;
 	}
 
+	.score.people_impacted {
+		--accent: #fbbf24;
+	}
+
 	.score.originality {
 		--accent: #38bdf8;
+	}
+
+	.impact-group {
+		margin: 0 0 8px;
+		padding: 6px 8px 2px;
+		border: 1px solid rgb(56 189 248 / 24%);
+		border-radius: 8px;
+		background: rgb(56 189 248 / 5%);
+	}
+
+	.impact-heading {
+		margin: 0 0 6px;
+		color: #7dd3fc;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
 	}
 
 	.score dt {
