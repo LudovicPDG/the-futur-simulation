@@ -219,27 +219,41 @@
 	}
 </script>
 
-{#snippet scoreGrid(scores: ScoreView[])}
-	{#if scores.length > 0}
-		<dl class="desired-scores">
-			{#each scores as score (score.key)}
-				<div class="score {score.key}" class:changed={score.changed} class:below={score.below}>
-					<dt>{score.label}</dt>
-					<dd>
-						<strong>{score.text}</strong>
-						{#if score.key !== 'people_impacted'}
-							<span class="gauge" aria-hidden="true">
-								<span style:width="{Math.min(100, Math.max(0, score.value))}%"></span>
-							</span>
-						{/if}
-					</dd>
-					<!-- The originality is a single number, not a function of the time. -->
-					{#if score.key !== 'originality'}
-						<ScoreFunction expression={score.fn} range={score.range} fit={score.key === 'people_impacted'} unit={score.key === 'people_impacted' ? m.simulation_people_unit() : undefined} threshold={score.key === 'uncertainty' || score.key === 'people_impacted' ? undefined : SCORE_THRESHOLD} />
+{#snippet scoreCards(scores: ScoreView[])}
+	<dl class="desired-scores">
+		{#each scores as score (score.key)}
+			<div class="score {score.key}" class:changed={score.changed} class:below={score.below}>
+				<dt>{score.label}</dt>
+				<dd>
+					<strong>{score.text}</strong>
+					{#if score.key !== 'people_impacted'}
+						<span class="gauge" aria-hidden="true">
+							<span style:width="{Math.min(100, Math.max(0, score.value))}%"></span>
+						</span>
 					{/if}
-				</div>
-			{/each}
-		</dl>
+				</dd>
+				<!-- The originality is a single number, not a function of the time. -->
+				{#if score.key !== 'originality'}
+					<ScoreFunction expression={score.fn} range={score.range} fit={score.key === 'people_impacted'} unit={score.key === 'people_impacted' ? m.simulation_people_unit() : undefined} threshold={score.key === 'uncertainty' || score.key === 'people_impacted' ? undefined : SCORE_THRESHOLD} />
+				{/if}
+			</div>
+		{/each}
+	</dl>
+{/snippet}
+
+<!-- The scores, with the impact (average impact and people impacted) in its own group, like in the parameters of a value. -->
+{#snippet scoreGrid(scores: ScoreView[])}
+	{@const isImpact = (score: ScoreView) => score.key === 'impact' || score.key === 'people_impacted'}
+	{@const main = scores.filter((score) => !isImpact(score))}
+	{@const impact = scores.filter(isImpact)}
+	{#if main.length > 0}
+		{@render scoreCards(main)}
+	{/if}
+	{#if impact.length > 0}
+		<section class="impact-group">
+			<h5 class="impact-heading">{m.simulation_section_impact()}</h5>
+			{@render scoreCards(impact)}
+		</section>
 	{/if}
 {/snippet}
 
@@ -567,6 +581,31 @@
 		grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
 		gap: 6px;
 		margin: 2px 0 0;
+	}
+
+	.impact-group {
+		margin: 8px 0 2px;
+		padding: 6px 8px 8px;
+		border: 1px solid rgb(56 189 248 / 24%);
+		border-radius: 8px;
+		background: rgb(56 189 248 / 5%);
+	}
+
+	.impact-heading {
+		margin: 0 0 6px;
+		color: #7dd3fc;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.impact-group > .desired-scores {
+		margin: 0;
+	}
+
+	:global(body.light) .impact-heading {
+		color: #087e8b;
 	}
 
 	.score {
