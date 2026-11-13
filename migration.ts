@@ -150,12 +150,12 @@ export async function createDatabase() {
 				verification_method translation_t NOT NULL,
 				falsifiability_method translation_t NOT NULL,
 				source TEXT[] NOT NULL DEFAULT '{}',
-				-- Véracité, incertitude, impact et originalité : des fonctions du temps t (expressions mathjs, valeurs de 0 à 100),
+				-- Véracité, incertitude, pertinence (relevance) et originalité : des fonctions du temps t (expressions mathjs, valeurs de 0 à 100),
 				-- sans incertitude
 				veracity TEXT NOT NULL DEFAULT '50',
 				uncertainty TEXT NOT NULL DEFAULT '50',
 				originality TEXT NOT NULL DEFAULT '0',
-				impact TEXT NOT NULL DEFAULT '0',
+				relevance TEXT NOT NULL DEFAULT '0',
 				value_name JSONB,
 				desired_value JSONB NOT NULL,
 				-- Les champs de desired_value que la preuve modifie vraiment : seuls eux votent
@@ -169,6 +169,16 @@ export async function createDatabase() {
 				original_proof_id UUID REFERENCES proofs(id) ON DELETE CASCADE,
 				created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 			);
+		`);
+
+		// Une base créée avant le renommage impact -> relevance (pertinence) : sans effet sur une base neuve.
+		await client.query(`
+			DO $$
+			BEGIN
+				IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'proofs' AND column_name = 'impact') THEN
+					ALTER TABLE proofs RENAME COLUMN impact TO relevance;
+				END IF;
+			END $$;
 		`);
 
 		// ==========================================

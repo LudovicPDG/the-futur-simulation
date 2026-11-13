@@ -3,10 +3,10 @@ import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
 import {
 	CURVE_FIELDS,
-	CURVE_SCORE_COLUMNS,
+	PROOF_CURVE_COLUMNS,
+	PROOF_SCORE_FIELDS,
 	ProofSchema,
 	SCORE_COLUMNS,
-	SCORE_FIELDS,
 	VALUE_SCORE_FIELDS,
 	valueColumns,
 	valueKind,
@@ -86,19 +86,19 @@ const ProofTextSchema = ProofSchema.pick({
 });
 
 /** The own scores of a proof over time, given as interpolation points. */
-const OwnScoresSchema = curvesSchema(CURVE_SCORE_COLUMNS).describe(
-	'The scores of THIS proof over time (its veracity, the uncertainty of its author, independent of the veracity, and its impact), as interpolation points at the dates that matter: a proof is stronger or weaker as time passes, as the facts become known, forgotten or confirmed. Do not give its originality: it is decided afterwards by comparing the proof with the other ones.'
+const OwnScoresSchema = curvesSchema(PROOF_CURVE_COLUMNS).describe(
+	'The scores of THIS proof over time (its veracity, the uncertainty of its author, independent of the veracity, and its relevance), as interpolation points at the dates that matter: a proof is stronger or weaker as time passes, as the facts become known, forgotten or confirmed. Do not give its originality: it is decided afterwards by comparing the proof with the other ones.'
 );
 
 /**
  * The own scores of a generated proof, as functions of the time. The originality is not a function: it is a single
  * number that the genie gives afterwards (see proofOriginality), 50 until then.
  */
-function ownScores(scores: CurvesInput): Pick<ProofData, 'veracity' | 'uncertainty' | 'impact' | 'originality'> {
+function ownScores(scores: CurvesInput): Pick<ProofData, 'veracity' | 'uncertainty' | 'relevance' | 'originality'> {
 	return {
 		veracity: curveExpression(scores, 'veracity'),
 		uncertainty: curveExpression(scores, 'uncertainty'),
-		impact: curveExpression(scores, 'impact'),
+		relevance: curveExpression(scores, 'relevance'),
 		originality: '50'
 	};
 }
@@ -244,8 +244,8 @@ const GeneratedSubProofSchema = ProofTextSchema.extend({
 				.array(z.string())
 				.nullable()
 				.describe('The whole list of sources this sub-proof wants for the debated proof, or null to keep them.'),
-			scores: curvesSchema(CURVE_SCORE_COLUMNS, true).describe(
-				'What this sub-proof changes in the scores of the DEBATED proof over time (veracity, uncertainty, impact; never its originality): the interpolation points of the period it changes, with a number only for the scores it changes. The rest of every score stays as it is.'
+			scores: curvesSchema(PROOF_CURVE_COLUMNS, true).describe(
+				'What this sub-proof changes in the scores of the DEBATED proof over time (veracity, uncertainty, relevance; never its originality): the interpolation points of the period it changes, with a number only for the scores it changes. The rest of every score stays as it is.'
 			)
 		})
 		.describe(
@@ -300,7 +300,7 @@ function currentCurves(kept: ValueEdit | ProofEdit): Record<string, string> {
 			curves.uncertainty_below = one.uncertainty_down;
 		}
 	}
-	for (const field of VALUE_SCORE_FIELDS) {
+	for (const field of [...VALUE_SCORE_FIELDS, 'relevance']) {
 		const score = (kept as Record<string, unknown>)[field];
 		if (score !== null && score !== undefined) curves[field] = toScoreFunction(score);
 	}
@@ -389,7 +389,7 @@ function proofFields(proof: ProofData): ProofEdit {
 		source: proof.source,
 		veracity: proof.veracity,
 		uncertainty: proof.uncertainty,
-		impact: proof.impact,
+		relevance: proof.relevance,
 		originality: proof.originality
 	};
 }
@@ -640,11 +640,11 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 		await db.query(
 			`INSERT INTO proofs (
 				id, name, description, value_name, desired_value, verification_method, falsifiability_method,
-				source, veracity, uncertainty, impact, originality, fact_id, relation_id, parent_proof_id,
+				source, veracity, uncertainty, relevance, originality, fact_id, relation_id, parent_proof_id,
 				original_proof_id
 			)
 			SELECT $2, name, description, value_name, desired_value, verification_method, falsifiability_method,
-				source, veracity, uncertainty, impact, originality, fact_id, relation_id, id, id
+				source, veracity, uncertainty, relevance, originality, fact_id, relation_id, id, id
 			FROM proofs
 			WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM proofs WHERE original_proof_id = $1)`,
 			[proofId, randomUUID()]
@@ -967,7 +967,7 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 		valueName: ProofData['value_name'],
 		element: Record<string, unknown>,
 		proofs: ProofData[],
-		fallback: Pick<ProofData, 'veracity' | 'uncertainty' | 'impact' | 'originality'>,
+		fallback: Pick<ProofData, 'veracity' | 'uncertainty' | 'originality'> & { impact: string },
 		valueless = false
 	): ValueEdit {
 		const scored = hasValueScores(target, valueName, element);
@@ -1038,7 +1038,7 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 
 ${
 			parentProofId
-				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources) and null for every other field: they keep their current value exactly. The scores of the debated proof (veracity, uncertainty, impact) are curves of the time: change them in "scores" with the interpolation points of the period the request is about, and a number only for the scores it changes. Never give an originality: it is decided afterwards by comparing this sub-proof with the other sub-proofs. When the request contests the originality of the debated proof (it says it copies another one, or that it is really original), set contests_originality to true: its originality is then analysed again with your argument. Never rewrite what does not need to change. It cannot edit the desired value of the debated proof.'
+				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources) and null for every other field: they keep their current value exactly. The scores of the debated proof (veracity, uncertainty, relevance) are curves of the time: change them in "scores" with the interpolation points of the period the request is about, and a number only for the scores it changes. Never give an originality: it is decided afterwards by comparing this sub-proof with the other sub-proofs. When the request contests the originality of the debated proof (it says it copies another one, or that it is really original), set contests_originality to true: its originality is then analysed again with your argument. Never rewrite what does not need to change. It cannot edit the desired value of the debated proof.'
 				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY what the request asks to change: ${
 						valueless
 							? 'NO content (the values of a relation have no value to propose: a proof about one only gives its parameters, that is its veracity, uncertainty, impact and originality) and, in "curves",'
@@ -1108,8 +1108,8 @@ ${
 				desired[field] = edit[field];
 				edited_fields.push(field);
 			}
-			const curves = applyCurves(edit.scores, CURVE_SCORE_COLUMNS, currentCurves(parentEdit));
-			for (const field of SCORE_FIELDS) desired[field] = curves.functions[field];
+			const curves = applyCurves(edit.scores, PROOF_CURVE_COLUMNS, currentCurves(parentEdit));
+			for (const field of PROOF_SCORE_FIELDS) desired[field] = curves.functions[field];
 			edited_fields.push(...curves.fields);
 			edited_ranges = curves.ranges;
 			// The originality of the debated proof is contested: it is analysed again, and this sub-proof votes for the result.
@@ -1139,7 +1139,7 @@ ${
 			desired_value = desired as ProofEdit;
 		} else {
 			const edit = proposed as GeneratedProof['desired_value'];
-			const kept = this.currentValue(target, generated.value_name, element, proofs, own, valueless);
+			const kept = this.currentValue(target, generated.value_name, element, proofs, { ...own, impact: own.relevance }, valueless);
 			const evolution = valueKind(kept.value) === 'evolution';
 			const curves = applyCurves(
 				edit.curves,
@@ -1222,7 +1222,7 @@ ${
 				source,
 				veracity,
 				uncertainty,
-				impact,
+				relevance,
 				originality,
 				fact_id,
 				relation_id,
@@ -1241,7 +1241,7 @@ ${
 				convertToPg(proof.source || []),
 				proof.veracity,
 				proof.uncertainty,
-				proof.impact,
+				proof.relevance,
 				proof.originality,
 				proof.fact_id ?? null,
 				proof.relation_id ?? null,
@@ -1272,7 +1272,7 @@ ${
 			source: row.source || [],
 			veracity: toScoreFunction(row.veracity),
 			uncertainty: toScoreFunction(row.uncertainty),
-			impact: toScoreFunction(row.impact),
+			relevance: toScoreFunction(row.relevance),
 			originality: toScoreFunction(row.originality),
 			fact_id: row.fact_id,
 			relation_id: row.relation_id,
@@ -1288,10 +1288,18 @@ ${
 		const before = new Map(
 			proofs.filter((proof) => proof.original_proof_id).map((copy) => [copy.original_proof_id, copy])
 		);
-		const scoresOf = ({ veracity, uncertainty, impact, originality }: ProofData) => ({
+		// The scores of a debated proof, which a sub-proof edits.
+		const scoresOf = ({ veracity, uncertainty, relevance, originality }: ProofData) => ({
 			veracity,
 			uncertainty,
-			impact,
+			relevance,
+			originality
+		});
+		// The scores a top-level proof kept for its value: its relevance stands for the impact of the value.
+		const valueScoresOf = ({ veracity, uncertainty, relevance, originality }: ProofData) => ({
+			veracity,
+			uncertainty,
+			impact: relevance,
 			originality
 		});
 		return proofs.map((proof) => {
@@ -1307,7 +1315,7 @@ ${
 							source: parent.source,
 							...scoresOf(parent)
 						}
-					: ({ value: null, ...scoresOf(proof) } as unknown as ValueEdit);
+					: ({ value: null, ...valueScoresOf(proof) } as unknown as ValueEdit);
 			const stored = proof.desired_value as unknown;
 			// A value without an originality and an impact of its own: its desired value gives neither.
 			if (

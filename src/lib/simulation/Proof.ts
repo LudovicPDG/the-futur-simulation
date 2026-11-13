@@ -67,6 +67,20 @@ export type ScoreField = keyof typeof SCORE_COLUMNS;
 export const SCORE_FIELDS = Object.keys(SCORE_COLUMNS) as ScoreField[];
 
 /**
+ * The relevance of a proof or of a sub-proof: how strongly it moves what it debates (the value, or the debated proof)
+ * toward its desired value. It is the own score of a proof, next to the impact that a value has.
+ */
+export const RELEVANCE_COLUMN = {
+	description:
+		'The relevance of the proof at this date: how strongly it moves what it debates toward its desired value, from 0 (no effect) to 100 (it decides it). Use the whole scale.',
+	min: 0,
+	max: 100
+} satisfies CurveColumns[string];
+
+/** The scores of a proof (or of a sub-proof): the ones of a value, with a relevance instead of an impact. */
+export const PROOF_SCORE_FIELDS = ['veracity', 'uncertainty', 'relevance', 'originality'] as const;
+
+/**
  * The number of people impacted by a value: a curve of the time from 0 to +infinity, next to its (average) impact. Only
  * a value that has an impact of its own has it: it is a part of the value, never a score of a proof.
  */
@@ -87,6 +101,13 @@ export const CURVE_SCORE_COLUMNS = {
 	veracity: SCORE_COLUMNS.veracity,
 	uncertainty: SCORE_COLUMNS.uncertainty,
 	impact: SCORE_COLUMNS.impact
+} satisfies CurveColumns;
+
+/** The scores a proof or a sub-proof draws as curves of the time for ITSELF: its relevance instead of an impact. */
+export const PROOF_CURVE_COLUMNS = {
+	veracity: SCORE_COLUMNS.veracity,
+	uncertainty: SCORE_COLUMNS.uncertainty,
+	relevance: RELEVANCE_COLUMN
 } satisfies CurveColumns;
 
 /**
@@ -113,6 +134,7 @@ export const CURVE_FIELDS: Record<string, string> = {
 	veracity: 'veracity',
 	uncertainty: 'uncertainty',
 	impact: 'impact',
+	relevance: 'relevance',
 	people_impacted: 'people_impacted',
 	originality: 'originality'
 };
@@ -146,7 +168,7 @@ export const ProofEditSchema = z.object({
 	source: z.array(z.string()),
 	veracity: StoredScoreSchema,
 	uncertainty: StoredScoreSchema,
-	impact: StoredScoreSchema,
+	relevance: StoredScoreSchema,
 	originality: StoredScoreSchema
 });
 
@@ -179,7 +201,7 @@ export const ProofSchema = z.object({
 	source: z.array(z.string()).default([]).describe('Sources for the proof'),
 	veracity: StoredScoreSchema,
 	uncertainty: StoredScoreSchema,
-	impact: StoredScoreSchema,
+	relevance: StoredScoreSchema,
 	originality: StoredScoreSchema
 });
 

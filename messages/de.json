@@ -176,6 +176,7 @@
 	"proof_desired_value": "Gewünschter Wert",
 	"proof_desired_scores": "Gewünschte Werte",
 	"proof_veracity": "Wahrhaftigkeit",
+	"proof_relevance": "Relevanz",
 	"proof_hide_params": "Parameter ausblenden",
 	"proof_edit_changed": "Geändert",
 	"proof_edit_changed_hint": "Von diesem Beweis geändert: nur die geänderten Felder stimmen ab",

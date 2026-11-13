@@ -90,6 +90,7 @@
 	const SCORE_FIELDS: [string, () => string, (value: number) => string][] = [
 		['veracity', m.proof_veracity, (value) => `${Math.round(value)}%`],
 		['uncertainty', m.simulation_evolution_uncertainty, (value) => `±${Math.round(value)}%`],
+		['relevance', m.proof_relevance, (value) => `${Math.round(value)}`],
 		['impact', m.simulation_field_impact, (value) => `${Math.round(value)}`],
 		['people_impacted', m.simulation_field_people_impacted, (value) => `${formatPeople(value)} ${m.simulation_people_unit()}`],
 		['originality', m.simulation_field_originality, (value) => `${Math.round(value)}%`]
@@ -120,11 +121,11 @@
 		});
 	}
 
-	/** The scores of the proof under their threshold at the date: veracity, impact and originality (see CountThreshold). */
+	/** The scores of the proof under their threshold at the date: veracity, relevance and originality (see CountThreshold). */
 	function belowProof(proof: StoredProof): CountedScore[] {
 		return belowThreshold({
 			veracity: scoreAt(proof.veracity, year),
-			impact: scoreAt(proof.impact, year),
+			relevance: scoreAt(proof.relevance, year),
 			originality: scoreAt(proof.originality, year)
 		});
 	}
@@ -598,6 +599,7 @@
 		--accent: #f59e0b;
 	}
 
+	.score.relevance,
 	.score.impact {
 		--accent: #a78bfa;
 	}

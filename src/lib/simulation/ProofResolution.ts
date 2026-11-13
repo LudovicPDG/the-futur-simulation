@@ -8,10 +8,10 @@ import { combineEvolution, countAt, scoreAt, toScoreFunction, type EvolutionComp
  * edited_fields) vote, next to the status quo:
  * - a debated proof is changed by its sub-proofs, next to its "original proof" copy (the proof before the debate);
  * - a value of an element is changed by its top-level proofs, the founding proof among them.
- * A text, a boolean... is decided by the voter with the best veracity * impact, a boolean by the weighted vote of
- * the voters and a number or an evolution by their weighted average, with the weight veracity * impact * originality.
+ * A text, a boolean... is decided by the voter with the best veracity * relevance, a boolean by the weighted vote of
+ * the voters and a number or an evolution by their weighted average, with the weight veracity * relevance * originality.
  * The sub-proofs are resolved first (from the deepest), so that each proof votes with its debated scores.
- * The veracity, the uncertainty, the impact and the originality are functions of the time: everything is decided at
+ * The veracity, the uncertainty, the relevance and the originality are functions of the time: everything is decided at
  * one moment t.
  */
 
@@ -24,7 +24,7 @@ export const PROOF_EDIT_FIELDS = [
 	'source',
 	'veracity',
 	'uncertainty',
-	'impact',
+	'relevance',
 	'originality'
 ] as const;
 
@@ -38,23 +38,25 @@ export const VALUE_EDIT_FIELDS = ['value', 'veracity', 'uncertainty', 'impact', 
 export const EVOLUTION_PARTS = ['function', 'uncertainty_above', 'uncertainty_below'] as const;
 export type EvolutionPart = (typeof EVOLUTION_PARTS)[number];
 
-const SCORE_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impact', 'originality']);
+const SCORE_FIELDS = new Set<string>(['veracity', 'uncertainty', 'relevance', 'impact', 'originality']);
 /** The scores that are functions of the time: all of them. */
-const SCORE_FUNCTION_FIELDS = new Set<string>(['veracity', 'uncertainty', 'impact', 'people_impacted', 'originality']);
+const SCORE_FUNCTION_FIELDS = new Set<string>(['veracity', 'uncertainty', 'relevance', 'impact', 'people_impacted', 'originality']);
+/** The scores of a value of an element (a proof has a relevance instead of an impact). */
+const VALUE_SCORE_FUNCTION_FIELDS = ['veracity', 'uncertainty', 'impact', 'people_impacted', 'originality'];
 
 /** The scores of a proof at one moment. */
-type Scores = { veracity: number; uncertainty: number; impact: number; originality: number };
+type Scores = { veracity: number; uncertainty: number; relevance: number; originality: number };
 type Voter<T = unknown> = { value: T; scores: Scores };
 
-/** Whether a proof counts at all: a veracity, an impact or an originality under the threshold takes it out (see CountThreshold). */
+/** Whether a proof counts at all: a veracity, a relevance or an originality under the threshold takes it out (see CountThreshold). */
 const counts = (scores: Scores) =>
-	isCounted({ veracity: scores.veracity, impact: scores.impact, originality: scores.originality });
+	isCounted({ veracity: scores.veracity, relevance: scores.relevance, originality: scores.originality });
 /** The score that decides a text or an array: the best one wins. */
-const pickScore = (scores: Scores) => scores.veracity * scores.impact;
+const pickScore = (scores: Scores) => scores.veracity * scores.relevance;
 /** The weight of a vote: the originality keeps copies of the same proof from adding up; 0 when it does not count. */
-const voteWeight = (scores: Scores) => (counts(scores) ? scores.veracity * scores.impact * scores.originality : 0);
+const voteWeight = (scores: Scores) => (counts(scores) ? scores.veracity * scores.relevance * scores.originality : 0);
 
-/** The value of the voter with the best veracity * impact; on a tie, the first one (the status quo). */
+/** The value of the voter with the best veracity * relevance; on a tie, the first one (the status quo). */
 function pickBest(voters: Voter[]): unknown {
 	let best = voters[0];
 	// A voter that does not count only wins when nobody counts (the status quo stays).
@@ -179,7 +181,7 @@ function scoresOf(proof: ProofData, t: number): Scores {
 	return {
 		veracity: scoreAt(proof.veracity, t) || 0,
 		uncertainty: scoreAt(proof.uncertainty, t) || 0,
-		impact: scoreAt(proof.impact, t) || 0,
+		relevance: scoreAt(proof.relevance, t) || 0,
 		originality: scoreAt(proof.originality, t) || 0
 	};
 }
@@ -411,7 +413,7 @@ export function resolveValueFunctions(proofs: ProofData[]): {
 	const count = (expression: string) => `max(0, ${expression})`;
 	const ordered = [...proofs].reverse();
 	const result: Record<string, string> = {};
-	for (const field of SCORE_FUNCTION_FIELDS) {
+	for (const field of VALUE_SCORE_FUNCTION_FIELDS) {
 		const voters = ordered.filter((proof) => {
 			const desired = (proof.desired_value as Record<string, unknown>)[field];
 			return editedFields(proof).includes(field) && desired !== null && desired !== undefined;
@@ -422,12 +424,12 @@ export function resolveValueFunctions(proofs: ProofData[]): {
 			result[field] = scores[0];
 			continue;
 		}
-		// The weight is 0 where the veracity, the impact or the originality is under the threshold (see CountThreshold).
+		// The weight is 0 where the veracity, the relevance or the originality is under the threshold (see CountThreshold).
 		const weights = voters.map((proof) => {
-			const [veracity, impact, originality] = [proof.veracity, proof.impact, proof.originality].map((score) =>
+			const [veracity, relevance, originality] = [proof.veracity, proof.relevance, proof.originality].map((score) =>
 				clamp(toScoreFunction(score))
 			);
-			return `${veracity} * ${impact} * ${originality} * ((${veracity}) >= ${SCORE_THRESHOLD} and (${impact}) >= ${SCORE_THRESHOLD} and (${originality}) >= ${SCORE_THRESHOLD} ? 1 : 0)`;
+			return `${veracity} * ${relevance} * ${originality} * ((${veracity}) >= ${SCORE_THRESHOLD} and (${relevance}) >= ${SCORE_THRESHOLD} and (${originality}) >= ${SCORE_THRESHOLD} ? 1 : 0)`;
 		});
 		result[field] = `(${scores
 			.map((score, index) => `(${weights[index]}) * ${field === 'people_impacted' ? count(score) : clamp(score)}`)

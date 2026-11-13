@@ -176,6 +176,7 @@
 	"proof_desired_value": "Desired value",
 	"proof_desired_scores": "Desired scores",
 	"proof_veracity": "Veracity",
+	"proof_relevance": "Relevance",
 	"proof_hide_params": "Hide parameters",
 	"proof_edit_changed": "Modified",
 	"proof_edit_changed_hint": "Changed by this proof: only the changed fields vote",
