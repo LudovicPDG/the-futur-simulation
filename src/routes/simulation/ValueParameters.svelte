@@ -21,6 +21,8 @@
 		hideUncertainty?: boolean;
 		/** Originality of the relation (for its values) or of the latest proof of the value. */
 		originality: string | null;
+		/** Relevance of an entry of a list in its list (only for a value in a list). */
+		relevance?: string | null;
 		/** Impact of the value: the one of its relation, or of its latest proof. */
 		impact?: string | null;
 		/** Number of people impacted by the value now (already formatted), from its proofs. */
@@ -32,7 +34,7 @@
 		/** The date of the time machine, as a decimal year. */
 		year: number;
 		/** Veracity, uncertainty, impact and originality as functions of t (expressions). */
-		functions?: { veracity?: string; uncertainty?: string; impact?: string; people_impacted?: string; originality?: string };
+		functions?: { veracity?: string; uncertainty?: string; impact?: string; people_impacted?: string; relevance?: string; originality?: string };
 		/** Existence of the element and color of the value: the evolutions of the proofs are drawn like the value. */
 		existence?: unknown;
 		accent?: { dark: string; light: string };
@@ -80,6 +82,9 @@
 		{@render score('veracity', m.simulation_veracity_label(), info.veracity, info.functions?.veracity)}
 		{#if !info.hideUncertainty}
 			{@render score('uncertainty', m.simulation_uncertainty_label(), info.uncertainty, info.functions?.uncertainty)}
+		{/if}
+		{#if info.relevance}
+			{@render score('relevance', m.proof_relevance(), info.relevance, info.functions?.relevance)}
 		{/if}
 		{#if info.originality}
 			{@render score('originality', m.simulation_originality_label(), info.originality, info.functions?.originality)}
@@ -259,6 +264,10 @@
 
 	.score.people_impacted {
 		--accent: #fbbf24;
+	}
+
+	.score.relevance {
+		--accent: #34d399;
 	}
 
 	.score.originality {

@@ -300,7 +300,7 @@ function currentCurves(kept: ValueEdit | ProofEdit): Record<string, string> {
 			curves.uncertainty_below = one.uncertainty_down;
 		}
 	}
-	for (const field of [...VALUE_SCORE_FIELDS, 'relevance']) {
+	for (const field of VALUE_SCORE_FIELDS) {
 		const score = (kept as Record<string, unknown>)[field];
 		if (score !== null && score !== undefined) curves[field] = toScoreFunction(score);
 	}
@@ -551,7 +551,7 @@ function hasValueScores(target: ProofTarget, name: unknown, element: Record<stri
 /** The parts of a value that its proofs give: its originality and impact only when it has its own. */
 function valueEditFields(scored: boolean, evolution = false, valueless = false): string[] {
 	const fields: string[] = VALUE_EDIT_FIELDS.filter(
-		(field) => (scored || field !== 'originality') && !(valueless && field === 'value')
+		(field) => (scored || (field !== 'originality' && field !== 'relevance')) && !(valueless && field === 'value')
 	);
 	// An evolution is edited part by part and has no general uncertainty.
 	return evolution
@@ -992,7 +992,9 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 			...current,
 			impact: voted.impact ?? fallback.impact,
 			people_impacted: voted.people_impacted ?? '0',
-			...(scored ? { originality: voted.originality ?? fallback.originality } : {})
+			...(scored
+				? { relevance: voted.relevance ?? fallback.impact, originality: voted.originality ?? fallback.originality }
+				: {})
 		} as ValueEdit;
 	}
 
@@ -1250,6 +1252,15 @@ ${
 				proof.edited_ranges ? JSON.stringify(proof.edited_ranges) : null
 			]
 		);
+		// The proofs decide the scores of the values of a relation: its stored "relation" array follows them.
+		if (proof.relation_id) {
+			try {
+				const { RelationServer } = await import('./Relation');
+				await RelationServer.instance.refreshValueMap(proof.relation_id);
+			} catch (error) {
+				console.error('Could not refresh the value map of the relation:', error);
+			}
+		}
 	}
 
 	async get_all(): Promise<ProofData[]> {
@@ -1365,11 +1376,11 @@ ${
 			const target: ProofTarget = proof.fact_id ? { factId: proof.fact_id } : { relationId: proof.relation_id ?? '' };
 			const element = byId.get(proof.fact_id ?? proof.relation_id);
 			if (!element || hasValueScores(target, proof.value_name, element)) return proof;
-			const { originality: _originality, ...desired_value } = proof.desired_value as Record<string, unknown>;
+			const { originality: _originality, relevance: _relevance, ...desired_value } = proof.desired_value as Record<string, unknown>;
 			return {
 				...proof,
 				desired_value: desired_value as ProofData['desired_value'],
-				edited_fields: proof.edited_fields?.filter((field) => field !== 'originality')
+				edited_fields: proof.edited_fields?.filter((field) => field !== 'originality' && field !== 'relevance')
 			};
 		});
 	}

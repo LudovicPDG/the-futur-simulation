@@ -10,7 +10,7 @@ import {
 import { resolveValue, valueNames } from './ProofResolution';
 import { dateToYear } from './TimeAxis';
 import { belowThreshold, isCounted, type CountedScore } from './CountThreshold';
-import { relationValueName, type RelationConnexionData, type RelationData } from './Relation';
+import { relationValueName, type RelationConnexionData, type RelationData, type RelationValueEntry } from './Relation';
 import {
 	combineRelations,
 	estimateAt,
@@ -337,6 +337,54 @@ export function relationImpact<T extends object>(
 		counted: below.length === 0 && sourceCounted,
 		expression: points.length > 0 ? splineExpression({ points, before: null, after: null }) : undefined
 	};
+}
+
+/**
+ * The "relation" array of a relation: for each of its values to modify, its value (impact ratio), veracity,
+ * uncertainty (above and below), impact (average and people impacted) and originality at the moment t.
+ * `resolved` holds the elements and the proofs decided at t, `base` the stored ones (see relationImpact).
+ */
+export function relationValueMap<T extends object>(
+	relation: RelationData,
+	resolved: T[],
+	base: T[],
+	t: number
+): RelationValueEntry[] {
+	const proofs = resolved.filter((each) => (each as { type?: unknown }).type === 'proof') as unknown as ProofData[];
+	const finite = (n: number | undefined): number | null => (n !== undefined && Number.isFinite(n) ? n : null);
+	const entries: RelationValueEntry[] = [];
+	for (const [direction, list] of DIRECTIONS) {
+		for (const connexion of relation[list] ?? []) {
+			const name = relationValueName(direction, connexion);
+			const group = proofs.filter(
+				(proof) =>
+					!proof.parent_proof_id &&
+					proof.relation_id === relation.id &&
+					valueNames(proof.value_name).some((each) => each.toLowerCase() === name.toLowerCase())
+			);
+			const voted = group.length > 0 ? resolveValue(group, t) : {};
+			const relationOriginality = Number(relation.originality);
+			entries.push({
+				direction,
+				name,
+				Element1Property: connexion.Element1Property,
+				Element2Property: connexion.Element2Property,
+				value: finite(relationImpact(relation, connexion, resolved, base, t).now ?? connexion.impact),
+				veracity: finite(voted.veracity),
+				uncertainty_above: finite(voted.uncertainty),
+				uncertainty_below: finite(voted.uncertainty),
+				impact: finite(voted.impact),
+				people_impacted: finite(voted.people_impacted),
+				originality: finite(voted.originality ?? relationOriginality)
+			});
+		}
+	}
+	return entries;
+}
+
+/** The relation with its "relation" array filled (see relationValueMap). */
+export function withRelationValueMap<T extends object>(relation: RelationData, resolved: T[], base: T[], t: number): RelationData {
+	return { ...relation, relation: relationValueMap(relation, resolved, base, t) };
 }
 
 /** The elements with every linked value moved by the values it is linked to, at the moment t. */

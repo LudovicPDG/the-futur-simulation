@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { RelationConnexionData, RelationData } from '$lib/simulation/Relation';
+	import type { RelationConnexionData, RelationData, RelationValueEntry } from '$lib/simulation/Relation';
 	import type { SimulationElementWithId } from '$lib/stores/simulation';
 	import { renderSimulationElementSvg } from '$lib/simulation/renderSvg';
 	import { svg_shape as relation_svg_shape, relationValueName } from '$lib/simulation/Relation';
@@ -22,7 +22,7 @@
 	} from '$lib/simulation/event/EvolutionFunction';
 	import { valueKind, type ProofData } from '$lib/simulation/Proof';
 	import { resolveAtDate, resolveValue, resolveValueFunctions } from '$lib/simulation/ProofResolution';
-	import { applyRelations, relationImpact } from '$lib/simulation/RelationApplication';
+	import { applyRelations, relationImpact, withRelationValueMap } from '$lib/simulation/RelationApplication';
 	import { belowThreshold } from '$lib/simulation/CountThreshold';
 	import { dateToYear } from '$lib/simulation/TimeAxis';
 	import { onMount } from 'svelte';
@@ -282,6 +282,12 @@
 			valueName,
 			name: `${formatValue(valueName)} — ${formatValue(activeElement.name)}`
 		});
+	}
+
+	function formatNumber(value: number | null | undefined, unit = ''): string {
+		return value === null || value === undefined || !Number.isFinite(value)
+			? '—'
+			: `${new Intl.NumberFormat(currentLocale, { maximumSignificantDigits: 4 }).format(value)}${unit}`;
 	}
 
 	function formatValue(value: unknown): string {
@@ -547,7 +553,10 @@
 		const source = hoveredElement ?? selectedElement;
 		return source ? (simulation_data.find((element) => element.id === source.id) ?? source) : null;
 	});
-	const activeRelation = $derived(isRelationElement(activeElement) ? activeElement : null);
+	// The active relation with its "relation" array: the parameters of each of its values at the date.
+	const activeRelation = $derived(
+		isRelationElement(activeElement) ? withRelationValueMap(activeElement, simulation_data, storedData, year) : null
+	);
 	const relationElement1 = $derived(
 		activeRelation
 			? simulation_data.find((element) => element.id === activeRelation.Element1ID)
@@ -597,7 +606,8 @@
 		const missing = (LISTS_OF_TYPE[activeElement.type ?? ''] ?? []).filter(
 			(list) => !activeFields.some(([key]) => key === list)
 		);
-		return [...activeFields, ...missing.map((list): [string, unknown] => [list, []])];
+		// The "relation" array of a relation is shown in each of its values (see relationSummary).
+		return [...activeFields.filter(([key]) => key !== 'relation'), ...missing.map((list): [string, unknown] => [list, []])];
 	});
 	const activeParameters = $derived(
 		activeElement
@@ -752,7 +762,7 @@
 
 		// Scores: the weighted average voted by the proofs of the value (the founding proof among them).
 		const voted = resolveValue(proofs, year);
-		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'people_impacted' | 'originality'): number => voted[key] ?? NaN;
+		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'people_impacted' | 'relevance' | 'originality'): number => voted[key] ?? NaN;
 		const veracityNow = score('veracity');
 		const uncertaintyNow = score('uncertainty');
 		const impactNow = score('impact');
@@ -763,6 +773,8 @@
 		const hasImpact = !nameKeys(name).some((key) => ['impact', 'people_impacted', 'originality'].includes(key));
 		// Originality: voted by the proofs of the value; the one of the relation for a value of a relation without one.
 		let originalityNow = NaN;
+		// The relevance of an entry of a list in its list.
+		const relevanceNow = inArray ? score('relevance') : NaN;
 		if (hasValueScores) {
 			originalityNow = score('originality');
 			if (!Number.isFinite(originalityNow) && relationImpact !== undefined && activeRelation) {
@@ -785,6 +797,7 @@
 				hasImpact && Number.isFinite(peopleNow)
 					? `${new Intl.NumberFormat(getLocale(), { maximumSignificantDigits: 4 }).format(peopleNow)} ${m.simulation_people_unit()}`
 					: null,
+			relevance: Number.isFinite(relevanceNow) ? `${Math.round(relevanceNow)}` : null,
 			originality: Number.isFinite(originalityNow) ? `${Math.round(originalityNow as number)}%` : null,
 			functions: {
 				...resolveValueFunctions(proofs),
@@ -984,9 +997,7 @@
 							<span class="relation-arrow" aria-hidden="true">↔</span>
 							<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
 							{#if impactOf(connexion).counted === false}<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>{/if}
-							<span class="relation-impact">
-								{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
-							</span>
+							{@render relationSummary('symmetric', connexion)}
 							{#each [valueInfluence(relationValueName('symmetric', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 						</div>
 					{/each}
@@ -1009,9 +1020,7 @@
 									<span class="relation-arrow" aria-hidden="true">→</span>
 									<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
 									{#if impactOf(connexion).counted === false}<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>{/if}
-							<span class="relation-impact">
-										{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
-									</span>
+									{@render relationSummary('element1_element2', connexion)}
 									{#each [valueInfluence(relationValueName('element1_element2', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
@@ -1036,9 +1045,7 @@
 									<span class="relation-arrow" aria-hidden="true">→</span>
 									<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
 									{#if impactOf(connexion).counted === false}<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>{/if}
-							<span class="relation-impact">
-										{m.simulation_field_impact()}: {formatValue(impactOf(connexion).now ?? connexion.impact)}
-									</span>
+									{@render relationSummary('element2_element1', connexion)}
 									{#each [valueInfluence(relationValueName('element2_element1', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
@@ -1121,6 +1128,34 @@
 		</aside>
 	{/if}
 </main>
+
+<!-- The "relation" array entry of a value to modify: its value, veracity, uncertainty, originality and its impact. -->
+{#snippet relationSummary(direction: 'symmetric' | 'element1_element2' | 'element2_element1', connexion: RelationConnexionData)}
+	{@const name = relationValueName(direction, connexion)}
+	{@const entry = (activeRelation?.relation ?? []).find((each) => each.name === name)}
+	{#if entry}
+		<div class="impact-category relation-summary">
+			<h4 class="impact-title">{formatLabel('relation')}</h4>
+			<div class="summary-grid">
+				{#each [
+					{ label: m.simulation_field_value(), text: formatNumber(entry.value), tone: 'value' },
+					{ label: m.simulation_veracity_label(), text: formatNumber(entry.veracity, '%'), tone: 'value' },
+					{ label: m.simulation_evolution_uncertainty_above(), text: formatNumber(entry.uncertainty_above, '%'), tone: 'uncertainty' },
+					{ label: m.simulation_evolution_uncertainty_below(), text: formatNumber(entry.uncertainty_below, '%'), tone: 'uncertainty' },
+					{ label: m.simulation_field_average_impact(), text: formatNumber(entry.impact), tone: 'impact' },
+					{ label: m.simulation_field_people_impacted(), text: formatNumber(entry.people_impacted), tone: 'impact' },
+					{ label: m.simulation_originality_label(), text: formatNumber(entry.originality, '%'), tone: 'value' }
+				] as part (part.label)}
+					<div class="impact-part summary-part {part.tone}">
+						<h5>{part.label}</h5>
+						<strong class="summary-number">{part.text}</strong>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+{/snippet}
+
 
 <style>
 	.canvas {
@@ -1634,6 +1669,59 @@
 	.relation-connexion.uncounted {
 		opacity: 0.8;
 	}
+	/* The box sits in the 3-column grid of the value: it takes the whole row, not the first column. */
+	.relation-summary {
+		grid-column: 1 / -1;
+		margin: 4px 0;
+		text-align: left;
+		overflow-wrap: normal;
+	}
+
+	.summary-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
+	}
+
+	.summary-part {
+		margin-top: 0;
+		padding: 8px 10px;
+	}
+
+	.summary-part h5 {
+		margin-bottom: 4px;
+		font-size: 12px;
+		line-height: 1.25;
+	}
+
+	.summary-part.uncertainty {
+		border-left-color: #a78bfa;
+	}
+
+	.summary-part.uncertainty h5 {
+		color: #c4b5fd;
+	}
+
+	.summary-part.impact {
+		border-left-color: #38bdf8;
+	}
+
+	.summary-part.impact h5 {
+		color: #7dd3fc;
+	}
+
+	/* The last score (originality) has no pair: it takes the whole row. */
+	.summary-part:last-child {
+		grid-column: 1 / -1;
+	}
+
+	.summary-number {
+		display: block;
+		margin-bottom: 4px;
+		font-size: 18px;
+		font-weight: 700;
+	}
+
 	.impact-category {
 		margin: 12px 0 6px;
 		padding: 10px;

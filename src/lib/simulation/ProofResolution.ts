@@ -29,7 +29,7 @@ export const PROOF_EDIT_FIELDS = [
 ] as const;
 
 /** The parts of a value of an element that its top-level proofs can change. */
-export const VALUE_EDIT_FIELDS = ['value', 'veracity', 'uncertainty', 'impact', 'people_impacted', 'originality'] as const;
+export const VALUE_EDIT_FIELDS = ['value', 'veracity', 'uncertainty', 'impact', 'people_impacted', 'relevance', 'originality'] as const;
 
 /**
  * The parts of an evolution that a proof changes on its own: the function and each side of its uncertainty. A proof
@@ -42,7 +42,7 @@ const SCORE_FIELDS = new Set<string>(['veracity', 'uncertainty', 'relevance', 'i
 /** The scores that are functions of the time: all of them. */
 const SCORE_FUNCTION_FIELDS = new Set<string>(['veracity', 'uncertainty', 'relevance', 'impact', 'people_impacted', 'originality']);
 /** The scores of a value of an element (a proof has a relevance instead of an impact). */
-const VALUE_SCORE_FUNCTION_FIELDS = ['veracity', 'uncertainty', 'impact', 'people_impacted', 'originality'];
+const VALUE_SCORE_FUNCTION_FIELDS = ['veracity', 'uncertainty', 'impact', 'people_impacted', 'relevance', 'originality'];
 
 /** The scores of a proof at one moment. */
 type Scores = { veracity: number; uncertainty: number; relevance: number; originality: number };
@@ -268,6 +268,7 @@ export function resolveValue(proofs: ProofData[], t: number): {
 	uncertainty?: number;
 	impact?: number;
 	people_impacted?: number;
+	relevance?: number;
 	originality?: number;
 } {
 	// Oldest first: the founding proof is the status quo of a tie.
@@ -407,6 +408,7 @@ export function resolveValueFunctions(proofs: ProofData[]): {
 	uncertainty?: string;
 	impact?: string;
 	people_impacted?: string;
+	relevance?: string;
 	originality?: string;
 } {
 	const clamp = (expression: string) => `max(0, min(100, ${expression}))`;

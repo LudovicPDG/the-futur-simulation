@@ -93,7 +93,36 @@ export const RELATION_LIST_FIELDS = [
 ] as const;
 export type RelationListField = (typeof RELATION_LIST_FIELDS)[number];
 
-export type RelationData = z.infer<typeof RelationSchema> & { id?: string };
+/**
+ * One entry of the "relation" array of a relation: every parameter of one value to modify. It is computed from the
+ * proofs of the value (see relationValueMap), never stored or written by the genie.
+ */
+export interface RelationValueEntry {
+	/** The list the value is in. */
+	direction: 'symmetric' | 'element1_element2' | 'element2_element1';
+	/** The value_name its proofs use (see relationValueName). */
+	name: string;
+	Element1Property: string;
+	Element2Property: string;
+	/** The value: the impact ratio of the link (Ii = Pi(Vi) / Vi) at the moment t. */
+	value: number | null;
+	/** Veracity, from 0 to 100. */
+	veracity: number | null;
+	/** Uncertainty above and below the value, in % (the same on both sides for a plain number). */
+	uncertainty_above: number | null;
+	uncertainty_below: number | null;
+	/** Average impact of the value, from 0 to 100, and the number of people it impacts. */
+	impact: number | null;
+	people_impacted: number | null;
+	/** Originality, from 0 to 100: voted by the proofs of the value, else the one of the relation. Null when none exists. */
+	originality: number | null;
+}
+
+export type RelationData = z.infer<typeof RelationSchema> & {
+	id?: string;
+	/** Every parameter of every value to modify (see RelationValueEntry). Computed, not stored. */
+	relation?: RelationValueEntry[];
+};
 
 /**
  * Every value of a relation that has its own value parameters (proofs, veracity, originality): the impact of each value

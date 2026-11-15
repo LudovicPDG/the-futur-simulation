@@ -121,7 +121,9 @@ export async function createDatabase() {
 				existence evolution_t NOT NULL DEFAULT ${DEFAULT_EXISTENCE},
 				originality NUMERIC(5, 2) NOT NULL DEFAULT 0.0 CHECK (originality >= 0 AND originality <= 100),
 				impact evolution_t NOT NULL DEFAULT ${DEFAULT_IMPACT},
-				people_impacted evolution_t NOT NULL DEFAULT ${DEFAULT_PEOPLE}
+				people_impacted evolution_t NOT NULL DEFAULT ${DEFAULT_PEOPLE},
+				-- Tableau "relation" : les paramètres de chaque valeur à modifier (valeur, véracité, incertitudes, impact, originalité).
+				relation JSONB NOT NULL DEFAULT '[]'
 			);
 
 			CREATE TABLE proof_relations (

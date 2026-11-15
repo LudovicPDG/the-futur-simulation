@@ -90,8 +90,19 @@ export const PEOPLE_IMPACTED_COLUMN = {
 	min: 0
 } satisfies CurveColumns[string];
 
-/** The scores of a value: the ones of a proof and the number of people impacted. */
-export const VALUE_SCORE_FIELDS: string[] = [...SCORE_FIELDS, 'people_impacted'];
+/**
+ * The relevance of an entry of a list among the other entries of the list (an "other" value, a titled item, a ranked
+ * entry): how much it matters in this list. Only a value in a list has it; it is not the relevance of a proof.
+ */
+export const VALUE_RELEVANCE_COLUMN = {
+	description:
+		'The relevance of this entry in its list at this date: how much it matters among the other entries of the list, from 0 (it does not matter) to 100 (it is essential). Use the whole scale.',
+	min: 0,
+	max: 100
+} satisfies CurveColumns[string];
+
+/** The scores of a value: the ones of a proof, the number of people impacted and the relevance (value in a list). */
+export const VALUE_SCORE_FIELDS: string[] = [...SCORE_FIELDS, 'people_impacted', 'relevance'];
 
 /**
  * The scores the genie draws as curves of the time. The originality is not one of them: it is a single number (not a
@@ -123,6 +134,8 @@ export function valueColumns(evolution: boolean, scored: boolean): CurveColumns 
 	}
 	// Every value has an impact of its own: its average impact and the number of people it impacts.
 	columns.people_impacted = PEOPLE_IMPACTED_COLUMN;
+	// An entry of a list also has a relevance in this list.
+	if (scored) columns.relevance = VALUE_RELEVANCE_COLUMN;
 	return columns;
 }
 
@@ -153,6 +166,8 @@ export const ValueEditSchema = z.object({
 	impact: StoredScoreSchema,
 	/** The number of people impacted, a function of the time from 0 to +infinity (only for a value with its own impact). */
 	people_impacted: StoredScoreSchema.optional(),
+	/** The relevance of the entry in its list, a function of the time from 0 to 100 (only for a value in a list). */
+	relevance: StoredScoreSchema.optional(),
 	originality: StoredScoreSchema
 });
 
@@ -176,7 +191,7 @@ export const ProofEditSchema = z.object({
  * The desired value of a value without an originality and an impact: a primary property of the element (name,
  * description, existence...) or a value of a relation (its originality and impact are the relation's).
  */
-export const PlainValueEditSchema = ValueEditSchema.omit({ impact: true, originality: true, people_impacted: true });
+export const PlainValueEditSchema = ValueEditSchema.omit({ impact: true, originality: true, people_impacted: true, relevance: true });
 
 export type ValueEdit = z.infer<typeof ValueEditSchema> | z.infer<typeof PlainValueEditSchema>;
 export type ProofEdit = z.infer<typeof ProofEditSchema>;

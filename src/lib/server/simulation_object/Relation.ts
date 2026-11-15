@@ -9,6 +9,9 @@ import {
 import { convertToPg } from './PgConversion';
 import { db } from '../utils/database';
 import { z } from 'zod';
+import { relationValueMap } from '$lib/simulation/RelationApplication';
+import { resolveProofs } from '$lib/simulation/ProofResolution';
+import { dateToYear } from '$lib/simulation/TimeAxis';
 import { RELATION_LIST_FIELDS, type RelationListField } from '$lib/simulation/Relation';
 
 /** The kind of value a property holds: only a function (evolution), a number or a boolean can be related. */
@@ -306,8 +309,9 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				originality,
 				impact,
 				people_impacted,
-				symmetric_connexions
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+				symmetric_connexions,
+				relation
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
 			[
 				convertToPg(relation.name),
 				convertToPg(relation.description),
@@ -321,10 +325,27 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 				relation.originality,
 				convertToPg(relation.impact),
 				convertToPg(relation.people_impacted),
-				JSON.stringify(relation.symmetric_value_to_modify ?? [])
+				JSON.stringify(relation.symmetric_value_to_modify ?? []),
+				JSON.stringify(relationValueMap(relation, [], [], dateToYear(Date.now())))
 			]
 		);
 		return result.rows[0].id;
+	}
+
+	/**
+	 * Computes the "relation" array of a relation (see relationValueMap) from its proofs, as they stand today, and
+	 * saves it. Called each time a proof or a value of the relation changes.
+	 */
+	async refreshValueMap(relationId: string): Promise<RelationData['relation']> {
+		const relation = (await this.get_all()).find((item) => item.id === relationId);
+		if (!relation) return [];
+		const { ProofServer } = await import('./Proof');
+		const t = dateToYear(Date.now());
+		const stored = (await ProofServer.instance.get_all()).filter((proof) => proof.relation_id === relationId);
+		const proofs = resolveProofs(stored, t) as unknown as object[];
+		const map = relationValueMap(relation, proofs, [], t);
+		await db.query(`UPDATE relations SET relation = $1 WHERE id = $2`, [JSON.stringify(map), relationId]);
+		return map;
 	}
 
 	async get_all(): Promise<RelationData[]> {
@@ -353,7 +374,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			existence: row.existence_json,
 			originality: Number(row.originality),
 			impact: row.impact_json,
-			people_impacted: row.people_impacted_json
+			people_impacted: row.people_impacted_json,
+			relation: row.relation ?? []
 		}));
 	}
 
@@ -423,7 +445,8 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			console.error('Could not create the founding proof of the new relation value:', error);
 		}
 
-		return { ...relation, [field]: entries };
+		const map = await this.refreshValueMap(relationId);
+		return { ...relation, [field]: entries, relation: map };
 	}
 
 	/**
