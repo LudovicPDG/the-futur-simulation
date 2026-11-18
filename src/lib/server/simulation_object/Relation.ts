@@ -4,7 +4,8 @@ import {
 	RelationEstimateSchema,
 	RelationElementTypeSchema,
 	RelationSchema,
-	type RelationData
+	type RelationData,
+	type RelationScoreTables
 } from '$lib/simulation/Relation';
 import { convertToPg } from './PgConversion';
 import { db } from '../utils/database';
@@ -375,8 +376,32 @@ export class RelationServer extends BaseSimulationObject<RelationData> {
 			originality: Number(row.originality),
 			impact: row.impact_json,
 			people_impacted: row.people_impacted_json,
-			relation: row.relation ?? []
+			relation: row.relation ?? [],
+			score_tables: row.score_tables ?? {}
 		}));
+	}
+
+	/**
+	 * Saves the interpolation table Pi (points [Vi, Pi]) of one score of one value to modify of a relation. Points that
+	 * are not finite are dropped; an empty table removes it, so it is computed from the curves again.
+	 */
+	async setScoreTable(
+		relationId: string,
+		valueName: string,
+		score: string,
+		points: [number, number][]
+	): Promise<RelationScoreTables> {
+		const relation = (await this.get_all()).find((item) => item.id === relationId);
+		if (!relation) throw new Error('The relation does not exist');
+		const kept = points.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+		const tables: RelationScoreTables = { ...(relation.score_tables ?? {}) };
+		const own = { ...(tables[valueName] ?? {}) };
+		if (kept.length === 0) delete own[score];
+		else own[score] = kept;
+		if (Object.keys(own).length === 0) delete tables[valueName];
+		else tables[valueName] = own;
+		await db.query(`UPDATE relations SET score_tables = $1 WHERE id = $2`, [JSON.stringify(tables), relationId]);
+		return tables;
 	}
 
 	/** Generates one new value to modify of the relation, saves it and gives it a founding proof. */

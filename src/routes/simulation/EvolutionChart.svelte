@@ -13,6 +13,7 @@
 	} from '$lib/simulation/event/EvolutionFunction';
 	import * as m from '$lib/paraglide/messages';
 	import { getLocale } from '$lib/paraglide/runtime';
+	import { simulationYear } from '$lib/stores/simulationYear';
 
 	let {
 		evolution,
@@ -60,10 +61,6 @@
 	const HALF_SPAN = 50;
 	// Number of points of the curve
 	const POINTS = 400;
-	// Smallest span of the time axis: a day
-	const MIN_SPAN = 1 / 365.25;
-	// Margin around the existence, as a share of its length, so that its bounds are not on the edges
-	const PADDING = 0.04;
 	// Half-widths of the nested bands of the cloud, in standard deviations (w = 2 sigma)
 	const CLOUD_LEVELS = [2.4, 2, 1.6, 1.2, 0.8, 0.4];
 	// Thinnest cloud, as a share of the vertical range of the curve (keeps it visible when the uncertainty is 0)
@@ -134,32 +131,9 @@
 
 	// The time axis goes from the beginning to the end of the existence
 	const axis = $derived.by(() => {
-		const { from, to } = existence;
-		let a: number;
-		let b: number;
-		if (Number.isFinite(from) && Number.isFinite(to)) {
-			a = from;
-			b = Math.max(to, from);
-		} else if (Number.isFinite(from)) {
-			a = from;
-			b = Math.max(today, from) + HALF_SPAN;
-		} else if (Number.isFinite(to)) {
-			b = to;
-			a = Math.min(today, to) - HALF_SPAN;
-		} else {
-			a = today - HALF_SPAN;
-			b = today + HALF_SPAN;
-		}
-		if (b - a < MIN_SPAN) {
-			const middle = (a + b) / 2;
-			a = middle - MIN_SPAN / 2;
-			b = middle + MIN_SPAN / 2;
-		}
-		const pad = (b - a) * PADDING;
-		return {
-			lo: Number.isFinite(from) ? a - pad : a,
-			hi: Number.isFinite(to) ? b + pad : b
-		};
+		// Always centered on the date of the simulation: from -50 to +50 years
+		const center = $simulationYear ?? today;
+		return { lo: center - HALF_SPAN, hi: center + HALF_SPAN };
 	});
 	const lo = $derived(axis.lo);
 	const hi = $derived(axis.hi);

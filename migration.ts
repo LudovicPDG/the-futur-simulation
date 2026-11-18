@@ -123,7 +123,11 @@ export async function createDatabase() {
 				impact evolution_t NOT NULL DEFAULT ${DEFAULT_IMPACT},
 				people_impacted evolution_t NOT NULL DEFAULT ${DEFAULT_PEOPLE},
 				-- Tableau "relation" : les paramètres de chaque valeur à modifier (valeur, véracité, incertitudes, impact, originalité).
-				relation JSONB NOT NULL DEFAULT '[]'
+				relation JSONB NOT NULL DEFAULT '[]',
+				-- Tables d'interpolation Pi des scores de chaque valeur à modifier :
+				-- { value_name: { veracity | uncertainty | impact | people_impacted | relevance | originality: [[Vi, Pi], ...] } }.
+				-- Absente, la table est calculée depuis les courbes (Ii = valeur de la cible / valeur de la source).
+				score_tables JSONB NOT NULL DEFAULT '{}'
 			);
 
 			CREATE TABLE proof_relations (

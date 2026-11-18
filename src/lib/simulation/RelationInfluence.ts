@@ -117,6 +117,9 @@ export function invertEstimate(estimate: EstimateFunction): EstimateFunction | u
 	}
 }
 
+/** Under this distance from a pole (a division by Vi, or by Pi), the estimates and impacts are not computed. */
+export const POLE_MARGIN = 1e-6;
+
 const share = (percent: number): number => (Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) / 100 : 0);
 
 /** Pi(Vi): the estimate of V0 given by the other value, or NaN where it is not defined. */
@@ -127,7 +130,8 @@ export function estimateAt(estimate: EstimateFunction, vi: number): number {
 		case 'additive':
 			return vi + estimate.offset;
 		case 'inverse':
-			return vi === 0 ? Number.NaN : estimate.constant / vi;
+			// Around Vi = 0 the function has a vertical asymptote: no estimate there, so no spike in the curve.
+			return Math.abs(vi) < POLE_MARGIN ? Number.NaN : estimate.constant / vi;
 		case 'points': {
 			// One point per source value (the last one given wins), sorted.
 			const byX = new Map<number, number>();
@@ -146,7 +150,7 @@ export function estimateAt(estimate: EstimateFunction, vi: number): number {
 /** Ii(Vi) = Pi(Vi) / Vi, only for display: undefined in Vi = 0. */
 export function impactAt(estimate: EstimateFunction, vi: number): number | undefined {
 	const p = estimateAt(estimate, vi);
-	return vi !== 0 && Number.isFinite(p) ? p / vi : undefined;
+	return Math.abs(vi) >= POLE_MARGIN && Number.isFinite(p) ? p / vi : undefined;
 }
 
 /**
@@ -175,7 +179,9 @@ function bounded(value: number, bounds: Bounds): number {
 export function combineRelations(
 	initial: { value: number; veracity: number; elementVeracity: number },
 	relations: RelationInput[],
-	bounds: Bounds = {}
+	bounds: Bounds = {},
+	/** False for a score (veracity, uncertainty): the 0.1 threshold on the impact ratio only concerns the value itself. */
+	checkImpact = true
 ): RelationResult {
 	let numerator = 0;
 	let denominator = 0;
@@ -203,7 +209,7 @@ export function combineRelations(
 				existence: relation.relationExistence,
 				originality: relation.originality
 			}) &&
-			(impact === undefined || isCounted({ impact }, true));
+			(!checkImpact || impact === undefined || isCounted({ impact }, true));
 		if (!counted) return { estimate, weight: 0, counted: false, impact };
 		// Far from its known points, the function extrapolates: the relation is less veracious there.
 		const weight =

@@ -1,7 +1,7 @@
 import type { Actions } from './$types';
 import { Genie } from '$lib/server/simulation_object/Genie';
 import { fail } from '@sveltejs/kit';
-import { RelationRefusal } from '$lib/server/simulation_object/Relation';
+import { RelationRefusal, RelationServer } from '$lib/server/simulation_object/Relation';
 import { isValueListField } from '$lib/server/simulation_object/Value';
 
 export const actions: Actions = {
@@ -54,6 +54,26 @@ export const actions: Actions = {
 			if (error instanceof RelationRefusal) return { success: false, refusal: error.code };
 			throw error;
 		}
+	},
+
+	/** Saves the interpolation table Pi of one score of one value of a relation (points [[Vi, Pi], ...]; empty: computed again). */
+	setScoreTable: async ({ request }) => {
+		const data = await request.formData();
+		const relationId = data.get('relation_id')?.toString();
+		const valueName = data.get('value_name')?.toString();
+		const score = data.get('score')?.toString();
+		let points: unknown;
+		try {
+			points = JSON.parse(data.get('points')?.toString() ?? '[]');
+		} catch {
+			return fail(400, { message: 'Invalid points' });
+		}
+		const valid =
+			Array.isArray(points) &&
+			points.every((point) => Array.isArray(point) && point.length === 2 && point.every((n) => typeof n === 'number'));
+		if (!relationId || !valueName || !score || !valid) return fail(400, { message: 'Invalid score table' });
+		const tables = await RelationServer.instance.setScoreTable(relationId, valueName, score, points as [number, number][]);
+		return { success: true, tables };
 	}
 };
 

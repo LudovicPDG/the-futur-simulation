@@ -118,8 +118,13 @@ export interface RelationValueEntry {
 	originality: number | null;
 }
 
+/** The score tables Pi of a relation, by value_name then by score: points [Vi, Pi] (see RelationApplication). */
+export type RelationScoreTables = Record<string, Partial<Record<string, [number, number][]>>>;
+
 export type RelationData = z.infer<typeof RelationSchema> & {
 	id?: string;
+	/** The stored interpolation tables of the scores of its values. A missing table is computed from the curves. */
+	score_tables?: RelationScoreTables;
 	/** Every parameter of every value to modify (see RelationValueEntry). Computed, not stored. */
 	relation?: RelationValueEntry[];
 };

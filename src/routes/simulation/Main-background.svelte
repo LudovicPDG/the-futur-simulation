@@ -8,6 +8,8 @@
 	import { getLocale } from '$lib/paraglide/runtime';
 	import * as m from '$lib/paraglide/messages';
 	import DatedValue from './DatedValue.svelte';
+	import ScoreFunction from './ScoreFunction.svelte';
+	import { simulationYear } from '$lib/stores/simulationYear';
 	import ValueParameters, {
 		type RelationInfluenceEntry,
 		type ValueInfluence
@@ -22,7 +24,14 @@
 	} from '$lib/simulation/event/EvolutionFunction';
 	import { valueKind, type ProofData } from '$lib/simulation/Proof';
 	import { resolveAtDate, resolveValue, resolveValueFunctions } from '$lib/simulation/ProofResolution';
-	import { applyRelations, relationImpact, withRelationValueMap } from '$lib/simulation/RelationApplication';
+	import {
+		applyRelations,
+		relationImpact,
+		relationScore,
+		relationScoreExpression,
+		withRelationValueMap,
+		type ScoreKind
+	} from '$lib/simulation/RelationApplication';
 	import { belowThreshold } from '$lib/simulation/CountThreshold';
 	import { dateToYear } from '$lib/simulation/TimeAxis';
 	import { onMount } from 'svelte';
@@ -44,6 +53,10 @@
 
 	// The date of the time machine, as a decimal year: every value is shown as it stands at this moment.
 	const year = $derived(dateToYear(date.getTime()));
+	// Shared with the graphs, which are centered on this date (-50 / +50 years)
+	$effect(() => {
+		simulationYear.set(year);
+	});
 	// The proofs decide each value, then the relations move the values that are linked to one another.
 	const simulation_data = $derived(applyRelations(resolveAtDate(storedData, year), year, storedData));
 
@@ -763,14 +776,26 @@
 		// Scores: the weighted average voted by the proofs of the value (the founding proof among them).
 		const voted = resolveValue(proofs, year);
 		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'people_impacted' | 'relevance' | 'originality'): number => voted[key] ?? NaN;
-		const veracityNow = score('veracity');
-		const uncertaintyNow = score('uncertainty');
-		const impactNow = score('impact');
-		const peopleNow = score('people_impacted');
-		// Only the values of an array and the values of a relation have an originality and an impact.
-		const hasValueScores = inArray || relationImpact !== undefined;
+		// The veracity and the uncertainty of a value of an element are moved by its relations, like its value.
+		const linked = !activeRelation && !inArray && item === undefined;
 		// Every value has an impact of its own, except the parameters of the element themselves.
 		const hasImpact = !nameKeys(name).some((key) => ['impact', 'people_impacted', 'originality'].includes(key));
+		const moved = (kind: ScoreKind) =>
+			linked && (hasImpact || (kind !== 'impact' && kind !== 'people_impacted'))
+				? relationScore(kind, id, keys, simulation_data, storedData, year)
+				: undefined;
+		const movedScores = {
+			veracity: moved('veracity'),
+			uncertainty: moved('uncertainty'),
+			impact: moved('impact'),
+			people_impacted: moved('people_impacted')
+		};
+		const veracityNow = movedScores.veracity ?? score('veracity');
+		const uncertaintyNow = movedScores.uncertainty ?? score('uncertainty');
+		const impactNow = movedScores.impact ?? score('impact');
+		const peopleNow = movedScores.people_impacted ?? score('people_impacted');
+		// Only the values of an array and the values of a relation have an originality and an impact.
+		const hasValueScores = inArray || relationImpact !== undefined;
 		// Originality: voted by the proofs of the value; the one of the relation for a value of a relation without one.
 		let originalityNow = NaN;
 		// The relevance of an entry of a list in its list.
@@ -801,6 +826,11 @@
 			originality: Number.isFinite(originalityNow) ? `${Math.round(originalityNow as number)}%` : null,
 			functions: {
 				...resolveValueFunctions(proofs),
+				...Object.fromEntries(
+					(Object.entries(movedScores) as [ScoreKind, number | undefined][])
+						.filter(([, now]) => now !== undefined)
+						.map(([kind, now]) => [kind, relationScoreExpression(kind, id, keys, storedData, year) ?? String(now)])
+				),
 				// A value of a relation: its impact is Ii = Pi(Vi) / Vi; the originality of the relation backs up its proofs.
 				...(relationImpact !== undefined && activeRelation
 					? {
@@ -1134,21 +1164,33 @@
 	{@const name = relationValueName(direction, connexion)}
 	{@const entry = (activeRelation?.relation ?? []).find((each) => each.name === name)}
 	{#if entry}
+		{@const linkImpact = impactOf(connexion)}
+		{@const own = resolveValueFunctions(
+			allProofs.filter(
+				(proof) =>
+					!proof.parent_proof_id &&
+					proof.relation_id === activeRelation?.id &&
+					nameKeys(proof.value_name).includes(name.toLowerCase())
+			)
+		)}
+		{@const originalityFunction =
+			own.originality ?? (Number.isFinite(Number(activeRelation?.originality)) ? String(Number(activeRelation?.originality)) : undefined)}
 		<div class="impact-category relation-summary">
 			<h4 class="impact-title">{formatLabel('relation')}</h4>
 			<div class="summary-grid">
 				{#each [
-					{ label: m.simulation_field_value(), text: formatNumber(entry.value), tone: 'value' },
-					{ label: m.simulation_veracity_label(), text: formatNumber(entry.veracity, '%'), tone: 'value' },
-					{ label: m.simulation_evolution_uncertainty_above(), text: formatNumber(entry.uncertainty_above, '%'), tone: 'uncertainty' },
-					{ label: m.simulation_evolution_uncertainty_below(), text: formatNumber(entry.uncertainty_below, '%'), tone: 'uncertainty' },
-					{ label: m.simulation_field_average_impact(), text: formatNumber(entry.impact), tone: 'impact' },
-					{ label: m.simulation_field_people_impacted(), text: formatNumber(entry.people_impacted), tone: 'impact' },
-					{ label: m.simulation_originality_label(), text: formatNumber(entry.originality, '%'), tone: 'value' }
+					{ label: m.simulation_field_value(), text: formatNumber(entry.value), tone: 'value', fn: linkImpact.expression, fit: true },
+					{ label: m.simulation_veracity_label(), text: formatNumber(entry.veracity, '%'), tone: 'value', fn: own.veracity },
+					{ label: m.simulation_evolution_uncertainty_above(), text: formatNumber(entry.uncertainty_above, '%'), tone: 'uncertainty', fn: own.uncertainty },
+					{ label: m.simulation_evolution_uncertainty_below(), text: formatNumber(entry.uncertainty_below, '%'), tone: 'uncertainty', fn: own.uncertainty },
+					{ label: m.simulation_field_average_impact(), text: formatNumber(entry.impact), tone: 'impact', fn: own.impact },
+					{ label: m.simulation_field_people_impacted(), text: formatNumber(entry.people_impacted), tone: 'impact', fn: own.people_impacted, fit: true, unit: m.simulation_people_unit() },
+					{ label: m.simulation_originality_label(), text: formatNumber(entry.originality, '%'), tone: 'value', fn: originalityFunction }
 				] as part (part.label)}
 					<div class="impact-part summary-part {part.tone}">
 						<h5>{part.label}</h5>
 						<strong class="summary-number">{part.text}</strong>
+						{#if part.fn}<ScoreFunction expression={part.fn} fit={part.fit ?? false} unit={part.unit} />{/if}
 					</div>
 				{/each}
 			</div>
@@ -1712,6 +1754,11 @@
 
 	/* The last score (originality) has no pair: it takes the whole row. */
 	.summary-part:last-child {
+		grid-column: 1 / -1;
+	}
+
+	/* A tile whose function is shown takes the whole row: the chart needs the width. */
+	.summary-part:has(:global(.score-chart)) {
 		grid-column: 1 / -1;
 	}
 

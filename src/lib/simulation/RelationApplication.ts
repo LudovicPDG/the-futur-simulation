@@ -7,7 +7,7 @@ import {
 	splineExpression,
 	type EvolutionComponent
 } from './event/EvolutionFunction';
-import { resolveValue, valueNames } from './ProofResolution';
+import { resolveAtDate, resolveProofs, resolveValue, valueNames } from './ProofResolution';
 import { dateToYear } from './TimeAxis';
 import { belowThreshold, isCounted, type CountedScore } from './CountThreshold';
 import { relationValueName, type RelationConnexionData, type RelationData, type RelationValueEntry } from './Relation';
@@ -16,6 +16,7 @@ import {
 	estimateAt,
 	impactAt,
 	invertEstimate,
+	POLE_MARGIN,
 	toEstimateFunction,
 	type Bounds,
 	type EstimateFunction,
@@ -310,7 +311,7 @@ export function relationImpact<T extends object>(
 	// The impact at each known date does not need distinct source values (a constant source has an impact too).
 	const anchors = anchored?.anchors ?? (sourceBase && targetBase ? anchorsOf(edge, sourceBase, targetBase, bounds) : []);
 	const points = anchors.flatMap((anchor): [number, number][] =>
-		anchor.source === 0 ? [] : [[anchor.date, anchor.estimate / anchor.source]]
+		Math.abs(anchor.source) < POLE_MARGIN ? [] : [[anchor.date, anchor.estimate / anchor.source]]
 	);
 	// The scores of the link under their threshold (see CountThreshold): the veracity of its value, the certainty that
 	// the relation exists, its originality and its impact. The veracity of the source value and the existence of its
@@ -337,6 +338,167 @@ export function relationImpact<T extends object>(
 		counted: below.length === 0 && sourceCounted,
 		expression: points.length > 0 ? splineExpression({ points, before: null, after: null }) : undefined
 	};
+}
+
+/** The scores of a value that a relation moves, the same way it moves the value itself. */
+export type ScoreKind = 'veracity' | 'uncertainty' | 'impact' | 'people_impacted' | 'relevance' | 'originality';
+
+/** The scores that are percentages (0..100); the number of people impacted is a count (0 and above). */
+const boundsOfScore = (kind: ScoreKind): Bounds => (kind === 'people_impacted' ? { min: 0 } : { min: 0, max: 100 });
+
+/** The score of a value at t, decided by its proofs (resolved by resolveProofs); undefined where no proof gives it. */
+function scoreOf(kind: ScoreKind, elementId: unknown, names: string[], proofs: ProofData[], t: number): number | undefined {
+	const group = proofs.filter(
+		(proof) =>
+			!proof.parent_proof_id &&
+			(proof.fact_id ?? proof.relation_id) === elementId &&
+			valueNames(proof.value_name).some((name) => names.includes(name.toLowerCase()))
+	);
+	if (group.length === 0) return undefined;
+	const score = resolveValue(group, t)[kind];
+	if (score === undefined || !Number.isFinite(score)) return undefined;
+	return kind === 'people_impacted' ? Math.max(0, score) : clampScore(score);
+}
+
+/**
+ * The estimate Pi of a score of the target from the same score of the source, as a table of points [source, target]
+ * taken at each known date of the two curves (the base, before the proofs): the first table of a link is the score of the
+ * source against the score of the target, i.e. Ii = target / source at each date. A point whose source is at a pole of that
+ * ratio (a source score of 0) is not kept, so the table has no vertical asymptote. With fewer than two distinct sources
+ * the estimate is the single ratio, proportional. Undefined when no date gives both scores.
+ */
+function scoreEstimate(
+	kind: ScoreKind,
+	edge: Edge,
+	sourceNames: string[],
+	targetNames: string[],
+	dates: number[],
+	proofsAt: (date: number) => ProofData[]
+): EstimateFunction | undefined {
+	// The table stored in the relation (edited) wins over the one computed from the curves. A symmetric link is stored
+	// once, from element 1 to element 2: read from the other end, its points are swapped.
+	const stored = edge.relation.score_tables?.[relationValueName(edge.direction, edge.connexion)]?.[kind];
+	if (stored) {
+		const backward = edge.direction === 'symmetric' && edge.sourceId === edge.relation.Element2ID;
+		const table = stored
+			.map(([x, y]): [number, number] => (backward ? [y, x] : [x, y]))
+			.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y) && Math.abs(x) >= POLE_MARGIN);
+		if (new Set(table.map(([x]) => x)).size >= 2) return { kind: 'points', points: table };
+	}
+	const points: [number, number][] = [];
+	for (const date of dates) {
+		const proofs = proofsAt(date);
+		const source = scoreOf(kind, edge.sourceId, sourceNames, proofs, date);
+		const target = scoreOf(kind, edge.targetId, targetNames, proofs, date);
+		if (source === undefined || target === undefined || Math.abs(source) < POLE_MARGIN) continue;
+		points.push([source, target]);
+	}
+	if (new Set(points.map(([x]) => x)).size >= 2) return { kind: 'points', points };
+	const last = points[points.length - 1];
+	return last ? { kind: 'proportional', factor: last[1] / last[0] } : undefined;
+}
+
+/**
+ * The veracity or the uncertainty of a value moved by the links that reach it, at t, with the same formula as its
+ * value: V = (V0·(A0·E0)^2.5 + Σ Pi(Vi)·Ai·Ei·Ri·Fi·Oi) / ((A0·E0)^2.5 + Σ Ai·Ei·Ri·Fi·Oi), where V0 and Vi are the scores.
+ * `names` are the lowercase names of the target value. Undefined when no link reaches it or it has no such score.
+ */
+export function relationScore<T extends object>(
+	kind: ScoreKind,
+	targetId: unknown,
+	names: string[],
+	resolved: T[],
+	base: T[],
+	t: number
+): number | undefined {
+	const typeOf = (element: T) => (element as { type?: unknown }).type;
+	const idOf = (element: T) => (element as { id?: unknown }).id;
+	const resolvedProofs = resolved.filter((element) => typeOf(element) === 'proof') as unknown as ProofData[];
+	const storedProofs = base.filter((element) => typeOf(element) === 'proof') as unknown as ProofData[];
+	const relations = resolved.filter(
+		(element) => typeOf(element) === 'relation' && 'Element1ID' in element && 'Element2ID' in element
+	) as unknown as RelationData[];
+	const elementOf = (list: T[], id: unknown) =>
+		list.find((element) => idOf(element) === id && typeOf(element) !== 'proof' && typeOf(element) !== 'relation') as
+			| Element
+			| undefined;
+
+	const proofCache = new Map<number, ProofData[]>();
+	const proofsAt = (date: number) => {
+		if (!proofCache.has(date)) proofCache.set(date, resolveProofs(storedProofs, date));
+		return proofCache.get(date)!;
+	};
+
+	const inputs: RelationInput[] = [];
+	let target: Element | undefined;
+	let targetNames: string[] = [];
+	for (const relation of relations) {
+		const relationExistence = existenceOf(relation as unknown as Element, t);
+		for (const edge of edgesOf(relation)) {
+			if (edge.targetId !== targetId || !names.includes(edge.targetProperty.toLowerCase())) continue;
+			const source = elementOf(resolved, edge.sourceId);
+			target = elementOf(resolved, edge.targetId);
+			const sourceNode = source && locate(source, edge.sourceProperty);
+			const targetNode = target && locate(target, edge.targetProperty);
+			if (!source || !sourceNode || !targetNode) continue;
+			targetNames = targetNode.names;
+			const sourceScore = scoreOf(kind, edge.sourceId, sourceNode.names, resolvedProofs, t);
+			if (sourceScore === undefined) continue;
+			const sourceBase = elementOf(base, edge.sourceId);
+			const targetBase = elementOf(base, edge.targetId);
+			const sourceBaseNode = (sourceBase && locate(sourceBase, edge.sourceProperty)) || sourceNode;
+			const targetBaseNode = (targetBase && locate(targetBase, edge.targetProperty)) || targetNode;
+			const dates = [...new Set([...sourceBaseNode.dates, ...targetBaseNode.dates, t])].sort((a, b) => a - b);
+			const estimate = scoreEstimate(kind, edge, sourceNode.names, targetNode.names, dates, proofsAt);
+			if (!estimate) continue;
+			const relationValue = relationValueName(edge.direction, edge.connexion).toLowerCase();
+			inputs.push({
+				value: sourceScore,
+				estimate,
+				valueVeracity: veracityOf(edge.sourceId, sourceNode.names, resolvedProofs, t),
+				elementVeracity: existenceOf(source, t),
+				relationVeracity: veracityOf(relation.id, [relationValue], resolvedProofs, t),
+				relationExistence,
+				originality: Number(relation.originality)
+			});
+		}
+	}
+	if (!target || inputs.length === 0) return undefined;
+	const initial = scoreOf(kind, targetId, targetNames, resolvedProofs, t);
+	if (initial === undefined) return undefined;
+	const { value } = combineRelations(
+		{ value: initial, veracity: veracityOf(targetId, targetNames, resolvedProofs, t), elementVeracity: existenceOf(target, t) },
+		inputs,
+		boundsOfScore(kind),
+		false
+	);
+	return value !== undefined && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * The same score as a function of the time: its value moved by the links at each known date of the target, joined by a
+ * spline. The dates where it cannot be computed (no estimate: a pole) are left out, so the curve has no spike or dip there.
+ */
+export function relationScoreExpression<T extends object>(
+	kind: ScoreKind,
+	targetId: unknown,
+	names: string[],
+	base: T[],
+	t: number
+): string | undefined {
+	const element = base.find(
+		(each) => (each as { id?: unknown }).id === targetId && (each as { type?: unknown }).type !== 'proof'
+	) as Element | undefined;
+	const dates = new Set<number>([t]);
+	for (const name of names) for (const date of (element && locate(element, name))?.dates ?? []) dates.add(date);
+	const points = [...dates]
+		.sort((a, b) => a - b)
+		.flatMap((date): [number, number][] => {
+			const score = relationScore(kind, targetId, names, resolveAtDate(base, date), base, date);
+			return score === undefined ? [] : [[date, score]];
+		});
+	if (points.length === 0) return undefined;
+	return points.length === 1 ? String(points[0][1]) : splineExpression({ points, before: null, after: null });
 }
 
 /**
