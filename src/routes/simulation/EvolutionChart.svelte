@@ -546,6 +546,20 @@
 					</text>
 					{/if}
 
+					<!-- Date of the simulation (the time machine) -->
+					{#if $simulationYear !== null && $simulationYear >= lo && $simulationYear <= hi}
+						<line
+							x1={geometry.xScale($simulationYear)}
+							y1="0"
+							x2={geometry.xScale($simulationYear)}
+							y2={innerHeight}
+							class="simulation-line"
+						/>
+						<text x={geometry.xScale($simulationYear) + 3} y="19" class="simulation-label">
+							{m.simulation_evolution_date()}
+						</text>
+					{/if}
+
 					{#if active}
 						<line x1={active.x} y1="0" x2={active.x} y2={innerHeight} class="active-line" />
 						<circle cx={active.x} cy={active.y} r="3.8" class="active-dot" />
@@ -810,6 +824,23 @@
 		stroke-width: 1;
 		stroke-dasharray: 3 3;
 		opacity: 0.8;
+	}
+
+	.simulation-line {
+		stroke: #f472b6;
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
+		opacity: 0.9;
+	}
+
+	.simulation-label {
+		font-size: 9px;
+		font-weight: 600;
+		fill: #f472b6;
+	}
+
+	:global(body.light) .simulation-label {
+		fill: #be185d;
 	}
 
 	.bound-line {

@@ -96,6 +96,7 @@
 	"simulation_evolution_existence": "Existence du fait (probabilité cumulée au-dessus de 50 %) : de {start} à {end}",
 	"simulation_evolution_never_exists": "Le fait a plus de chances de ne jamais commencer : l'évolution n'existe pas.",
 	"simulation_evolution_today": "Aujourd'hui",
+	"simulation_evolution_date": "Date",
 	"simulation_evolution_function_hint": "f(t), avec t = l'année",
 	"simulation_evolution_see_more": "Voir plus",
 	"simulation_evolution_see_less": "Voir moins",
