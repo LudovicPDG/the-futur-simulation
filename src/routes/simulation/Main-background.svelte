@@ -1229,7 +1229,6 @@
 				ratio: expression ? { expression, now } : undefined
 			};
 		}}
-		{@const ratioLabel = direction === 'element2_element1' ? 'A / B' : 'B / A'}
 		{@const scorePart = (
 			label: string,
 			kind: 'veracity' | 'uncertainty' | 'impact' | 'people_impacted' | 'originality',
@@ -1241,7 +1240,7 @@
 		) => {
 			const { extras, ratio } = scoreExtras(kind, unit, side);
 			return ratio
-				? { label: `${label} · ${ratioLabel}`, text: formatNumber(ratio.now), tone, fn: ratio.expression, fit: true, unit: '', extras }
+				? { label, text: formatNumber(ratio.now), tone, fn: ratio.expression, fit: true, unit: '', extras }
 				: kind === 'people_impacted'
 					? { label, text: ownText, tone, fn: own, fit: true, unit, extras }
 					: { label, text: ownText, tone, fn: own, fit: false, unit: undefined, extras };
