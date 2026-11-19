@@ -27,6 +27,7 @@
 	import {
 		applyRelations,
 		relationImpact,
+		relationCurves,
 		relationScore,
 		relationScoreExpression,
 		withRelationValueMap,
@@ -1173,24 +1174,96 @@
 					nameKeys(proof.value_name).includes(name.toLowerCase())
 			)
 		)}
+		{@const labelA = `A · ${formatRelationProperty(connexion.Element1Property, relationElement1)}`}
+		{@const labelB = `B · ${formatRelationProperty(connexion.Element2Property, relationElement2)}`}
+		{@const curves = activeRelation ? relationCurves(activeRelation, connexion, storedData) : {}}
+		{@const linkCurves = [
+			curves.a && { label: labelA, expression: curves.a.expression, color: '#f59e0b', unit: curves.a.unit },
+			curves.b && { label: labelB, expression: curves.b.expression, color: '#38bdf8', unit: curves.b.unit }
+		].filter((curve) => !!curve)}
+		<!-- The scores of the two linked values (A and B), each one decided by the proofs of its own value -->
+		{@const scoresOf = (elementId: string | undefined, property: string) =>
+			resolveValueFunctions(
+				allProofs.filter(
+					(proof) =>
+						!proof.parent_proof_id &&
+						proof.fact_id === elementId &&
+						nameKeys(proof.value_name).includes(property.toLowerCase())
+				)
+			)}
+		{@const scoresA = scoresOf(activeRelation?.Element1ID, connexion.Element1Property)}
+		{@const scoresB = scoresOf(activeRelation?.Element2ID, connexion.Element2Property)}
+		{@const elementOriginality = (element: unknown) => {
+			const value = Number((element as { originality?: unknown } | undefined)?.originality);
+			return Number.isFinite(value) ? String(value) : undefined;
+		}}
+		{@const scoreExtras = (
+			kind: 'veracity' | 'uncertainty' | 'impact' | 'people_impacted' | 'originality',
+			unit = '%',
+			side?: 'up' | 'down'
+		) => {
+			// The uncertainty of an evolution is the one of its curve (above and below), in the unit of the value; the
+			// originality of a value without its own is the one of its element.
+			const of = (scores: typeof scoresA, curve: typeof curves.a, element: unknown) =>
+				kind === 'uncertainty' && side && curve?.uncertainty
+					? { expression: curve.uncertainty[side], unit: curve.unit }
+					: scores[kind]
+						? { expression: scores[kind]!, unit }
+						: kind === 'originality' && elementOriginality(element)
+							? { expression: elementOriginality(element)!, unit }
+							: undefined;
+			const a = of(scoresA, curves.a, relationElement1);
+			const b = of(scoresB, curves.b, relationElement2);
+			// Like the value of the link: the score of the target divided by the score of the source (B / A from element 1
+			// to element 2, A / B the other way).
+			const [source, target] = direction === 'element2_element1' ? [b, a] : [a, b];
+			const expression = source && target ? `(${target.expression}) / (${source.expression})` : undefined;
+			const now = expression
+				? buildEvolutionFunction([{ function: expression, weight: 1, uncertainty_down: '0', uncertainty_up: '0' }])(year)
+				: Number.NaN;
+			return {
+				extras: [
+					a && { label: labelA, color: '#f59e0b', ...a },
+					b && { label: labelB, color: '#38bdf8', ...b }
+				].filter((curve) => !!curve),
+				ratio: expression ? { expression, now } : undefined
+			};
+		}}
+		{@const ratioLabel = direction === 'element2_element1' ? 'A / B' : 'B / A'}
+		{@const scorePart = (
+			label: string,
+			kind: 'veracity' | 'uncertainty' | 'impact' | 'people_impacted' | 'originality',
+			tone: string,
+			own: string | undefined,
+			ownText: string,
+			unit = '%',
+			side?: 'up' | 'down'
+		) => {
+			const { extras, ratio } = scoreExtras(kind, unit, side);
+			return ratio
+				? { label: `${label} · ${ratioLabel}`, text: formatNumber(ratio.now), tone, fn: ratio.expression, fit: true, unit: '', extras }
+				: kind === 'people_impacted'
+					? { label, text: ownText, tone, fn: own, fit: true, unit, extras }
+					: { label, text: ownText, tone, fn: own, fit: false, unit: undefined, extras };
+		}}
 		{@const originalityFunction =
 			own.originality ?? (Number.isFinite(Number(activeRelation?.originality)) ? String(Number(activeRelation?.originality)) : undefined)}
 		<div class="impact-category relation-summary">
 			<h4 class="impact-title">{formatLabel('relation')}</h4>
 			<div class="summary-grid">
 				{#each [
-					{ label: m.simulation_field_value(), text: formatNumber(entry.value), tone: 'value', fn: linkImpact.expression, fit: true },
-					{ label: m.simulation_veracity_label(), text: formatNumber(entry.veracity, '%'), tone: 'value', fn: own.veracity },
-					{ label: m.simulation_evolution_uncertainty_above(), text: formatNumber(entry.uncertainty_above, '%'), tone: 'uncertainty', fn: own.uncertainty },
-					{ label: m.simulation_evolution_uncertainty_below(), text: formatNumber(entry.uncertainty_below, '%'), tone: 'uncertainty', fn: own.uncertainty },
-					{ label: m.simulation_field_average_impact(), text: formatNumber(entry.impact), tone: 'impact', fn: own.impact },
-					{ label: m.simulation_field_people_impacted(), text: formatNumber(entry.people_impacted), tone: 'impact', fn: own.people_impacted, fit: true, unit: m.simulation_people_unit() },
-					{ label: m.simulation_originality_label(), text: formatNumber(entry.originality, '%'), tone: 'value', fn: originalityFunction }
+					{ label: m.simulation_field_value(), text: formatNumber(entry.value), tone: 'value', fn: linkImpact.expression, fit: true, unit: undefined, extras: linkCurves },
+					scorePart(m.simulation_veracity_label(), 'veracity', 'value', own.veracity, formatNumber(entry.veracity, '%')),
+					scorePart(m.simulation_evolution_uncertainty_above(), 'uncertainty', 'uncertainty', own.uncertainty, formatNumber(entry.uncertainty_above, '%'), '%', 'up'),
+					scorePart(m.simulation_evolution_uncertainty_below(), 'uncertainty', 'uncertainty', own.uncertainty, formatNumber(entry.uncertainty_below, '%'), '%', 'down'),
+					scorePart(m.simulation_field_average_impact(), 'impact', 'impact', own.impact, formatNumber(entry.impact), ''),
+					scorePart(m.simulation_field_people_impacted(), 'people_impacted', 'impact', own.people_impacted, formatNumber(entry.people_impacted), m.simulation_people_unit()),
+					scorePart(m.simulation_originality_label(), 'originality', 'value', originalityFunction, formatNumber(entry.originality, '%'))
 				] as part (part.label)}
 					<div class="impact-part summary-part {part.tone}">
 						<h5>{part.label}</h5>
 						<strong class="summary-number">{part.text}</strong>
-						{#if part.fn}<ScoreFunction expression={part.fn} fit={part.fit ?? false} unit={part.unit} />{/if}
+						{#if part.fn}<ScoreFunction expression={part.fn} fit={part.fit ?? false} unit={part.unit} extras={part.extras} />{/if}
 					</div>
 				{/each}
 			</div>

@@ -8,8 +8,11 @@
 		range,
 		threshold,
 		fit = false,
-		unit
+		unit,
+		extras
 	}: {
+		/** Other curves drawn over the score (the two values a link joins), each one on its own scale. */
+		extras?: { label: string; expression: string; color: string; unit?: string }[];
 		/** The unit of the axis when the score is not a percentage (a number of people). */
 		unit?: string;
 		/** True for a value that is not from 0 to 100 (the impact of a relation): the axis fits the curve. */
@@ -41,6 +44,7 @@
 				bounds={fit ? undefined : [0, 100]}
 				fitCurve={fit}
 					{threshold}
+					{extras}
 				edited={range ? { function: true, above: false, below: false } : undefined}
 				ranges={range ? { function: range } : undefined}
 			/>

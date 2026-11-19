@@ -48,6 +48,10 @@ interface ValueNode {
 	unit: string;
 	/** The dates of the interpolation points of its curve (empty for a number). */
 	dates: number[];
+	/** The value as a function of the time (the text of its expression). */
+	expression: string;
+	/** Its uncertainty above and below as functions of the time (only for an evolution). */
+	uncertainty?: { up: string; down: string };
 	read(t: number): number | undefined;
 	/** Gives the value its decided number at t, on the element given (a copy). */
 	write(element: Element, decided: number, t: number): void;
@@ -89,6 +93,8 @@ function locate(element: Element, name: string): ValueNode | undefined {
 				names: [key],
 				unit,
 				dates: datesOf(components),
+				expression: combineEvolution(components).function,
+				uncertainty: uncertaintyOf(components),
 				read: (t) => finite(buildEvolutionFunction(components)(t)),
 				write: (target, decided, t) => {
 					const current = buildEvolutionFunction(components)(t);
@@ -97,7 +103,14 @@ function locate(element: Element, name: string): ValueNode | undefined {
 			};
 		}
 		if (typeof raw === 'number') {
-			return { names: [key], unit: '', dates: [], read: () => raw, write: (target, decided) => void (target[key] = decided) };
+			return {
+				names: [key],
+				unit: '',
+				dates: [],
+				expression: String(raw),
+				read: () => raw,
+				write: (target, decided) => void (target[key] = decided)
+			};
 		}
 		const evolution = parseEvolutionValue(raw);
 		if (evolution) {
@@ -105,6 +118,8 @@ function locate(element: Element, name: string): ValueNode | undefined {
 				names: [key],
 				unit: evolution.unit,
 				dates: datesOf(evolution.evolution),
+				expression: combineEvolution(evolution.evolution).function,
+				uncertainty: uncertaintyOf(evolution.evolution),
 				read: (t) => finite(buildEvolutionFunction(evolution.evolution)(t)),
 				write: (target, decided, t) => {
 					const current = buildEvolutionFunction(evolution.evolution)(t);
@@ -128,7 +143,7 @@ function locate(element: Element, name: string): ValueNode | undefined {
 	};
 	if (typeof entry.value === 'number') {
 		const raw = entry.value;
-		return { names, unit: '', dates: [], read: () => raw, write: (target, decided) => replace(target, decided) };
+		return { names, unit: '', dates: [], expression: String(raw), read: () => raw, write: (target, decided) => replace(target, decided) };
 	}
 	const evolution = parseEvolutionValue(entry.value);
 	if (!evolution) return undefined;
@@ -136,6 +151,8 @@ function locate(element: Element, name: string): ValueNode | undefined {
 		names,
 		unit: evolution.unit,
 		dates: datesOf(evolution.evolution),
+		expression: combineEvolution(evolution.evolution).function,
+		uncertainty: uncertaintyOf(evolution.evolution),
 		read: (t) => finite(buildEvolutionFunction(evolution.evolution)(t)),
 		write: (target, decided, t) => {
 			const current = buildEvolutionFunction(evolution.evolution)(t);
@@ -144,6 +161,16 @@ function locate(element: Element, name: string): ValueNode | undefined {
 			}
 		}
 	};
+}
+
+/**
+ * The uncertainty above and below an evolution as functions of the time only: the value v they may use is replaced by
+ * the curve itself, and a negative distance is 0.
+ */
+function uncertaintyOf(components: EvolutionComponent[]): { up: string; down: string } {
+	const mix = combineEvolution(components);
+	const ofTime = (expression: string) => `max(0, (${expression.replace(/v/g, `(${mix.function})`)}))`;
+	return { up: ofTime(mix.uncertainty_up), down: ofTime(mix.uncertainty_down) };
 }
 
 /** The dates of the interpolation points of the curve of an evolution. */
@@ -157,6 +184,15 @@ const finite = (value: number): number | undefined => (Number.isFinite(value) ? 
 function boundsOf(name: string, node: ValueNode): Bounds {
 	if (node.unit.trim() === '%') return { min: 0, max: 100 };
 	return NON_NEGATIVE.has(name) ? { min: 0 } : {};
+}
+
+/** The value as a function of the time, kept inside its plausible range (a probability never goes under 0). */
+function boundedExpression(name: string, node: ValueNode): string {
+	const { min, max } = boundsOf(name, node);
+	let expression = `(${node.expression})`;
+	if (min !== undefined) expression = `max(${min}, ${expression})`;
+	if (max !== undefined) expression = `min(${max}, ${expression})`;
+	return expression;
 }
 
 /** The veracity (0..100) that the proofs decide for a value of an element at t; 100 where no proof speaks of it. */
@@ -249,12 +285,15 @@ interface Anchor {
  * probability under 0) never gives an impact.
  */
 function anchorsOf(edge: Edge, sourceBase: ValueNode, targetBase: ValueNode, bounds: Bounds): Anchor[] {
+	const sourceBounds = boundsOf(edge.sourceProperty, sourceBase);
 	const today = dateToYear(Date.now());
 	const dates = [...new Set([...sourceBase.dates, ...targetBase.dates])].sort((a, b) => a - b);
-	const within = (value: number) => Math.min(bounds.max ?? Infinity, Math.max(bounds.min ?? -Infinity, value));
+	const within = (value: number, range: Bounds = bounds) =>
+		Math.min(range.max ?? Infinity, Math.max(range.min ?? -Infinity, value));
 	const anchors: Anchor[] = [];
 	for (const date of dates) {
-		const source = sourceBase.read(date);
+		const rawSource = sourceBase.read(date);
+		const source = rawSource === undefined ? undefined : within(rawSource, sourceBounds);
 		const target = targetBase.read(date);
 		if (source === undefined || target === undefined) continue;
 		const genie = date > today ? estimateAt(edge.estimate, source) : Number.NaN;
@@ -277,8 +316,8 @@ function anchoredEstimate(
 }
 
 /**
- * The impact of a value to modify of a relation, Ii = Pi(Vi) / Vi, at the moment t and as a function of the time (the
- * impact at each known date, joined by a spline). Up to today it is exactly V0 / Vi; after, the one of the estimate.
+ * The value of a value to modify of a relation, Ii = V0 / Vi (the target divided by the source), at the moment t and as
+ * a function of the time: exactly the curve of the target divided by the curve of the source.
  */
 export function relationImpact<T extends object>(
 	relation: RelationData,
@@ -298,21 +337,31 @@ export function relationImpact<T extends object>(
 	const bounds = targetBase ? boundsOf(edge.targetProperty, targetBase) : {};
 	const anchored = anchoredEstimate(edge, sourceBase, targetBase, bounds);
 	const estimate = anchored?.estimate ?? edge.estimate;
-	const source = nodeOf(resolved, edge.sourceId, edge.sourceProperty)?.read(t);
+	const sourceResolved = nodeOf(resolved, edge.sourceId, edge.sourceProperty);
+	const sourceRange = sourceResolved ? boundsOf(edge.sourceProperty, sourceResolved) : {};
+	const rawResolved = sourceResolved?.read(t);
+	const source =
+		rawResolved === undefined ? undefined : Math.min(sourceRange.max ?? Infinity, Math.max(sourceRange.min ?? -Infinity, rawResolved));
 	let now = source === undefined ? undefined : impactAt(estimate, source);
-	// Up to today the impact is exactly V0 / Vi, read on the curves at the date.
-	if (sourceBase && targetBase && t <= dateToYear(Date.now())) {
-		const vi = sourceBase.read(t);
-		const v0 = targetBase.read(t);
-		if (vi !== undefined && v0 !== undefined && vi !== 0) {
-			now = Math.min(bounds.max ?? Infinity, Math.max(bounds.min ?? -Infinity, v0)) / vi;
-		}
+	// The value of the link is exactly V0 / Vi (the target divided by the source) at every date, read on the values
+	// decided by the proofs at t (the ones the user sees), each one kept in its plausible range: a probability that the
+	// curve takes slightly under 0 is 0, and where the source is 0 the ratio does not exist.
+	if (sourceBase && targetBase) {
+		const decided = resolveAtDate(base, t);
+		const sourceNow = nodeOf(decided, edge.sourceId, edge.sourceProperty) ?? sourceBase;
+		const targetNow = nodeOf(decided, edge.targetId, edge.targetProperty) ?? targetBase;
+		const sourceBounds = boundsOf(edge.sourceProperty, sourceNow);
+		const within = (value: number, range: Bounds) => Math.min(range.max ?? Infinity, Math.max(range.min ?? -Infinity, value));
+		const rawSource = sourceNow.read(t);
+		const vi = rawSource === undefined ? undefined : within(rawSource, sourceBounds);
+		const v0 = targetNow.read(t);
+		now = vi !== undefined && v0 !== undefined && Math.abs(vi) >= POLE_MARGIN ? within(v0, bounds) / vi : undefined;
 	}
-	// The impact at each known date does not need distinct source values (a constant source has an impact too).
-	const anchors = anchored?.anchors ?? (sourceBase && targetBase ? anchorsOf(edge, sourceBase, targetBase, bounds) : []);
-	const points = anchors.flatMap((anchor): [number, number][] =>
-		Math.abs(anchor.source) < POLE_MARGIN ? [] : [[anchor.date, anchor.estimate / anchor.source]]
-	);
+	// As a function of the time: the curve of the target divided by the curve of the source, exactly.
+	const expression =
+		sourceBase && targetBase
+			? `${boundedExpression(edge.targetProperty, targetBase)} / ${boundedExpression(edge.sourceProperty, sourceBase)}`
+			: undefined;
 	// The scores of the link under their threshold (see CountThreshold): the veracity of its value, the certainty that
 	// the relation exists, its originality and its impact. The veracity of the source value and the existence of its
 	// element also decide whether the link counts.
@@ -336,7 +385,36 @@ export function relationImpact<T extends object>(
 		now,
 		below,
 		counted: below.length === 0 && sourceCounted,
-		expression: points.length > 0 ? splineExpression({ points, before: null, after: null }) : undefined
+		expression
+	};
+}
+
+/**
+ * The curves of the two values a link joins, as functions of the time: A (the property of element 1) and B (the
+ * property of element 2): their real functions (the ones the value of the link divides), kept in their range.
+ */
+/** The curve of one of the two values a link joins, and its uncertainty above and below (for an evolution). */
+export interface LinkedCurve {
+	expression: string;
+	unit: string;
+	uncertainty?: { up: string; down: string };
+}
+
+export function relationCurves<T extends object>(
+	relation: RelationData,
+	connexion: RelationConnexionData,
+	base: T[]
+): { a?: LinkedCurve; b?: LinkedCurve } {
+	const curveOf = (id: string, property: string) => {
+		const element = base.find((each) => (each as { id?: unknown }).id === id && (each as { type?: unknown }).type !== 'proof') as
+			| Element
+			| undefined;
+		const node = element ? locate(element, property) : undefined;
+		return node ? { expression: boundedExpression(property, node), unit: node.unit, uncertainty: node.uncertainty } : undefined;
+	};
+	return {
+		a: curveOf(relation.Element1ID, connexion.Element1Property),
+		b: curveOf(relation.Element2ID, connexion.Element2Property)
 	};
 }
 

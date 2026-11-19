@@ -29,8 +29,11 @@
 		width = 320,
 		height = 210,
 		accent,
-		threshold
+		threshold,
+		extras
 	}: {
+		/** Other curves drawn over this one (each on its own vertical scale, fitted to its min and max) */
+		extras?: { label: string; expression: string; color: string; unit?: string }[];
 		/** Under this value, the function is not counted: its points and its portions are drawn in red */
 		threshold?: number;
 		evolution?: unknown;
@@ -111,6 +114,20 @@
 			return { part, points, sides: splineSides(expressions), expression: expressions[0] };
 		});
 	});
+
+	/** The interpolation points of the extra curves, as listed for the main one (date, value, and the sides). */
+	const extraSummary = $derived(
+		(extras ?? []).map((extra) => {
+			const valueAt = buildEvolutionFunction([
+				{ function: extra.expression, weight: 1, uncertainty_down: '0', uncertainty_up: '0' } as EvolutionComponent
+			]);
+			const points = splineDates(extra.expression).flatMap((t) => {
+				const value = valueAt(t);
+				return Number.isFinite(value) ? [{ t, value }] : [];
+			});
+			return { ...extra, points, sides: splineSides([extra.expression]) };
+		})
+	);
 
 	const today = (() => {
 		const now = new Date();
@@ -273,9 +290,38 @@
 			})
 		) as Partial<Record<Part, { x: number; width: number }>>;
 
+		// The extra curves (the two values a link joins): same dates, each one on its own vertical scale.
+		const extraShapes = (extras ?? []).flatMap((extra) => {
+			const valueAt = buildEvolutionFunction([
+				{ function: extra.expression, weight: 1, uncertainty_down: '0', uncertainty_up: '0' } as EvolutionComponent
+			]);
+			const points = model.curve.flatMap((d) => {
+				const value = valueAt(d.t);
+				return Number.isFinite(value) ? [{ t: d.t, value }] : [];
+			});
+			if (points.length === 0) return [];
+			const [min, max] = d3.extent(points, (d) => d.value) as [number, number];
+			const pad = (max - min > 1e-9 ? max - min : Math.max(Math.abs(max), 1) * 0.2) * 0.1;
+			const y = d3.scaleLinear().domain([min - pad, max + pad]).range([innerHeight, 0]);
+			const path =
+				d3
+					.line<{ t: number; value: number }>()
+					.x((d) => xScale(d.t))
+					.y((d) => y(d.value))
+					.curve(d3.curveMonotoneX)(points) || '';
+			const knotPoints = splineDates(extra.expression)
+				.filter((t) => t >= lo && t <= hi)
+				.flatMap((t) => {
+					const value = valueAt(t);
+					return Number.isFinite(value) ? [{ t, value, x: xScale(t), y: y(value) }] : [];
+				});
+			return [{ ...extra, valueAt, path, knots: knotPoints, min, max }];
+		});
+
 		return {
 			xScale,
 			yScale,
+			extraShapes,
 			// Under the threshold the curve is entirely red: split in two pieces (each one reaches the first point of the other).
 			linePath:
 				(threshold === undefined
@@ -325,6 +371,7 @@
 			t,
 			value,
 			uncertainty: model.uncertaintyAt(t),
+			extras: geometry.extraShapes.map((extra) => ({ label: extra.label, color: extra.color, unit: extra.unit ?? '', value: extra.valueAt(t) })),
 			x: geometry.xScale(t),
 			y: geometry.yScale(value)
 		};
@@ -442,6 +489,35 @@
 					</div>
 				{/each}
 			</div>
+			{#each extraSummary as extra (extra.label)}
+				<div class="function-card" style:--accent={extra.color}>
+					<div class="function-field">
+						<span class="field-label">{extra.label}{#if extra.unit} ({extra.unit}){/if}</span>
+						{#if extra.points.length > 0}
+							<ul class="spline-points" aria-label={m.simulation_evolution_points()}>
+								{#each extra.points as point}
+									<li class="spline-point" title={preciseFormatter.format(point.value)}>
+										<span class="spline-date">{formatPointDate(point.t)}</span>
+										<span class="spline-value" style:color={extra.color}>{formatter.format(point.value)}</span>
+									</li>
+								{/each}
+							</ul>
+							<div class="spline-sides">
+								<span class="spline-side">
+									<span class="spline-side-label">← {m.simulation_evolution_before()}</span>
+									<code>{extra.sides.before.join(' | ') || m.simulation_evolution_flat()}</code>
+								</span>
+								<span class="spline-side">
+									<span class="spline-side-label">{m.simulation_evolution_after()} →</span>
+									<code>{extra.sides.after.join(' | ') || m.simulation_evolution_flat()}</code>
+								</span>
+							</div>
+						{:else}
+							<span class="function-expression" style:color={extra.color}>{extra.expression}</span>
+						{/if}
+					</div>
+				</div>
+			{/each}
 			<p class="function-hint">
 				{m.simulation_evolution_function_hint()}{#if unit}&nbsp;· {m.simulation_field_unit()} : {unit}{/if}
 			</p>
@@ -488,6 +564,15 @@
 						{/each}
 					{/if}
 					{@render partPath(geometry.linePath, 'curve', 'function')}{#if threshold !== undefined}<path d={geometry.belowPath} class="curve below-curve" />{/if}
+
+					{#each geometry.extraShapes as extra (extra.label)}
+						<path d={extra.path} class="extra-curve" style:stroke={extra.color} />
+						{#each extra.knots as point}
+							<circle cx={point.x} cy={point.y} r="2.8" class="extra-knot" style:stroke={extra.color}>
+								<title>{extra.label} · {formatDate(point.t)} : {preciseFormatter.format(point.value)} {extra.unit ?? ''}</title>
+							</circle>
+						{/each}
+					{/each}
 
 					<!-- The interpolation points: of the curve, and of each side of the uncertainty -->
 					{#each (showUncertainty ? (['above', 'below'] as Part[]) : []) as part}
@@ -601,6 +686,12 @@
 						<span class="readout-value">−{preciseFormatter.format(active.uncertainty.down)} {unit}</span>
 					</span>
 				{/if}
+				{#each active.extras as extra (extra.label)}
+					<span>
+						{extra.label} :
+						<span class="readout-value" style:color={extra.color}>{Number.isFinite(extra.value) ? preciseFormatter.format(extra.value) : '—'} {extra.unit}</span>
+					</span>
+				{/each}
 			{:else}
 				<span class="readout-empty">—</span>
 			{/if}
@@ -617,6 +708,12 @@
 					{geometry.knots.function.exact ? m.simulation_evolution_legend_points() : m.simulation_evolution_legend_mixed_points()}
 				</span>
 			{/if}
+			{#each geometry.extraShapes as extra (extra.label)}
+				<span class="legend-item">
+					<span class="swatch extra" style:border-color={extra.color}></span>
+					{extra.label} ({formatter.format(extra.min)} → {formatter.format(extra.max)} {extra.unit ?? ''})
+				</span>
+			{/each}
 			{#if editedSpans.length > 0}
 				<span class="legend-item"><span class="swatch edited"></span>{m.simulation_evolution_legend_edited()}</span>
 			{/if}
@@ -841,6 +938,29 @@
 
 	:global(body.light) .simulation-label {
 		fill: #be185d;
+	}
+
+	.extra-curve {
+		fill: none;
+		stroke-width: 1.8;
+		stroke-dasharray: 5 3;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	.extra-knot {
+		fill: rgb(8 14 29 / 85%);
+		stroke-width: 1.5;
+	}
+
+	:global(body.light) .extra-knot {
+		fill: #ffffff;
+	}
+
+	.swatch.extra {
+		height: 0;
+		background: transparent;
+		border-top: 2px dashed;
 	}
 
 	.bound-line {
