@@ -47,7 +47,11 @@
 		addRelation?: () => void;
 	}
 
-	let { info, format }: { info: ValueInfluence; format: (value: unknown) => string } = $props();
+	let {
+		info,
+		format,
+		label
+	}: { info: ValueInfluence; format: (value: unknown) => string; label?: string } = $props();
 </script>
 
 <!-- A score as a card with a gauge from 0 to 100, like the scores of a desired value in the proofs. -->
@@ -70,7 +74,7 @@
 
 <details class="value-parameters">
 	<summary>
-		<span>{m.simulation_value_parameters()}</span>
+		<span>{label ?? m.simulation_value_parameters()}</span>
 		{#if info.belowThreshold && info.belowThreshold.length > 0}
 			<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>
 		{/if}

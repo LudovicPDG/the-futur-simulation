@@ -1247,6 +1247,8 @@
 		}}
 		{@const originalityFunction =
 			own.originality ?? (Number.isFinite(Number(activeRelation?.originality)) ? String(Number(activeRelation?.originality)) : undefined)}
+		{@const linkInfo = valueInfluence(name, false, undefined, linkImpact.now ?? connexion.impact, linkImpact.expression, linkImpact.below)}
+		{@const parametersInfo = linkInfo && { ...linkInfo, hideUncertainty: true }}
 		<div class="impact-category relation-summary">
 			<h4 class="impact-title">{formatLabel('relation')}</h4>
 			<div class="summary-grid">
@@ -1263,6 +1265,7 @@
 						<h5>{part.label}</h5>
 						<strong class="summary-number">{part.text}</strong>
 						{#if part.fn}<ScoreFunction expression={part.fn} fit={part.fit ?? false} unit={part.unit} extras={part.extras} />{/if}
+						{#if parametersInfo}<div class="part-parameters"><ValueParameters info={parametersInfo} format={formatValue} label={m.simulation_parameters()} /></div>{/if}
 					</div>
 				{/each}
 			</div>
@@ -1830,8 +1833,41 @@
 	}
 
 	/* A tile whose function is shown takes the whole row: the chart needs the width. */
-	.summary-part:has(:global(.score-chart)) {
+	.summary-part:has(:global(.score-chart)),
+	.summary-part:has(:global(details[open])) {
 		grid-column: 1 / -1;
+	}
+
+	/* The value parameters of a tile: a small button as wide as the tile, its panel takes the whole row once open. */
+	.part-parameters {
+		margin-top: 6px;
+		min-width: 0;
+	}
+
+	.part-parameters :global(.value-parameters) {
+		margin-top: 0;
+	}
+
+	.part-parameters :global(.value-parameters > summary) {
+		justify-content: flex-start;
+		padding: 2px 8px;
+		border-radius: 6px;
+		font-size: 10px;
+		font-weight: 700;
+		line-height: 1.3;
+	}
+
+	.part-parameters :global(.value-parameters > summary::before) {
+		margin-right: 4px;
+	}
+
+	.part-parameters :global(.value-parameters > summary > span:first-child) {
+		flex: 0 1 auto;
+	}
+
+	/* The veracity is already in the tile: no need to repeat it on the button. */
+	.part-parameters :global(.summary-score) {
+		display: none;
 	}
 
 	.summary-number {
