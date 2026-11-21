@@ -453,16 +453,6 @@ function scoreEstimate(
 	dates: number[],
 	proofsAt: (date: number) => ProofData[]
 ): EstimateFunction | undefined {
-	// The table stored in the relation (edited) wins over the one computed from the curves. A symmetric link is stored
-	// once, from element 1 to element 2: read from the other end, its points are swapped.
-	const stored = edge.relation.score_tables?.[relationValueName(edge.direction, edge.connexion)]?.[kind];
-	if (stored) {
-		const backward = edge.direction === 'symmetric' && edge.sourceId === edge.relation.Element2ID;
-		const table = stored
-			.map(([x, y]): [number, number] => (backward ? [y, x] : [x, y]))
-			.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y) && Math.abs(x) >= POLE_MARGIN);
-		if (new Set(table.map(([x]) => x)).size >= 2) return { kind: 'points', points: table };
-	}
 	const points: [number, number][] = [];
 	for (const date of dates) {
 		const proofs = proofsAt(date);
