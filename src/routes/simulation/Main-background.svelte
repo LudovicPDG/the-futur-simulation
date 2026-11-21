@@ -1248,7 +1248,7 @@
 		{@const originalityFunction =
 			own.originality ?? (Number.isFinite(Number(activeRelation?.originality)) ? String(Number(activeRelation?.originality)) : undefined)}
 		{@const linkInfo = valueInfluence(name, false, undefined, linkImpact.now ?? connexion.impact, linkImpact.expression, linkImpact.below)}
-		{@const parametersInfo = linkInfo && { ...linkInfo, hideUncertainty: true }}
+		{@const parametersInfo = linkInfo && { ...linkInfo, hideUncertainty: true, impact: null, peopleImpacted: null }}
 		<div class="impact-category relation-summary">
 			<h4 class="impact-title">{formatLabel('relation')}</h4>
 			<div class="summary-grid">
