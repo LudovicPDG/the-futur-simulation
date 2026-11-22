@@ -1824,6 +1824,27 @@
 		color: #7dd3fc;
 	}
 
+	/* The value (first tile) is the main data of the relation: full row, bigger number, accent colour. */
+	.summary-part:first-child {
+		grid-column: 1 / -1;
+		padding: 12px 14px;
+		border: 1px solid rgb(245 158 11 / 55%);
+		border-left-width: 4px;
+	}
+
+	.summary-part:first-child h5 {
+		margin-bottom: 6px;
+		color: #fbbf24;
+		font-size: 13px;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.summary-part:first-child .summary-number {
+		font-size: 32px;
+		line-height: 1.1;
+	}
+
 	/* The last score (originality) has no pair: it takes the whole row. */
 	.summary-part:last-child {
 		grid-column: 1 / -1;
