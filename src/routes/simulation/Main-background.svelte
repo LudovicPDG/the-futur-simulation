@@ -1029,7 +1029,6 @@
 							<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
 							{#if impactOf(connexion).counted === false}<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>{/if}
 							{@render relationSummary('symmetric', connexion)}
-							{#each [valueInfluence(relationValueName('symmetric', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 						</div>
 					{/each}
 					<button type="button" class="add-value" onclick={() => startAddValue('symmetric_value_to_modify')}>
@@ -1052,7 +1051,6 @@
 									<span>{formatRelationProperty(connexion.Element2Property, relationElement2)}</span>
 									{#if impactOf(connexion).counted === false}<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>{/if}
 									{@render relationSummary('element1_element2', connexion)}
-									{#each [valueInfluence(relationValueName('element1_element2', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element1_element2_value_to_modify')}>
@@ -1077,7 +1075,6 @@
 									<span>{formatRelationProperty(connexion.Element1Property, relationElement1)}</span>
 									{#if impactOf(connexion).counted === false}<span class="not-counted" title={m.not_counted_hint()}>{m.not_counted()}</span>{/if}
 									{@render relationSummary('element2_element1', connexion)}
-									{#each [valueInfluence(relationValueName('element2_element1', connexion), false, undefined, impactOf(connexion).now ?? connexion.impact, impactOf(connexion).expression, impactOf(connexion).below)] as info}{#if info}<ValueParameters {info} format={formatValue} />{/if}{/each}
 								</div>
 							{/each}
 							<button type="button" class="add-value" onclick={() => startAddValue('element2_element1_value_to_modify')}>
