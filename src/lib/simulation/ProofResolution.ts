@@ -29,7 +29,7 @@ export const PROOF_EDIT_FIELDS = [
 ] as const;
 
 /** The parts of a value of an element that its top-level proofs can change. */
-export const VALUE_EDIT_FIELDS = ['value', 'veracity', 'uncertainty', 'impact', 'people_impacted', 'relevance', 'originality'] as const;
+export const VALUE_EDIT_FIELDS = ['value', 'veracity', 'uncertainty', 'impact', 'people_impacted', 'relevance', 'originality', 'percentage'] as const;
 
 /**
  * The parts of an evolution that a proof changes on its own: the function and each side of its uncertainty. A proof
@@ -38,11 +38,11 @@ export const VALUE_EDIT_FIELDS = ['value', 'veracity', 'uncertainty', 'impact', 
 export const EVOLUTION_PARTS = ['function', 'uncertainty_above', 'uncertainty_below'] as const;
 export type EvolutionPart = (typeof EVOLUTION_PARTS)[number];
 
-const SCORE_FIELDS = new Set<string>(['veracity', 'uncertainty', 'relevance', 'impact', 'originality']);
+const SCORE_FIELDS = new Set<string>(['veracity', 'uncertainty', 'relevance', 'impact', 'originality', 'percentage']);
 /** The scores that are functions of the time: all of them. */
-const SCORE_FUNCTION_FIELDS = new Set<string>(['veracity', 'uncertainty', 'relevance', 'impact', 'people_impacted', 'originality']);
+const SCORE_FUNCTION_FIELDS = new Set<string>(['veracity', 'uncertainty', 'relevance', 'impact', 'people_impacted', 'originality', 'percentage']);
 /** The scores of a value of an element (a proof has a relevance instead of an impact). */
-const VALUE_SCORE_FUNCTION_FIELDS = ['veracity', 'uncertainty', 'impact', 'people_impacted', 'relevance', 'originality'];
+const VALUE_SCORE_FUNCTION_FIELDS = ['veracity', 'uncertainty', 'impact', 'people_impacted', 'relevance', 'originality', 'percentage'];
 
 /** The scores of a proof at one moment. */
 type Scores = { veracity: number; uncertainty: number; relevance: number; originality: number };
@@ -270,6 +270,8 @@ export function resolveValue(proofs: ProofData[], t: number): {
 	people_impacted?: number;
 	relevance?: number;
 	originality?: number;
+	/** How much the value counts in the final score, in % (only for a value of a relation). */
+	percentage?: number;
 } {
 	// Oldest first: the founding proof is the status quo of a tie.
 	const ordered = [...proofs].reverse();
@@ -410,6 +412,7 @@ export function resolveValueFunctions(proofs: ProofData[]): {
 	people_impacted?: string;
 	relevance?: string;
 	originality?: string;
+	percentage?: string;
 } {
 	const clamp = (expression: string) => `max(0, min(100, ${expression}))`;
 	const count = (expression: string) => `max(0, ${expression})`;

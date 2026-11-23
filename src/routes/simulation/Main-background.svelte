@@ -22,7 +22,7 @@
 		formatUncertainty,
 		type EvolutionValue
 	} from '$lib/simulation/event/EvolutionFunction';
-	import { valueKind, type ProofData } from '$lib/simulation/Proof';
+	import { DEFAULT_PERCENTAGE, valueKind, type ProofData } from '$lib/simulation/Proof';
 	import { resolveAtDate, resolveValue, resolveValueFunctions } from '$lib/simulation/ProofResolution';
 	import {
 		applyRelations,
@@ -776,7 +776,7 @@
 
 		// Scores: the weighted average voted by the proofs of the value (the founding proof among them).
 		const voted = resolveValue(proofs, year);
-		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'people_impacted' | 'relevance' | 'originality'): number => voted[key] ?? NaN;
+		const score = (key: 'veracity' | 'uncertainty' | 'impact' | 'people_impacted' | 'relevance' | 'originality' | 'percentage'): number => voted[key] ?? NaN;
 		// The veracity and the uncertainty of a value of an element are moved by its relations, like its value.
 		const linked = !activeRelation && !inArray && item === undefined;
 		// Every value has an impact of its own, except the parameters of the element themselves.
@@ -825,6 +825,11 @@
 					: null,
 			relevance: Number.isFinite(relevanceNow) ? `${Math.round(relevanceNow)}` : null,
 			originality: Number.isFinite(originalityNow) ? `${Math.round(originalityNow as number)}%` : null,
+			// Every value of a relation: how much it counts in the final score, voted by its proofs (50% by default).
+			percentage:
+				relationImpact !== undefined && activeRelation
+					? `${Math.round(Number.isFinite(score('percentage')) ? score('percentage') : DEFAULT_PERCENTAGE)}%`
+					: null,
 			functions: {
 				...resolveValueFunctions(proofs),
 				...Object.fromEntries(
@@ -839,7 +844,8 @@
 							...(resolveValueFunctions(proofs).originality === undefined &&
 							Number.isFinite(Number(activeRelation.originality))
 								? { originality: String(Number(activeRelation.originality)) }
-								: {})
+								: {}),
+							percentage: resolveValueFunctions(proofs).percentage ?? String(DEFAULT_PERCENTAGE)
 						}
 					: {})
 			},
@@ -1256,6 +1262,7 @@
 					scorePart(m.simulation_evolution_uncertainty_below(), 'uncertainty', 'uncertainty', own.uncertainty, formatNumber(entry.uncertainty_below, '%'), '%', 'down'),
 					scorePart(m.simulation_field_average_impact(), 'impact', 'impact', own.impact, formatNumber(entry.impact), ''),
 					scorePart(m.simulation_field_people_impacted(), 'people_impacted', 'impact', own.people_impacted, formatNumber(entry.people_impacted), m.simulation_people_unit()),
+					{ label: m.simulation_percentage_label(), text: formatNumber(entry.percentage ?? DEFAULT_PERCENTAGE, '%'), tone: 'value', fn: own.percentage ?? String(entry.percentage ?? DEFAULT_PERCENTAGE), fit: false, unit: undefined, extras: [] },
 					scorePart(m.simulation_originality_label(), 'originality', 'value', originalityFunction, formatNumber(entry.originality, '%'))
 				] as part (part.label)}
 					<div class="impact-part summary-part {part.tone}">

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { BaseSimulationObject } from './BaseSimulationObject';
 import {
 	CURVE_FIELDS,
+	DEFAULT_PERCENTAGE,
 	PROOF_CURVE_COLUMNS,
 	PROOF_SCORE_FIELDS,
 	ProofSchema,
@@ -104,17 +105,17 @@ function ownScores(scores: CurvesInput): Pick<ProofData, 'veracity' | 'uncertain
 }
 
 /** The scores of a value as curves (an evolution has no general uncertainty, see valueColumns). */
-function scoreColumns(evolution: boolean, scored: boolean): CurveColumns {
+function scoreColumns(evolution: boolean, scored: boolean, relationValue = false): CurveColumns {
 	return Object.fromEntries(
-		Object.entries(valueColumns(evolution, scored)).filter(([key]) => VALUE_SCORE_FIELDS.includes(key))
+		Object.entries(valueColumns(evolution, scored, relationValue)).filter(([key]) => VALUE_SCORE_FIELDS.includes(key))
 	);
 }
 
 /** The content of a founding proof: the value itself is added afterwards, the proof gives the scores it adds with it. */
-function foundingSchema(scored: boolean, evolution: boolean) {
+function foundingSchema(scored: boolean, evolution: boolean, relationValue = false) {
 	return ProofTextSchema.extend({
 		scores: OwnScoresSchema,
-		desired_value: curvesSchema(scoreColumns(evolution, scored)).describe(
+		desired_value: curvesSchema(scoreColumns(evolution, scored, relationValue)).describe(
 			'The scores this founding proof adds to its value over time, as interpolation points at the dates that matter.'
 		)
 	});
@@ -195,8 +196,8 @@ const ContestSchema = z
 function generatedProofSchema(shape: ValueShape, scored: boolean, valueless = false) {
 	const columns =
 		shape === 'any'
-			? { ...valueColumns(true, scored), uncertainty: SCORE_COLUMNS.uncertainty }
-			: valueColumns(shape === 'evolution', scored);
+			? { ...valueColumns(true, scored, valueless), uncertainty: SCORE_COLUMNS.uncertainty }
+			: valueColumns(shape === 'evolution', scored, valueless);
 	const desired: Record<string, z.ZodType> = {};
 	if (shape !== 'evolution' && !valueless) {
 		desired.content = z
@@ -479,7 +480,7 @@ type ElementValue = {
 	value_name: ProofData['value_name'];
 	value: ProofValue;
 	scored: boolean;
-	/** A value of a relation: its proofs give no value, only its parameters (veracity, uncertainty, impact, originality). */
+	/** A value of a relation: its proofs give no value, only its parameters (veracity, uncertainty, impact, percentage, originality). */
 	valueless?: boolean;
 };
 
@@ -502,8 +503,8 @@ function elementValues(
 		if (value_name && value !== undefined) values.push({ value_name, value, scored, valueless });
 	};
 
-	// Each value to modify of a relation has its own proof. The proof gives no value: only the four
-	// parameters of the value (veracity, uncertainty, impact, originality).
+	// Each value to modify of a relation has its own proof. The proof gives no value: only the five
+	// parameters of the value (veracity, uncertainty, impact, percentage, originality).
 	if (element.type === 'relation') {
 		for (const value of relationValues(element as Partial<RelationData>)) {
 			add(value.name, value.value, true, true);
@@ -548,10 +549,16 @@ function hasValueScores(target: ProofTarget, name: unknown, element: Record<stri
 	return key ? Array.isArray(element[key]) && key !== 'evolution' : findListEntry(name, element) !== undefined;
 }
 
-/** The parts of a value that its proofs give: its originality and impact only when it has its own. */
+/**
+ * The parts of a value that its proofs give: its originality and impact only when it has its own, and its
+ * percentage only for a value of a relation (valueless).
+ */
 function valueEditFields(scored: boolean, evolution = false, valueless = false): string[] {
 	const fields: string[] = VALUE_EDIT_FIELDS.filter(
-		(field) => (scored || (field !== 'originality' && field !== 'relevance')) && !(valueless && field === 'value')
+		(field) =>
+			(scored || (field !== 'originality' && field !== 'relevance')) &&
+			!(valueless && field === 'value') &&
+			(valueless || field !== 'percentage')
 	);
 	// An evolution is edited part by part and has no general uncertainty.
 	return evolution
@@ -688,14 +695,14 @@ export class ProofServer extends BaseSimulationObject<ProofData> {
 			const results = await Promise.allSettled(
 				batch.map(async (value) => {
 					const evolution = valueKind(value.value) === 'evolution';
-					const columns = scoreColumns(evolution, value.scored);
+					const columns = scoreColumns(evolution, value.scored, value.valueless);
 					const generated = (await this.generateWithSchema(
 						model_name,
 						level_of_reasoning,
 						`${prompt}${context.text}
 
 Create the founding proof of ONE value of this element: the value ${JSON.stringify(value.value_name)}, whose content is ${JSON.stringify(value.value)}. Give the source and the information this value is based on (documents, data, statements, observations). The sources must be real and verifiable. The founding proof adds this value: its desired value gives the ${Object.keys(columns).join(', ')} of THIS value alone over time, not of the whole element: they differ from one value to another, and from one period to another (a well documented period is more certain than a forecast). This proof will be the starting point of the debate about this value.`,
-						foundingSchema(value.scored, evolution)
+						foundingSchema(value.scored, evolution, value.valueless)
 					)) as z.infer<ReturnType<typeof foundingSchema>> & { scores: CurvesInput; desired_value: CurvesInput };
 					const { scores, desired_value: curves, ...texts } = generated;
 					const own = ownScores(scores);
@@ -953,7 +960,7 @@ ${JSON.stringify(element)}`
 			element: { ...element, other: values },
 			text: `
 
-This proof is about the following relation between two simulation elements. Its values are its name, its description and each value to modify (a parameter-only value: a proof about it gives its veracity, uncertainty, impact and originality, never a value), named in "values":
+This proof is about the following relation between two simulation elements. Its values are its name, its description and each value to modify (a parameter-only value: a proof about it gives its veracity, uncertainty, impact, percentage and originality, never a value), named in "values":
 ${JSON.stringify({ ...element, ...endpoints, values })}`
 		};
 	}
@@ -994,7 +1001,9 @@ ${JSON.stringify({ ...element, ...endpoints, values })}`
 			people_impacted: voted.people_impacted ?? '0',
 			...(scored
 				? { relevance: voted.relevance ?? fallback.impact, originality: voted.originality ?? fallback.originality }
-				: {})
+				: {}),
+			// A value of a relation also has the percentage it counts in the final score.
+			...(valueless ? { percentage: voted.percentage ?? String(DEFAULT_PERCENTAGE) } : {})
 		} as ValueEdit;
 	}
 
@@ -1043,7 +1052,7 @@ ${
 				? 'A sub-proof debates the proof above: in its desired_value, give ONLY the fields of the debated proof that the request asks to change (name, description, verification method, falsifiability method, sources) and null for every other field: they keep their current value exactly. The scores of the debated proof (veracity, uncertainty, relevance) are curves of the time: change them in "scores" with the interpolation points of the period the request is about, and a number only for the scores it changes. Never give an originality: it is decided afterwards by comparing this sub-proof with the other sub-proofs. When the request contests the originality of the debated proof (it says it copies another one, or that it is really original), set contests_originality to true: its originality is then analysed again with your argument. Never rewrite what does not need to change. It cannot edit the desired value of the debated proof.'
 				: `A proof is about ONE value of the element: value_name is this existing value. In its desired_value, give ONLY what the request asks to change: ${
 						valueless
-							? 'NO content (the values of a relation have no value to propose: a proof about one only gives its parameters, that is its veracity, uncertainty, impact and originality) and, in "curves",'
+							? 'NO content (the values of a relation have no value to propose: a proof about one only gives its parameters, that is its veracity, uncertainty, impact, percentage and originality) and, in "curves",'
 							: 'its content (null to keep it) and, in "curves",'
 					} the interpolation points of the period it is about, with a number only for the curves it changes (${
 						shape === 'evolution'
@@ -1145,7 +1154,7 @@ ${
 			const evolution = valueKind(kept.value) === 'evolution';
 			const curves = applyCurves(
 				edit.curves,
-				valueColumns(evolution, hasValueScores(target, generated.value_name, element)),
+				valueColumns(evolution, hasValueScores(target, generated.value_name, element), valueless),
 				currentCurves(kept)
 			);
 			const desired: Record<string, unknown> = { ...kept };

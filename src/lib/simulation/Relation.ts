@@ -116,6 +116,8 @@ export interface RelationValueEntry {
 	people_impacted: number | null;
 	/** Originality, from 0 to 100: voted by the proofs of the value, else the one of the relation. Null when none exists. */
 	originality: number | null;
+	/** Percentage, from 0 to 100: how much the value counts in the final score. Voted by the proofs of the value, 50 by default. */
+	percentage: number;
 }
 
 export type RelationData = z.infer<typeof RelationSchema> & {

@@ -21,6 +21,8 @@
 		hideUncertainty?: boolean;
 		/** Originality of the relation (for its values) or of the latest proof of the value. */
 		originality: string | null;
+		/** How much a value of a relation counts in the final score (only for a value of a relation). */
+		percentage?: string | null;
 		/** Relevance of an entry of a list in its list (only for a value in a list). */
 		relevance?: string | null;
 		/** Impact of the value: the one of its relation, or of its latest proof. */
@@ -34,7 +36,7 @@
 		/** The date of the time machine, as a decimal year. */
 		year: number;
 		/** Veracity, uncertainty, impact and originality as functions of t (expressions). */
-		functions?: { veracity?: string; uncertainty?: string; impact?: string; people_impacted?: string; relevance?: string; originality?: string };
+		functions?: { veracity?: string; uncertainty?: string; impact?: string; people_impacted?: string; relevance?: string; originality?: string; percentage?: string };
 		/** Existence of the element and color of the value: the evolutions of the proofs are drawn like the value. */
 		existence?: unknown;
 		accent?: { dark: string; light: string };
@@ -68,7 +70,7 @@
 				</span>
 			{/if}
 		</dd>
-		{#if fn && key !== 'originality'}<ScoreFunction expression={fn} fit={isCount || (key === 'impact' && !!info.relationImpact)} unit={isCount ? m.simulation_people_unit() : undefined} threshold={key === 'uncertainty' || isCount ? undefined : key === 'impact' && info.relationImpact ? RELATION_IMPACT_THRESHOLD : SCORE_THRESHOLD} />{/if}
+		{#if fn && key !== 'originality'}<ScoreFunction expression={fn} fit={isCount || (key === 'impact' && !!info.relationImpact)} unit={isCount ? m.simulation_people_unit() : undefined} threshold={key === 'uncertainty' || key === 'percentage' || isCount ? undefined : key === 'impact' && info.relationImpact ? RELATION_IMPACT_THRESHOLD : SCORE_THRESHOLD} />{/if}
 	</div>
 {/snippet}
 
@@ -92,6 +94,9 @@
 		{/if}
 		{#if info.originality}
 			{@render score('originality', m.simulation_originality_label(), info.originality, info.functions?.originality)}
+		{/if}
+		{#if info.percentage}
+			{@render score('percentage', m.simulation_percentage_label(), info.percentage, info.functions?.percentage)}
 		{/if}
 	</dl>
 	{#if info.impact || info.peopleImpacted}
@@ -276,6 +281,10 @@
 
 	.score.originality {
 		--accent: #38bdf8;
+	}
+
+	.score.percentage {
+		--accent: #f472b6;
 	}
 
 	.impact-group {

@@ -1,4 +1,4 @@
-import type { ProofData } from './Proof';
+import { DEFAULT_PERCENTAGE, type ProofData } from './Proof';
 import {
 	parseEvolutionValue,
 	buildEvolutionFunction,
@@ -605,7 +605,8 @@ export function relationValueMap<T extends object>(
 				uncertainty_below: finite(voted.uncertainty),
 				impact: finite(voted.impact),
 				people_impacted: finite(voted.people_impacted),
-				originality: finite(voted.originality ?? relationOriginality)
+				originality: finite(voted.originality ?? relationOriginality),
+				percentage: finite(voted.percentage) ?? DEFAULT_PERCENTAGE
 			});
 		}
 	}

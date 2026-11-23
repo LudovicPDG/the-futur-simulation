@@ -71,6 +71,8 @@
 	"simulation_veracity_label": "Veracidad:",
 	"simulation_uncertainty_label": "Incertidumbre:",
 	"simulation_originality_label": "Originalidad:",
+	"simulation_percentage_label": "Porcentaje:",
+	"simulation_field_percentage": "Porcentaje",
 	"simulation_section_global_parameters": "Parámetros globales",
 	"simulation_value_parameters": "Parámetros del valor",
 	"simulation_parameters": "Parámetros",

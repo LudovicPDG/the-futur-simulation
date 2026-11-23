@@ -101,8 +101,22 @@ export const VALUE_RELEVANCE_COLUMN = {
 	max: 100
 } satisfies CurveColumns[string];
 
-/** The scores of a value: the ones of a proof, the number of people impacted and the relevance (value in a list). */
-export const VALUE_SCORE_FIELDS: string[] = [...SCORE_FIELDS, 'people_impacted', 'relevance'];
+/**
+ * The percentage of a value of a relation: how much this value counts in the final score. Every value of a relation
+ * (an entry of its array of values to modify) has it.
+ */
+export const PERCENTAGE_COLUMN = {
+	description:
+		'The percentage of this value of the relation at this date: how much this value counts in the final score, from 0 (it does not count at all) to 100 (it counts fully). Use the whole scale.',
+	min: 0,
+	max: 100
+} satisfies CurveColumns[string];
+
+/** The percentage of a value of a relation without any proof that gives it. */
+export const DEFAULT_PERCENTAGE = 50;
+
+/** The scores of a value: the ones of a proof, the number of people impacted, the relevance (value in a list) and the percentage (value of a relation). */
+export const VALUE_SCORE_FIELDS: string[] = [...SCORE_FIELDS, 'people_impacted', 'relevance', 'percentage'];
 
 /**
  * The scores the genie draws as curves of the time. The originality is not one of them: it is a single number (not a
@@ -126,7 +140,7 @@ export const PROOF_CURVE_COLUMNS = {
  * general uncertainty), then its scores, with its impact (every value has one). The originality is never a
  * curve (see CURVE_SCORE_COLUMNS).
  */
-export function valueColumns(evolution: boolean, scored: boolean): CurveColumns {
+export function valueColumns(evolution: boolean, scored: boolean, relationValue = false): CurveColumns {
 	const columns: CurveColumns = evolution ? evolutionColumns() : {};
 	for (const field of Object.keys(CURVE_SCORE_COLUMNS) as (keyof typeof CURVE_SCORE_COLUMNS)[]) {
 		if (evolution && field === 'uncertainty') continue;
@@ -136,6 +150,8 @@ export function valueColumns(evolution: boolean, scored: boolean): CurveColumns 
 	columns.people_impacted = PEOPLE_IMPACTED_COLUMN;
 	// An entry of a list also has a relevance in this list.
 	if (scored) columns.relevance = VALUE_RELEVANCE_COLUMN;
+	// A value of a relation also has the percentage it counts in the final score.
+	if (relationValue) columns.percentage = PERCENTAGE_COLUMN;
 	return columns;
 }
 
@@ -149,7 +165,8 @@ export const CURVE_FIELDS: Record<string, string> = {
 	impact: 'impact',
 	relevance: 'relevance',
 	people_impacted: 'people_impacted',
-	originality: 'originality'
+	originality: 'originality',
+	percentage: 'percentage'
 };
 
 /** For each curve a proof changes, the period it really changes (see changedRange). */
@@ -168,7 +185,9 @@ export const ValueEditSchema = z.object({
 	people_impacted: StoredScoreSchema.optional(),
 	/** The relevance of the entry in its list, a function of the time from 0 to 100 (only for a value in a list). */
 	relevance: StoredScoreSchema.optional(),
-	originality: StoredScoreSchema
+	originality: StoredScoreSchema,
+	/** How much the value counts in the final score, a function of the time from 0 to 100 (only for a value of a relation). */
+	percentage: StoredScoreSchema.optional()
 });
 
 /**
@@ -191,7 +210,7 @@ export const ProofEditSchema = z.object({
  * The desired value of a value without an originality and an impact: a primary property of the element (name,
  * description, existence...) or a value of a relation (its originality and impact are the relation's).
  */
-export const PlainValueEditSchema = ValueEditSchema.omit({ impact: true, originality: true, people_impacted: true, relevance: true });
+export const PlainValueEditSchema = ValueEditSchema.omit({ impact: true, originality: true, people_impacted: true, relevance: true, percentage: true });
 
 export type ValueEdit = z.infer<typeof ValueEditSchema> | z.infer<typeof PlainValueEditSchema>;
 export type ProofEdit = z.infer<typeof ProofEditSchema>;

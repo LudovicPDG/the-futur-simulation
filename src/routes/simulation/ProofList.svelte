@@ -93,7 +93,8 @@
 		['relevance', m.proof_relevance, (value) => `${Math.round(value)}`],
 		['impact', m.simulation_field_impact, (value) => `${Math.round(value)}`],
 		['people_impacted', m.simulation_field_people_impacted, (value) => `${formatPeople(value)} ${m.simulation_people_unit()}`],
-		['originality', m.simulation_field_originality, (value) => `${Math.round(value)}%`]
+		['originality', m.simulation_field_originality, (value) => `${Math.round(value)}%`],
+		['percentage', m.simulation_field_percentage, (value) => `${Math.round(value)}%`]
 	];
 
 	type ScoreView = {
