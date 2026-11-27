@@ -5,7 +5,7 @@ La simulation est composée de **faits** et de **liens** :
 - un **fait** est une chose du monde : une personne, une organisation, un événement, une action…
 - un **lien** relie des faits entre eux et décrit comment l'un influence l'autre.
 
-La simulation est donc représenté sous la forme un graphe : les faits sont les arrete, les liens sont les arc entre eux.
+La simulation est donc représentée sous la forme d'un graphe : les faits sont les sommets, les liens sont les arcs entre eux.
 
 Trois mécanismes font fonctionner l'ensemble :
 
@@ -35,7 +35,7 @@ L'IA coûte cher : le Génie n'intervient que lorsqu'un élément est créé ou 
 
 ## Les faits
 
-Les fait sont l'élément de base de la simulation, c'est un type générique de la simulation qui peut réprésenter n'importe quelle type de chose.
+Les faits sont l'élément de base de la simulation : c'est un type générique qui peut représenter n'importe quel type de chose.
 Certains types de faits existent déjà dans la simulation. Chacun a des champs propres, et certains types **héritent** d'un autre : ils reprennent tout ce que leur parent contient, puis ajoutent leurs particularités.
 
 ```
@@ -58,7 +58,7 @@ C'est la base de tout. Tous les autres types en héritent. Un fait possède :
 - un **nom** et une **description**;
 - un **type** ;
 - des **informations libres** supplémentaires ;
-- une **existence** : la probabilité, à chaque date, que le fait existe réellement. Elle est proche de 0 avant sont début, haute pendant, et retombe à 0 après sa fin. Un fait inventé ou fictif reste à une valeur très basse ;
+- une **existence** : la probabilité, à chaque date, que le fait existe réellement. Elle est proche de 0 avant son début, haute pendant, et retombe à 0 après sa fin. Un fait inventé ou fictif reste à une valeur très basse ;
 - une **originalité** : est-ce une copie de quelque chose d'existant ? Elle évite qu'on répète la même chose pour peser plus ;
 - un **impact** : l'effet moyen du fait sur chaque personnage qu'il touche ;
 - un **nombre de personnes impactées**.
@@ -78,7 +78,7 @@ Un personnage peut être de trois sortes :
 
 - **Personne** : un individu. Son existence va de sa naissance à sa mort.
 - **Organisation** : entreprise, association, État, parti… Elle remplace la satisfaction par la **satisfaction moyenne de ses membres**, et ajoute le **nombre de personnes** qui la composent. Son existence va de sa fondation à sa dissolution.
-- **Groupe d'intérêt** : une organisation dont les membres partagent une même volonté (écologistes, conservateurs…). Il hérite de tout ce qu'a une organisation. Il permet de relier un événement ou une action à tout un groupe plutôt qu'à des millions de personnes une par une, ou a plusieur groupe.
+- **Groupe d'intérêt** : une organisation dont les membres partagent une même volonté (écologistes, conservateurs…). Il hérite de tout ce qu'a une organisation. Il permet de relier un événement ou une action à tout un groupe plutôt qu'à des millions de personnes une par une, ou à plusieurs groupes.
 
 ### Événement
 
@@ -117,19 +117,19 @@ Les faits reliés forment un graphe : modifier un fait modifie ceux qui lui sont
 
 ### Valeur
 
-Dans cette simulation chaque valeur possede des parametre de valeur qui sont: l'uncertitude et la véracité.
+Dans cette simulation, chaque valeur possède des paramètres de valeur qui sont : l'incertitude et la véracité.
 
-En plus de cela chaque valeur possede un impact, qui est composé en deux valeur (l'impact moyen, et le nombre de personne impacté). Cela décrit a quelle point cette valeur impact, les autre valeur. si vous voulez en savoir plus sur l'impact [cliquer ici](#impact-et-score-gloabal)
+En plus de cela, chaque valeur possède un impact, composé de deux valeurs (l'impact moyen et le nombre de personnes impactées). Cela décrit à quel point cette valeur impacte les autres valeurs. Si vous voulez en savoir plus sur l'impact, [cliquez ici](#impact-et-score-global).
 
-les valeur numérique et les fonction en deux type de véracité: la véracité en dessous et la veracité au dessus.
+Les valeurs numériques et les fonctions ont deux types de véracité : la véracité en dessous et la véracité au-dessus.
 
-les valeur faisant partie d'un tableaux possède deux parametre de valeur en plus originalité et pertinance.
+Les valeurs faisant partie d'un tableau possèdent deux paramètres de valeur en plus : l'originalité et la pertinence.
 
-voici en détaille a quoi serve ces différent parametre de valeur:
-- **véracité**: a quelle point le génie juge qut cette valeur est véridique
-- **incertitude**: Décrit a quelle point les personne sont incertain concernant cette valeur.
-- **pertinance**: A quelle point cette valeur est pertinante par rapport au fait. Une preuve peut étre véridique mais impertinante.
-- **originalité** A quelle point la preuve est original est apporte quelle que chose de nouveaux. Cela est fait pour éviter les doublons et le spam.
+Voici en détail à quoi servent ces différents paramètres de valeur :
+- **véracité** : à quel point le Génie juge que cette valeur est véridique ;
+- **incertitude** : décrit à quel point les personnes sont incertaines concernant cette valeur ;
+- **pertinence** : à quel point cette valeur est pertinente par rapport au fait. Une preuve peut être véridique mais impertinente ;
+- **originalité** : à quel point la preuve est originale et apporte quelque chose de nouveau. Cela évite les doublons et le spam.
 
 
 ### Le système de preuves
@@ -143,12 +143,12 @@ Pour cela, on ajoute une **preuve** : un argument qui propose une autre valeur. 
 - comment la **vérifier** et comment la **réfuter** ;
 - ses propres scores : véracité, incertitude, pertinence et originalité.
 
-Pour les valeurs pour lesquelles ont ne peut pas faire d'opération mathématique comme les valeur textuelle ou les tableau, en choisit la valeur qui a le plus haute véracité, originalité et relevance
+Pour les valeurs sur lesquelles on ne peut pas faire d'opération mathématique, comme les valeurs textuelles ou les tableaux, on choisit la valeur qui a la plus haute véracité, originalité et pertinence.
 
 La valeur retenue n'est jamais écrasée par une preuve : elle résulte du **poids de toutes les preuves**. Une preuve pèse plus quand elle est vraie, pertinente et originale. Une preuve dont le poids est trop faible est ignorée, pour empêcher quelqu'un de noyer un fait sous de multiples petites preuves sans valeur.
 
 > Cette partie sera détaillée dans un prochain document.
 
-## Impact et score gloabal
+## Impact et score global
 
 
