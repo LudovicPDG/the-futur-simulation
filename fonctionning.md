@@ -126,11 +126,11 @@ Les valeurs numériques et les fonctions ont deux types de véracité : la véra
 Les valeurs faisant partie d'un tableau possèdent deux paramètres de valeur en plus : l'originalité et la pertinence.
 
 Voici en détail à quoi servent ces différents paramètres de valeur :
+
 - **véracité** : à quel point le Génie juge que cette valeur est véridique ;
 - **incertitude** : décrit à quel point les personnes sont incertaines concernant cette valeur ;
 - **pertinence** : à quel point cette valeur est pertinente par rapport au fait. Une preuve peut être véridique mais impertinente ;
 - **originalité** : à quel point la preuve est originale et apporte quelque chose de nouveau. Cela évite les doublons et le spam.
-
 
 ### Le système de preuves
 
@@ -143,12 +143,10 @@ Pour cela, on ajoute une **preuve** : un argument qui propose une autre valeur. 
 - comment la **vérifier** et comment la **réfuter** ;
 - ses propres scores : véracité, incertitude, pertinence et originalité.
 
-Pour les valeurs sur lesquelles on ne peut pas faire d'opération mathématique, comme les valeurs textuelles ou les tableaux, on choisit la valeur qui a la plus haute véracité, originalité et pertinence.
+La valeur retenue n'est jamais écrasée par une preuve : elle résulte du **poids de toutes les preuves**.
 
-La valeur retenue n'est jamais écrasée par une preuve : elle résulte du **poids de toutes les preuves**. Une preuve pèse plus quand elle est vraie, pertinente et originale. Une preuve dont le poids est trop faible est ignorée, pour empêcher quelqu'un de noyer un fait sous de multiples petites preuves sans valeur.
+Pour les valeurs sur lesquelles on ne peut pas faire d'opération mathématique, comme les valeurs textuelles ou les tableaux, on retient la valeur de la preuve qui a le meilleur score, calculé à partir de sa véracité et de sa pertinence. [Cette opération est détaillée ici](./operation.md#texte-et-tableau).
 
-> Cette partie sera détaillée dans un prochain document.
+Pour les valeurs numériques, les booléens et les fonctions, on fait simplement la moyenne pondérée de toutes les valeurs proposées. Le poids de chaque preuve est calculé à partir de sa véracité, de son originalité et de sa pertinence. Une preuve dont un de ces scores est trop faible est ignorée, pour empêcher quelqu'un de noyer un fait sous de multiples petites preuves sans valeur, ou de le fausser en mettant des données abérente. [Cette opération est détaillée ici](./operation.md#valeur-numérique-booléen-et-fonction).
 
 ## Impact et score global
-
-
